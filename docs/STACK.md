@@ -92,8 +92,8 @@ Biome does **not** read `.gitignore`. Each `biome.json` has
 Added in later commits — listed so the trajectory is clear. Versions are current-latest as of
 2026-05-30 (pin to these majors when installing):
 
-- **react-router** (v7) — client-side routing (chat view, saved views). Note: v7 merged
-  `react-router-dom` into `react-router`; import from `react-router`. Matches SM-AI.
+- **@tanstack/react-router** — type-safe client-side routing (chat view, saved views). Chosen
+  over react-router for its type safety and tight integration with TanStack Query.
 - **@tanstack/react-query** (v5) — server-state/caching (M6 persistence)
 - **plotly.js** (v3) + **react-plotly.js** (v2) — chart widgets (~M6)
 - **cytoscape** (v3) — relationship graph view (M8)
