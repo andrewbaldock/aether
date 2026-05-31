@@ -104,6 +104,73 @@ needs its own rule (`files.includes` with `!dist`). To stop tsc checking somethi
 
 ---
 
+## The shell — three-zone layout
+
+The app is one persistent shell with three horizontal zones. This is the frame every experience
+runs inside; it is the platform's primary surface.
+
+```
+┌──────────┬───────────────────────────┬──────────────────────────────────┐
+│          │                           │                                  │
+│  SIDEBAR │      CHAT (body)          │     CAPABILITY COLUMN            │
+│          │                           │                                  │
+│  logo    │   messages                │   [ tab | tab | tab ]  ⛶  ×      │
+│  nav     │   …                       │   ┌──────────────────────────┐   │
+│          │                           │   │  active widget           │   │
+│  convos  │   ┌─────────────────────┐ │   │  (3dverse / data / …)    │   │
+│   • …    │   │ type a message…  ↑  │ │   └──────────────────────────┘   │
+│          │   └─────────────────────┘ │                                  │
+└──────────┴───────────────────────────┴──────────────────────────────────┘
+  resizable          resizable boundary        resizable · closable
+  collapsible
+```
+
+**Zones**
+- **Sidebar** — resizable, collapsible. Logo + nav (top), conversation history (list).
+- **Chat (body)** — message transcript + composer. Full width when alone; narrows when the
+  capability column opens.
+- **Capability column** — hosts widgets. **Tabbed** (multiple widgets coexist). **Fullscreen-
+  capable** (expands over the chat for an immersive moment, then restores). Opened/closed by the
+  **agent or the user**; resizable, closable.
+
+**Three states**
+```
+1. CHAT ONLY          2. SPLIT                    3. CAPABILITY FULLSCREEN
+┌────┬──────────┐     ┌────┬─────┬──────────┐     ┌────┬───────────────────┐
+│ SB │  chat    │     │ SB │chat │[tab|tab] │     │ SB │ [tab | tab | tab] │
+│    │          │  →  │    │     │ widget   │  →  │    │   widget          │
+└────┴──────────┘     └────┴─────┴──────────┘     └────┴───────────────────┘
+```
+
+Panel resize/collapse is handled by **`react-resizable-panels`** (resizable, collapsible panel
+groups) rather than hand-rolled drag math.
+
+## The capability registry — the first platform seam
+
+The capability column is not a fixed slot; it is a small managed system that **both the agent
+and the user act on**. The shared state is the **capability registry**:
+
+```
+            ┌─────────────────────────────┐
+  agent  ──▶│   capability registry       │◀──  user
+  (tools)   │   [{ id, type, title,       │     (open/close tabs,
+            │      state, active }]        │      resize, fullscreen)
+            └─────────────────────────────┘
+                         │
+                         ▼
+            Capability column renders tabs + the active widget
+```
+
+- The agent's tools address the column: *open a widget, update widget N, bring one forward.*
+- Each **widget type** (a 3dverse scene, a data view, …) is a **plugin** that registers a
+  renderer keyed by `type`. The registry and the column don't know what's inside a widget — they
+  only know `{ id, type, title, state }` and hand `state` to the matching renderer.
+
+This is where **conversation, capabilities, and visuals meet** — designing it well *is* designing
+the platform. New experiences plug in by registering a renderer; nothing in the shell changes.
+
+---
+
 ## Planned data flow (later commits)
 
 The shape the agent loop will take, for context (not built yet):
