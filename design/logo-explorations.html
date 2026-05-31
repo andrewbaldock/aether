@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aether — Neon Font Explorations</title>
+
+    <!-- Google Fonts: Orbitron, Audiowide, Wallpoet, Space Mono, Oswald, Monoton, Ubuntu -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Audiowide&family=Wallpoet&family=Space+Mono:wght@700&family=Oswald:wght@700&family=Monoton&family=Ubuntu:wght@700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --pink: #ff2e9a;
+        --cyan: #16c2ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        padding: 40px;
+        transition: background 0.25s, color 0.25s;
+      }
+      /* THEMES — toggled via data-theme on <body> */
+      body[data-theme="dark"] {
+        background: radial-gradient(120% 120% at 30% 20%, #15131f 0%, #0a0a0f 60%, #050507 100%);
+        color: #e6e6ef;
+      }
+      body[data-theme="light"] {
+        background: radial-gradient(120% 120% at 30% 20%, #ffffff 0%, #f1f1f5 70%, #e7e7ee 100%);
+        color: #2a2a33;
+      }
+      body[data-theme="art"] {
+        background: radial-gradient(120% 120% at 25% 15%, #2a0a3d 0%, #140a28 55%, #0a0512 100%);
+        color: #f0e6ff;
+      }
+
+      h1 { font-weight: 600; letter-spacing: -0.02em; margin-bottom: 4px; }
+      .sub { opacity: 0.6; margin-bottom: 24px; font-size: 14px; }
+
+      .toggle { display: flex; gap: 8px; margin-bottom: 28px; }
+      .toggle button {
+        font: inherit; font-size: 13px; cursor: pointer;
+        padding: 7px 16px; border-radius: 999px;
+        border: 1px solid currentColor; background: transparent; color: inherit; opacity: 0.5;
+      }
+      .toggle button.active { opacity: 1; font-weight: 600; }
+
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        border-radius: 16px;
+        padding: 20px 24px;
+        margin-bottom: 20px;
+        transition: background 0.25s, border-color 0.25s;
+      }
+      body[data-theme="dark"] .row {
+        background: radial-gradient(80% 80% at 50% 40%, #14121d 0%, #0b0b11 70%, #08080c 100%);
+        border: 1px solid #1c1c28;
+      }
+      body[data-theme="light"] .row {
+        background: #ffffff;
+        border: 1px solid #e2e2ea;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      }
+      body[data-theme="art"] .row {
+        background: radial-gradient(80% 80% at 50% 40%, #221038 0%, #160a28 70%, #0e0620 100%);
+        border: 1px solid #3a1f55;
+      }
+      .fontname {
+        width: 130px;
+        flex-shrink: 0;
+        font-size: 13px;
+        opacity: 0.6;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .mark-A { width: 130px; height: 150px; flex-shrink: 0; }
+      .mark-word { flex: 1; height: 150px; }
+    </style>
+  </head>
+  <body data-theme="dark">
+    <h1>Aether — Font Explorations</h1>
+    <div class="sub">
+      Each row = one font (standalone “A” + “AETHER” wordmark). Pink-weighted gradient, neon glow
+      + CRT scanlines. Flip the theme to see how the neon survives on light / art.
+    </div>
+    <div class="toggle">
+      <button data-set="dark" class="active">Dark</button>
+      <button data-set="light">Light</button>
+      <button data-set="art">Art</button>
+    </div>
+    <script>
+      const body = document.body;
+      for (const btn of document.querySelectorAll(".toggle button")) {
+        btn.addEventListener("click", () => {
+          body.dataset.theme = btn.dataset.set;
+          for (const b of document.querySelectorAll(".toggle button")) {
+            b.classList.toggle("active", b === btn);
+          }
+        });
+      }
+    </script>
+
+    <!-- Shared defs: glow, pink-weighted gradient, scanline masks -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <defs>
+        <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b1" />
+          <feGaussianBlur in="SourceGraphic" stdDeviation="13" result="b2" />
+          <feMerge>
+            <feMergeNode in="b2" />
+            <feMergeNode in="b1" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+
+        <!-- Pink-weighted gradient: pink holds until ~66%, cyan only at the tail -->
+        <linearGradient id="duo" x1="0" y1="0" x2="1" y2="0.4">
+          <stop offset="0%" stop-color="#ff2e9a" />
+          <stop offset="55%" stop-color="#ff2e9a" />
+          <stop offset="78%" stop-color="#b54bd0" />
+          <stop offset="100%" stop-color="#16c2ff" />
+        </linearGradient>
+
+        <!-- Scanline masks (white = visible, black = knocked out) -->
+        <pattern id="scanA" width="10" height="6" patternUnits="userSpaceOnUse">
+          <rect width="10" height="4" fill="#fff" />
+          <rect y="4" width="10" height="2" fill="#000" />
+        </pattern>
+        <mask id="maskA"><rect width="200" height="200" fill="url(#scanA)" /></mask>
+
+        <pattern id="scanW" width="10" height="5" patternUnits="userSpaceOnUse">
+          <rect width="10" height="3.2" fill="#fff" />
+          <rect y="3.2" width="10" height="1.8" fill="#000" />
+        </pattern>
+        <mask id="maskW"><rect width="900" height="200" fill="url(#scanW)" /></mask>
+      </defs>
+    </svg>
+
+    <!--
+      One row template per font. The A and wordmark share `font-family`.
+      Letter "A" uppercase, centered; wordmark "AETHER".
+    -->
+
+    <!-- ORBITRON -->
+    <div class="row">
+      <div class="fontname">Orbitron</div>
+      <svg class="mark-A" viewBox="0 0 130 150">
+        <g filter="url(#glow)" mask="url(#maskA)">
+          <text x="65" y="118" text-anchor="middle" font-family="Orbitron" font-weight="900"
+            font-size="130" fill="url(#duo)">A</text>
+        </g>
+      </svg>
+      <svg class="mark-word" viewBox="0 0 900 150" preserveAspectRatio="xMidYMid meet">
+        <g filter="url(#glow)" mask="url(#maskW)">
+          <text x="450" y="112" text-anchor="middle" font-family="Orbitron" font-weight="900"
+            font-size="110" letter-spacing="6" fill="url(#duo)">AETHER</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- AUDIOWIDE -->
+    <div class="row">
+      <div class="fontname">Audiowide</div>
+      <svg class="mark-A" viewBox="0 0 130 150">
+        <g filter="url(#glow)" mask="url(#maskA)">
+          <text x="65" y="118" text-anchor="middle" font-family="Audiowide"
+            font-size="120" fill="url(#duo)">A</text>
+        </g>
+      </svg>
+      <svg class="mark-word" viewBox="0 0 900 150" preserveAspectRatio="xMidYMid meet">
+        <g filter="url(#glow)" mask="url(#maskW)">
+          <text x="450" y="112" text-anchor="middle" font-family="Audiowide"
+            font-size="105" letter-spacing="4" fill="url(#duo)">AETHER</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- WALLPOET -->
+    <div class="row">
+      <div class="fontname">Wallpoet</div>
+      <svg class="mark-A" viewBox="0 0 130 150">
+        <g filter="url(#glow)" mask="url(#maskA)">
+          <text x="65" y="118" text-anchor="middle" font-family="Wallpoet"
+            font-size="120" fill="url(#duo)">A</text>
+        </g>
+      </svg>
+      <svg class="mark-word" viewBox="0 0 900 150" preserveAspectRatio="xMidYMid meet">
+        <g filter="url(#glow)" mask="url(#maskW)">
+          <text x="450" y="112" text-anchor="middle" font-family="Wallpoet"
+            font-size="100" letter-spacing="6" fill="url(#duo)">AETHER</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- SPACE MONO -->
+    <div class="row">
+      <div class="fontname">Space Mono</div>
+      <svg class="mark-A" viewBox="0 0 130 150">
+        <g filter="url(#glow)" mask="url(#maskA)">
+          <text x="65" y="118" text-anchor="middle" font-family="'Space Mono'" font-weight="700"
+            font-size="125" fill="url(#duo)">A</text>
+        </g>
+      </svg>
+      <svg class="mark-word" viewBox="0 0 900 150" preserveAspectRatio="xMidYMid meet">
+        <g filter="url(#glow)" mask="url(#maskW)">
+          <text x="450" y="112" text-anchor="middle" font-family="'Space Mono'" font-weight="700"
+            font-size="105" letter-spacing="2" fill="url(#duo)">AETHER</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- OSWALD (condensed bold) -->
+    <div class="row">
+      <div class="fontname">Oswald</div>
+      <svg class="mark-A" viewBox="0 0 130 150">
+        <g filter="url(#glow)" mask="url(#maskA)">
+          <text x="65" y="120" text-anchor="middle" font-family="Oswald" font-weight="700"
+            font-size="140" fill="url(#duo)">A</text>
+        </g>
+      </svg>
+      <svg class="mark-word" viewBox="0 0 900 150" preserveAspectRatio="xMidYMid meet">
+        <g filter="url(#glow)" mask="url(#maskW)">
+          <text x="450" y="114" text-anchor="middle" font-family="Oswald" font-weight="700"
+            font-size="125" letter-spacing="4" fill="url(#duo)">AETHER</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- MONOTON -->
+    <div class="row">
+      <div class="fontname">Monoton</div>
+      <svg class="mark-A" viewBox="0 0 130 150">
+        <g filter="url(#glow)" mask="url(#maskA)">
+          <text x="65" y="118" text-anchor="middle" font-family="Monoton"
+            font-size="120" fill="url(#duo)">A</text>
+        </g>
+      </svg>
+      <svg class="mark-word" viewBox="0 0 900 150" preserveAspectRatio="xMidYMid meet">
+        <g filter="url(#glow)" mask="url(#maskW)">
+          <text x="450" y="112" text-anchor="middle" font-family="Monoton"
+            font-size="95" letter-spacing="4" fill="url(#duo)">AETHER</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- UBUNTU -->
+    <div class="row">
+      <div class="fontname">Ubuntu</div>
+      <svg class="mark-A" viewBox="0 0 130 150">
+        <g filter="url(#glow)" mask="url(#maskA)">
+          <text x="65" y="118" text-anchor="middle" font-family="Ubuntu" font-weight="700"
+            font-size="130" fill="url(#duo)">A</text>
+        </g>
+      </svg>
+      <svg class="mark-word" viewBox="0 0 900 150" preserveAspectRatio="xMidYMid meet">
+        <g filter="url(#glow)" mask="url(#maskW)">
+          <text x="450" y="112" text-anchor="middle" font-family="Ubuntu" font-weight="700"
+            font-size="110" letter-spacing="4" fill="url(#duo)">AETHER</text>
+        </g>
+      </svg>
+    </div>
+  </body>
+</html>
