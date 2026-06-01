@@ -42,12 +42,15 @@ cd aether
 cd backend  && bun install && cd ..
 cd frontend && bun install && cd ..
 
-# configure environment
-cp .env.example .env
-# then fill in .env with your keys (Anthropic, Supabase)
+# configure the backend environment
+cp backend/.env.example backend/.env
+# then add your ANTHROPIC_API_KEY to backend/.env
 ```
 
-See [.env.example](.env.example) for the required variables.
+The backend reads `backend/.env` (bun auto-loads it). `ANTHROPIC_API_KEY` is **required** to run
+the backend — see [backend/.env.example](backend/.env.example). The root
+[.env.example](.env.example) lists everything the project will use as it grows. `.env` files are
+gitignored — never commit real keys.
 
 ---
 
@@ -68,8 +71,8 @@ bun dev
 Then open **http://localhost:5173**. The frontend proxies `/api` requests to the backend on
 `:8000` (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#frontend--backend-wiring-the-api-proxy)).
 
-> **Note:** this project is built incrementally. At early commits the backend is a stub (no
-> server yet) and the frontend renders a placeholder. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Note:** this project is built incrementally — see [docs/ROADMAP.md](docs/ROADMAP.md). The
+> chat now does a real round-trip to Claude (no streaming yet); set `ANTHROPIC_API_KEY` first.
 
 ---
 

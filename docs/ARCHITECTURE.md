@@ -3,7 +3,7 @@
 How Aether fits together. **Keep this current:** update it in the same commit that changes how
 the pieces connect.
 
-Last updated: Commit 1 (monorepo skeleton).
+Last updated: Commit 3 (backend + LLM).
 
 ---
 
@@ -79,9 +79,40 @@ Two benefits:
 1. **No CORS in dev** — to the browser, the API looks same-origin.
 2. **No hardcoded backend URL** in frontend code — it just calls `/api/...`.
 
-The `:8000` port is a contract the backend must honor when its server lands in Commit 3 (it
-should bind `:8000`, ideally from an env var). The proxy line and the server's port are two files
-that must agree.
+The `:8000` port is a contract the backend honors: the Hono server binds `:8000` (overridable via
+`PORT`). The proxy line and the server's port are two files that must agree. No CORS config is
+needed in dev — the proxy makes the API look same-origin.
+
+---
+
+## The backend (`/api/chat`)
+
+The backend is a Hono server (`backend/src/index.ts`) served by **bun's native server**
+(`export default { port, fetch }` — no `@hono/node-server`). Two routes today:
+
+- `GET /api/health` → `{ ok: true }` — liveness, works before any API key is set.
+- `POST /api/chat` — one chat turn.
+
+```
+request   { messages: { role: "user" | "assistant", content: string }[] }
+response  { reply: string }            // 200
+error     { error: string }            // 400 (bad body) | 500 (model call failed)
+```
+
+The frontend sends the **full conversation** on every turn; the server is **stateless** (no
+session storage yet). No streaming — one request in, one reply out (streaming is a later commit).
+
+### The LLM connector — a platform seam
+
+The route never imports the Anthropic SDK. It calls `createClient().complete(messages)` from
+`backend/src/llm.ts`, a factory keyed off `LLM_PROVIDER` (default `claude`). Claude is the only
+provider implemented; adding Gemini/Ollama means a new branch there, not a route change. The
+system prompt (`backend/src/prompt.ts`) is sent as a cached content block
+(`cache_control: ephemeral`). The Anthropic client is built lazily on first chat turn, so the
+server (and `/api/health`) start fine without a key.
+
+On the frontend, the round-trip and conversation state live in `frontend/src/shell/useChat.ts`;
+`ChatPanel.tsx` is just the view.
 
 ---
 
@@ -171,18 +202,25 @@ the platform. New experiences plug in by registering a renderer; nothing in the 
 
 ---
 
-## Planned data flow (later commits)
+## Data flow
 
-The shape the agent loop will take, for context (not built yet):
+The shape the full agent loop will take. **Lit up so far** (Commit 3):
 
 ```
 user message
-   → frontend POST /api/chat
-   → Hono handler
+   → frontend POST /api/chat        ← built
+   → Hono handler                   ← built
+   → Claude call (via connector)    ← built (non-streaming, no tools)
+   → reply rendered in the chat     ← built
+```
+
+Still ahead, each its own commit:
+
+```
    → agent loop: Claude call → tool_use? → run tool → feed result back → repeat
    → stream tokens back over SSE
    → frontend renders text + widgets (chart / graph / 3D)
    → persist session + widget specs to Supabase
 ```
 
-Each arrow becomes a commit. See [ROADMAP.md](./ROADMAP.md) for the build sequence.
+See [ROADMAP.md](./ROADMAP.md) for the build sequence.
