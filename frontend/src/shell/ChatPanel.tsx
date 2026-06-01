@@ -1,14 +1,32 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useCapabilities } from "../capabilities/useCapabilities";
+import { AGENT_DIAGRAM_WIDGET } from "../capabilities/widgets/AgentDiagram";
 import { useChat } from "./useChat";
 
 export function ChatPanel() {
   const { messages, sendMessage, isLoading, error } = useChat();
+  const { widgets, activeId, open, close, activate } = useCapabilities();
   const [draft, setDraft] = useState("");
   const [started, setStarted] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // The "See under the hood" toggle. The diagram is considered "on" when its
+  // widget is open AND the active tab. Toggling: open+activate it, or close it
+  // if it's already the one on screen.
+  const diagramOpen = widgets.some((w) => w.id === AGENT_DIAGRAM_WIDGET.id);
+  const diagramActive = diagramOpen && activeId === AGENT_DIAGRAM_WIDGET.id;
+  function toggleDiagram() {
+    if (diagramActive) {
+      close(AGENT_DIAGRAM_WIDGET.id);
+    } else if (diagramOpen) {
+      activate(AGENT_DIAGRAM_WIDGET.id);
+    } else {
+      open(AGENT_DIAGRAM_WIDGET);
+    }
+  }
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps are triggers, not values the effect reads
   useEffect(() => {
@@ -188,15 +206,61 @@ export function ChatPanel() {
             rows={1}
             className={`w-full resize-none bg-transparent px-4 pt-3 pb-10 text-sm text-neutral-100 placeholder:text-neutral-500 focus:outline-none transition-opacity${isLoading ? " opacity-50" : ""}${started ? "" : " min-h-24"}`}
           />
-          <button
-            type="submit"
-            className="absolute bottom-2 right-2 rounded-lg bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-900 hover:bg-white disabled:opacity-40"
-            disabled={draft.trim().length === 0 || isLoading}
-          >
-            Send
-          </button>
+          <div className="absolute bottom-2 right-2 flex items-center gap-2">
+            {/* "See under the hood" — toggles the live agent-loop diagram. */}
+            <div className="group relative flex">
+              <button
+                type="button"
+                onClick={toggleDiagram}
+                aria-label="See under the hood"
+                aria-pressed={diagramActive}
+                className={
+                  diagramActive
+                    ? "rounded-lg border border-neutral-600 bg-neutral-700 p-1.5 text-neutral-100"
+                    : "rounded-lg border border-transparent p-1.5 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-100"
+                }
+              >
+                <FlowChartIcon />
+              </button>
+              <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 whitespace-nowrap rounded-md bg-neutral-950 px-2 py-1 text-xs text-neutral-200 opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                See under the hood
+              </span>
+            </div>
+            <button
+              type="submit"
+              className="rounded-lg bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-900 hover:bg-white disabled:opacity-40"
+              disabled={draft.trim().length === 0 || isLoading}
+            >
+              Send
+            </button>
+          </div>
         </div>
       </form>
     </div>
+  );
+}
+
+// A simple flow-chart glyph: three connected nodes. Marks the "See under the
+// hood" toggle for the live agent-loop diagram.
+function FlowChartIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="8" y="3" width="8" height="5" rx="1" />
+      <rect x="3" y="16" width="7" height="5" rx="1" />
+      <rect x="14" y="16" width="7" height="5" rx="1" />
+      <path d="M12 8v3" />
+      <path d="M12 11H6.5v5" />
+      <path d="M12 11h5.5v5" />
+    </svg>
   );
 }

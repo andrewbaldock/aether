@@ -21,7 +21,12 @@ export interface LlmClient {
     onToken: (token: string) => Promise<void>,
     onDone: () => Promise<void>,
     onToolStart?: (name: string, input: unknown) => Promise<void>,
-    onToolResult?: (name: string, result: string) => Promise<void>
+    onToolResult?: (name: string, result: string) => Promise<void>,
+    // Fired at the top of the agent loop for the second iteration onward — i.e.
+    // each time tool results are fed back and the model is called again. Lets the
+    // frontend visualise the loop re-entering. Iteration 1 is implied by the
+    // request itself, so it is not signalled here.
+    onLoopStart?: (iteration: number) => Promise<void>
   ): Promise<void>;
 }
 
@@ -90,7 +95,14 @@ function createClaudeClient(tools: ToolDefinition[]): LlmClient {
       return text;
     },
 
-    async stream(messages, onToken, onDone, onToolStart, onToolResult) {
+    async stream(
+      messages,
+      onToken,
+      onDone,
+      onToolStart,
+      onToolResult,
+      onLoopStart
+    ) {
       // The agent loop: call the API, handle tool_use if the model requests it,
       // feed results back, and repeat until the model produces a terminal response.
       const history: ApiMessage[] = messages.map((m) => ({
@@ -98,7 +110,15 @@ function createClaudeClient(tools: ToolDefinition[]): LlmClient {
         content: m.content,
       }));
 
+      // Counts trips through the loop. Iteration 1 is the initial call; every
+      // increment past that means tool results were fed back and we're calling
+      // the model again.
+      let iteration = 0;
+
       while (true) {
+        iteration++;
+        if (iteration > 1) await onLoopStart?.(iteration);
+
         // Per-turn accumulators — reset each iteration.
         const pendingTools = new Map<
           number,

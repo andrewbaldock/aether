@@ -48,6 +48,11 @@ app.post("/api/chat", async (c) => {
           await stream.writeSSE({
             data: JSON.stringify({ type: "tool_result", tool, result }),
           });
+        },
+        async (iteration) => {
+          await stream.writeSSE({
+            data: JSON.stringify({ type: "loop_start", iteration }),
+          });
         }
       );
     } catch (err) {

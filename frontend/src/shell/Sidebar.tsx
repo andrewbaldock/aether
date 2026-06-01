@@ -8,10 +8,18 @@ const stubConversations = [
   "Make the room feel like dusk",
 ];
 
-export function Sidebar() {
+export function Sidebar({ onToggle }: { onToggle: () => void }) {
   return (
     <div className="flex h-full flex-col bg-neutral-950 text-neutral-300">
-      <div className="flex items-center px-4 py-5">
+      <div className="flex items-center gap-2 px-4 py-5">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label="Collapse sidebar"
+          className="-ml-1 shrink-0 rounded-md p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+        >
+          <SidebarToggleIcon />
+        </button>
         <Wordmark height={48} />
       </div>
 
@@ -40,5 +48,26 @@ export function Sidebar() {
         ))}
       </ul>
     </div>
+  );
+}
+
+// Standard sidebar glyph: a panel with a divider rail. Used by the header
+// collapse button and the floating re-open button in the shell.
+export function SidebarToggleIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+    </svg>
   );
 }

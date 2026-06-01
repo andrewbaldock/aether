@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAgentEvents } from "./AgentEventContext";
 
 // One message in the transcript. `id` is a render key, local to the frontend —
 // it's not sent to the backend.
@@ -12,12 +13,21 @@ export interface Message {
 // Owns the conversation state and the streaming connection to the backend.
 // Tokens arrive as SSE events and are appended to the last assistant message
 // as they come in, so the UI updates in real time.
+//
+// As it reads the stream it also re-emits each event on the AgentEventBus, so
+// observers like the live agent-loop diagram see the same signals without
+// re-parsing the SSE stream. The chat's own message-state logic is unchanged.
 export function useChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const bus = useAgentEvents();
 
   async function sendMessage(text: string) {
+    // Frontend-only signal: the turn has begun, before any byte leaves. Drives
+    // the diagram's user → POST animation and its auto-open on first message.
+    bus.emit({ type: "request_start" });
+
     const next: Message[] = [
       ...messages,
       { id: crypto.randomUUID(), role: "user", text },
@@ -70,7 +80,10 @@ export function useChat() {
           if (!line.startsWith("data: ")) continue;
           const data = line.slice(6);
 
-          if (data === "[DONE]") break outer;
+          if (data === "[DONE]") {
+            bus.emit({ type: "done" });
+            break outer;
+          }
 
           const event = JSON.parse(data) as {
             type: string;
@@ -79,9 +92,11 @@ export function useChat() {
             tool?: string;
             input?: unknown;
             result?: string;
+            iteration?: number;
           };
 
           if (event.type === "text" && event.content) {
+            bus.emit({ type: "text", content: event.content });
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantId
@@ -90,6 +105,11 @@ export function useChat() {
               )
             );
           } else if (event.type === "tool_start" && event.tool) {
+            bus.emit({
+              type: "tool_start",
+              tool: event.tool,
+              input: event.input,
+            });
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantId
@@ -97,13 +117,25 @@ export function useChat() {
                   : m
               )
             );
-          } else if (event.type === "tool_result") {
+          } else if (event.type === "tool_result" && event.tool) {
+            bus.emit({
+              type: "tool_result",
+              tool: event.tool,
+              result: event.result ?? "",
+            });
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantId ? { ...m, toolActivity: undefined } : m
               )
             );
+          } else if (event.type === "loop_start") {
+            bus.emit({ type: "loop_start", iteration: event.iteration ?? 0 });
           } else if (event.type === "error") {
+            // Emit before throwing so the diagram can show the error state.
+            bus.emit({
+              type: "error",
+              message: event.message ?? "Unknown error from server",
+            });
             throw new Error(event.message ?? "Unknown error from server");
           }
         }
@@ -112,7 +144,11 @@ export function useChat() {
       // Always remove the assistant placeholder on error — partial content is
       // misleading without any indication the response was cut short.
       setMessages((prev) => prev.filter((m) => m.id !== assistantId));
-      setError(e instanceof Error ? e.message : "Something went wrong");
+      const message = e instanceof Error ? e.message : "Something went wrong";
+      setError(message);
+      // Covers the network / bad-status path too (the SSE `error` branch above
+      // already emitted, but the diagram resets idempotently on `error`).
+      bus.emit({ type: "error", message });
     } finally {
       setIsLoading(false);
     }
