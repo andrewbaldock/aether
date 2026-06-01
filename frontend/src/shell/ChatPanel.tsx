@@ -1,4 +1,6 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useChat } from "./useChat";
 
 export function ChatPanel() {
@@ -8,6 +10,7 @@ export function ChatPanel() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps are triggers, not values the effect reads
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, isLoading]);
@@ -58,7 +61,41 @@ export function ChatPanel() {
                     : "max-w-[80%] rounded-2xl bg-neutral-800 px-4 py-2 text-sm text-neutral-200"
                 }
               >
-                {m.text}
+                {m.role === "user" ? (
+                  m.text
+                ) : (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                      h1: ({ children }) => <h1 className="mb-2 text-base font-semibold">{children}</h1>,
+                      h2: ({ children }) => <h2 className="mb-2 text-sm font-semibold">{children}</h2>,
+                      h3: ({ children }) => <h3 className="mb-1 text-sm font-medium">{children}</h3>,
+                      ul: ({ children }) => <ul className="mb-2 list-disc pl-4 space-y-0.5">{children}</ul>,
+                      ol: ({ children }) => <ol className="mb-2 list-decimal pl-4 space-y-0.5">{children}</ol>,
+                      li: ({ children }) => <li>{children}</li>,
+                      code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) =>
+                        inline ? (
+                          <code className="rounded bg-neutral-700 px-1 py-0.5 font-mono text-xs">{children}</code>
+                        ) : (
+                          <code>{children}</code>
+                        ),
+                      pre: ({ children }) => (
+                        <pre className="mb-2 overflow-x-auto rounded-lg bg-neutral-900 p-3 font-mono text-xs">{children}</pre>
+                      ),
+                      blockquote: ({ children }) => (
+                        <blockquote className="mb-2 border-l-2 border-neutral-500 pl-3 text-neutral-400">{children}</blockquote>
+                      ),
+                      a: ({ href, children }) => (
+                        <a href={href} className="underline hover:text-neutral-100" target="_blank" rel="noreferrer">{children}</a>
+                      ),
+                      strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                      hr: () => <hr className="my-2 border-neutral-600" />,
+                    }}
+                  >
+                    {m.text}
+                  </ReactMarkdown>
+                )}
               </div>
             </li>
           ))}
@@ -89,7 +126,7 @@ export function ChatPanel() {
         }
       >
         <div
-          className={`mx-auto flex items-end gap-2 ${started ? "max-w-2xl" : "max-w-md"}`}
+          className={`relative mx-auto rounded-lg border border-neutral-700 bg-neutral-800 focus-within:border-neutral-500 transition-colors ${started ? "max-w-2xl" : "max-w-md"}`}
         >
           <textarea
             ref={textareaRef}
@@ -99,11 +136,11 @@ export function ChatPanel() {
             onKeyDown={handleKeyDown}
             placeholder="Type a message… (Shift+Enter for newline)"
             rows={1}
-            className={`flex-1 resize-none rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2.5 text-sm text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:outline-none transition-opacity${isLoading ? " opacity-50" : ""}${started ? "" : " h-24"}`}
+            className={`w-full resize-none bg-transparent px-4 pt-3 pb-10 text-sm text-neutral-100 placeholder:text-neutral-500 focus:outline-none transition-opacity${isLoading ? " opacity-50" : ""}${started ? "" : " min-h-24"}`}
           />
           <button
             type="submit"
-            className="rounded-lg bg-neutral-100 px-4 py-2.5 text-sm font-medium text-neutral-900 hover:bg-white disabled:opacity-40"
+            className="absolute bottom-2 right-2 rounded-lg bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-900 hover:bg-white disabled:opacity-40"
             disabled={draft.trim().length === 0 || isLoading}
           >
             Send
