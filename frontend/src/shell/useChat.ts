@@ -8,17 +8,15 @@ export interface Message {
   text: string;
 }
 
-// Owns the conversation state and the round-trip to the backend. ChatPanel stays
-// a view; this hook does the work. Plain fetch + useState is right for now —
-// streaming (and TanStack Query, if it earns its place) come later.
+// Owns the conversation state and the streaming connection to the backend.
+// Tokens arrive as SSE events and are appended to the last assistant message
+// as they come in, so the UI updates in real time.
 export function useChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function sendMessage(text: string) {
-    // Append the user's message and post the full history — the server is
-    // stateless, so each turn carries the whole conversation.
     const next: Message[] = [
       ...messages,
       { id: crypto.randomUUID(), role: "user", text },
@@ -26,6 +24,13 @@ export function useChat() {
     setMessages(next);
     setIsLoading(true);
     setError(null);
+
+    // Placeholder for the assistant's reply — appended to as tokens arrive.
+    const assistantId = crypto.randomUUID();
+    setMessages((prev) => [
+      ...prev,
+      { id: assistantId, role: "assistant", text: "" },
+    ]);
 
     try {
       const res = await fetch("/api/chat", {
@@ -35,7 +40,8 @@ export function useChat() {
           messages: next.map((m) => ({ role: m.role, content: m.text })),
         }),
       });
-      if (!res.ok) {
+
+      if (!res.ok || !res.body) {
         const body = await res.json().catch(() => null);
         const msg =
           body != null &&
@@ -47,15 +53,47 @@ export function useChat() {
         throw new Error(msg);
       }
 
-      const data = (await res.json()) as { reply?: unknown };
-      if (typeof data.reply !== "string")
-        throw new Error("Malformed response from server");
-      const reply = data.reply;
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), role: "assistant", text: reply },
-      ]);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      outer: while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6);
+
+          if (data === "[DONE]") break outer;
+
+          const event = JSON.parse(data) as {
+            type: string;
+            content?: string;
+            message?: string;
+          };
+
+          if (event.type === "text" && event.content) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? { ...m, text: m.text + event.content }
+                  : m
+              )
+            );
+          } else if (event.type === "error") {
+            throw new Error(event.message ?? "Unknown error from server");
+          }
+        }
+      }
     } catch (e) {
+      // Always remove the assistant placeholder on error — partial content is
+      // misleading without any indication the response was cut short.
+      setMessages((prev) => prev.filter((m) => m.id !== assistantId));
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setIsLoading(false);

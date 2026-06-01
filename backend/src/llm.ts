@@ -14,9 +14,12 @@ export interface ChatMessage {
 }
 
 export interface LlmClient {
-  // Send the full conversation, get the assistant's text reply. Non-streaming
-  // for now — streaming is a later commit.
   complete(messages: ChatMessage[]): Promise<string>;
+  stream(
+    messages: ChatMessage[],
+    onToken: (token: string) => Promise<void>,
+    onDone: () => Promise<void>
+  ): Promise<void>;
 }
 
 // A current, fast, inexpensive Claude model — good default for a first slice.
@@ -43,33 +46,49 @@ function createClaudeClient(): LlmClient {
 
   const model = process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL;
 
+  function baseParams(messages: ChatMessage[]) {
+    return {
+      model,
+      max_tokens: 1024,
+      system: [
+        {
+          type: "text" as const,
+          text: SYSTEM_PROMPT,
+          cache_control: { type: "ephemeral" as const },
+        },
+      ],
+      messages,
+    };
+  }
+
   return {
     async complete(messages) {
-      const response = await getClient().messages.create({
-        model,
-        max_tokens: 1024,
-        // System prompt as a content block with cache_control so the (stable)
-        // prefix is cached across turns — cheaper and faster as it grows.
-        system: [
-          {
-            type: "text",
-            text: SYSTEM_PROMPT,
-            cache_control: { type: "ephemeral" },
-          },
-        ],
-        messages,
-      });
+      const response = await getClient().messages.create(baseParams(messages));
 
       // Concatenate every text block; ignore any non-text blocks (none yet, but
       // tool_use blocks would appear here once tools land).
-      // Note: stop_reason "max_tokens" means the reply was truncated — visible as
-      // a sentence cut off mid-word. Raise max_tokens or stream (Commit 4) to fix.
       const text = response.content
         .filter((block) => block.type === "text")
         .map((block) => block.text)
         .join("");
       if (!text) throw new Error("Model returned no text content");
       return text;
+    },
+
+    async stream(messages, onToken, onDone) {
+      // for await ensures each onToken call is awaited before the next token
+      // arrives — writeSSE errors surface instead of being silently dropped.
+      for await (const event of getClient().messages.stream(
+        baseParams(messages)
+      )) {
+        if (
+          event.type === "content_block_delta" &&
+          event.delta.type === "text_delta"
+        ) {
+          await onToken(event.delta.text);
+        }
+      }
+      await onDone();
     },
   };
 }

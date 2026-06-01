@@ -1,9 +1,10 @@
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import { type ChatMessage, createClient } from "./llm";
 
 // The Aether backend: a small Hono server that holds the API keys and talks to
-// the LLM. The frontend (Vite, :5173) proxies /api here. No streaming yet — a
-// chat turn is one request in, one reply out.
+// the LLM. The frontend (Vite, :5173) proxies /api here. Chat turns stream
+// token-by-token via SSE so the UI updates as Claude generates.
 
 const app = new Hono();
 const llm = createClient();
@@ -11,8 +12,8 @@ const llm = createClient();
 // Trivial liveness check — usable before any API key is set.
 app.get("/api/health", (c) => c.json({ ok: true }));
 
-// One chat turn. The frontend posts the full conversation each time (the server
-// is stateless); we hand it straight to the connector and return the reply.
+// One chat turn. The frontend posts the full conversation; we stream tokens
+// back as SSE events. The server is stateless — history is sent each turn.
 app.post("/api/chat", async (c) => {
   let body: unknown;
   try {
@@ -26,14 +27,28 @@ app.post("/api/chat", async (c) => {
     return c.json({ error: "Expected { messages: { role, content }[] }" }, 400);
   }
 
-  try {
-    const reply = await llm.complete(messages);
-    return c.json({ reply });
-  } catch (err) {
-    // Log the real error server-side; don't leak SDK/key details to the client.
-    console.error("POST /api/chat failed:", err);
-    return c.json({ error: "Failed to get a reply from the model" }, 500);
-  }
+  return streamSSE(c, async (stream) => {
+    try {
+      await llm.stream(
+        messages,
+        async (token) => {
+          await stream.writeSSE({
+            data: JSON.stringify({ type: "text", content: token }),
+          });
+        },
+        async () => {
+          await stream.writeSSE({ data: "[DONE]" });
+        }
+      );
+    } catch (err) {
+      console.error("POST /api/chat stream failed:", err);
+      const message =
+        err instanceof Error ? err.message : "Failed to get a reply from the model";
+      await stream.writeSSE({
+        data: JSON.stringify({ type: "error", message }),
+      });
+    }
+  });
 });
 
 function isChatMessageArray(value: unknown): value is ChatMessage[] {
