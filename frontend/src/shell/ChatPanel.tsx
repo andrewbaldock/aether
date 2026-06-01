@@ -1,11 +1,10 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { useCapabilities } from "../capabilities/useCapabilities";
 import { useChat } from "./useChat";
 
 export function ChatPanel() {
   const { messages, sendMessage, isLoading, error } = useChat();
   const [draft, setDraft] = useState("");
-  const { open, isOpen } = useCapabilities();
+  const [started, setStarted] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -16,6 +15,7 @@ export function ChatPanel() {
   function submit() {
     const text = draft.trim();
     if (!text || isLoading) return;
+    setStarted(true);
     setDraft("");
     sendMessage(text);
     textareaRef.current?.focus();
@@ -33,35 +33,14 @@ export function ChatPanel() {
     }
   }
 
-  function openDemoWidget() {
-    const n = Date.now().toString().slice(-4);
-    open({
-      id: crypto.randomUUID(),
-      type: "placeholder",
-      title: `Widget ${n}`,
-      state: "Opened from the chat — try tabs, resize, and fullscreen.",
-    });
-  }
-
   return (
-    <div className="flex h-full flex-col bg-neutral-900">
+    <div className="relative flex h-full flex-col bg-neutral-900">
       <div className="flex-1 overflow-y-auto px-6 py-6">
-        {messages.length === 0 && (
+        {!started && (
           <div className="mx-auto mt-20 max-w-md text-center">
             <div className="text-2xl font-medium text-neutral-200">
               Ask Aether
             </div>
-            <p className="mt-2 text-sm text-neutral-500">
-              The chat is the interface. Answers appear here — and in the
-              capability column when a visual fits best.
-            </p>
-            <button
-              type="button"
-              onClick={openDemoWidget}
-              className="mt-6 rounded-md bg-neutral-100 px-4 py-2 text-sm font-medium text-neutral-900 hover:bg-white"
-            >
-              {isOpen ? "Open another widget" : "Open a capability widget"}
-            </button>
           </div>
         )}
         <ul className="mx-auto max-w-2xl space-y-4">
@@ -101,16 +80,26 @@ export function ChatPanel() {
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={handleSubmit} className="border-t border-neutral-800 p-4">
-        <div className="mx-auto flex max-w-2xl items-end gap-2">
+      <form
+        onSubmit={handleSubmit}
+        className={
+          started
+            ? "border-t border-neutral-800 p-4 transition-all duration-600 ease-in-out"
+            : "absolute inset-x-0 top-1/2 -translate-y-1/2 px-6 transition-all duration-600 ease-in-out"
+        }
+      >
+        <div
+          className={`mx-auto flex items-end gap-2 ${started ? "max-w-2xl" : "max-w-md"}`}
+        >
           <textarea
             ref={textareaRef}
             value={draft}
+            autoFocus
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message… (Shift+Enter for newline)"
             rows={1}
-            className={`flex-1 resize-none rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2.5 text-sm text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:outline-none transition-opacity${isLoading ? " opacity-50" : ""}`}
+            className={`flex-1 resize-none rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2.5 text-sm text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-500 focus:outline-none transition-opacity${isLoading ? " opacity-50" : ""}${started ? "" : " h-24"}`}
           />
           <button
             type="submit"
