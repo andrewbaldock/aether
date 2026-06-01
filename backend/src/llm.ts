@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { SYSTEM_PROMPT } from "./prompt";
+import { executeTool, TOOLS, type ToolDefinition } from "./tools";
 
 // The LLM connector — a Platform seam. The route calls `createClient().complete()`
 // and never names a provider. Swapping Claude for Gemini/Ollama later means adding
@@ -18,7 +19,9 @@ export interface LlmClient {
   stream(
     messages: ChatMessage[],
     onToken: (token: string) => Promise<void>,
-    onDone: () => Promise<void>
+    onDone: () => Promise<void>,
+    onToolStart?: (name: string, input: unknown) => Promise<void>,
+    onToolResult?: (name: string, result: string) => Promise<void>
   ): Promise<void>;
 }
 
@@ -26,7 +29,12 @@ export interface LlmClient {
 // Override with ANTHROPIC_MODEL; bump to an Opus model when quality matters more.
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 
-function createClaudeClient(): LlmClient {
+// Internal type alias — the Anthropic SDK's MessageParam. The public ChatMessage
+// uses plain strings; internally the agent loop needs structured content blocks
+// once tool_use / tool_result blocks appear.
+type ApiMessage = Anthropic.Messages.MessageParam;
+
+function createClaudeClient(tools: ToolDefinition[]): LlmClient {
   // Build the SDK client lazily on first use, not at construction time. This lets
   // the server start (and /api/health respond) without a key set — only an actual
   // chat turn requires ANTHROPIC_API_KEY.
@@ -46,7 +54,7 @@ function createClaudeClient(): LlmClient {
 
   const model = process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL;
 
-  function baseParams(messages: ChatMessage[]) {
+  function apiParams(messages: ApiMessage[]) {
     return {
       model,
       max_tokens: 1024,
@@ -58,12 +66,19 @@ function createClaudeClient(): LlmClient {
         },
       ],
       messages,
+      ...(tools.length > 0 ? { tools } : {}),
     };
   }
 
   return {
     async complete(messages) {
-      const response = await getClient().messages.create(baseParams(messages));
+      const apiMessages: ApiMessage[] = messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+      const response = await getClient().messages.create(
+        apiParams(apiMessages)
+      );
 
       // Concatenate every text block; ignore any non-text blocks (none yet, but
       // tool_use blocks would appear here once tools land).
@@ -75,20 +90,97 @@ function createClaudeClient(): LlmClient {
       return text;
     },
 
-    async stream(messages, onToken, onDone) {
-      // for await ensures each onToken call is awaited before the next token
-      // arrives — writeSSE errors surface instead of being silently dropped.
-      for await (const event of getClient().messages.stream(
-        baseParams(messages)
-      )) {
-        if (
-          event.type === "content_block_delta" &&
-          event.delta.type === "text_delta"
-        ) {
-          await onToken(event.delta.text);
+    async stream(messages, onToken, onDone, onToolStart, onToolResult) {
+      // The agent loop: call the API, handle tool_use if the model requests it,
+      // feed results back, and repeat until the model produces a terminal response.
+      const history: ApiMessage[] = messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      while (true) {
+        // Per-turn accumulators — reset each iteration.
+        const pendingTools = new Map<
+          number,
+          { id: string; name: string; inputChunks: string[] }
+        >();
+        const textBlocks: { type: "text"; text: string }[] = [];
+        let currentText = "";
+        let stopReason: string | null = null;
+
+        // for await ensures each onToken call is awaited before the next token
+        // arrives — writeSSE errors surface instead of being silently dropped.
+        for await (const event of getClient().messages.stream(
+          apiParams(history)
+        )) {
+          if (event.type === "content_block_start") {
+            if (event.content_block.type === "tool_use") {
+              pendingTools.set(event.index, {
+                id: event.content_block.id,
+                name: event.content_block.name,
+                inputChunks: [],
+              });
+            } else if (event.content_block.type === "text") {
+              currentText = "";
+            }
+          } else if (event.type === "content_block_delta") {
+            if (event.delta.type === "text_delta") {
+              await onToken(event.delta.text);
+              currentText += event.delta.text;
+            } else if (event.delta.type === "input_json_delta") {
+              // Accumulate partial JSON — parse only when the block is complete.
+              pendingTools
+                .get(event.index)
+                ?.inputChunks.push(event.delta.partial_json);
+            }
+          } else if (event.type === "content_block_stop") {
+            if (currentText) {
+              textBlocks.push({ type: "text", text: currentText });
+              currentText = "";
+            }
+          } else if (event.type === "message_delta") {
+            stopReason = event.delta.stop_reason ?? null;
+          }
         }
+
+        // No tool calls — stream is complete.
+        if (stopReason !== "tool_use" || pendingTools.size === 0) {
+          await onDone();
+          return;
+        }
+
+        // Build the assistant message with all content blocks for history.
+        // Must include both text blocks (if any) and tool_use blocks.
+        const assistantContent: Anthropic.Messages.ContentBlockParam[] = [
+          ...textBlocks,
+          ...Array.from(pendingTools.values()).map((t) => ({
+            type: "tool_use" as const,
+            id: t.id,
+            name: t.name,
+            input: JSON.parse(t.inputChunks.join("") || "{}"),
+          })),
+        ];
+        history.push({ role: "assistant", content: assistantContent });
+
+        // Execute each tool and collect results.
+        const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
+        for (const [, tool] of pendingTools) {
+          const input = JSON.parse(
+            tool.inputChunks.join("") || "{}"
+          ) as unknown;
+          await onToolStart?.(tool.name, input);
+          const result = executeTool(tool.name, input);
+          await onToolResult?.(tool.name, result);
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: tool.id,
+            content: result,
+          });
+        }
+
+        history.push({ role: "user", content: toolResults });
+        // Continue the loop — call the API again with updated history.
       }
-      await onDone();
     },
   };
 }
@@ -99,7 +191,7 @@ export function createClient(): LlmClient {
   const provider = process.env.LLM_PROVIDER ?? "claude";
   switch (provider) {
     case "claude":
-      return createClaudeClient();
+      return createClaudeClient(TOOLS);
     default:
       throw new Error(
         `Unknown LLM_PROVIDER: "${provider}" (expected "claude")`

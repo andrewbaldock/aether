@@ -3,7 +3,7 @@
 Every dependency in Aether, what it does, and why it was chosen. **Keep this current:** when a
 commit adds, removes, or upgrades a dependency, update this file in the same commit.
 
-Last updated: Commit 3 (backend + LLM).
+Last updated: agent loop + tools.
 
 ---
 
@@ -27,7 +27,9 @@ source. See [ARCHITECTURE.md](./ARCHITECTURE.md#two-runtimes).
 |---------|---------|--------------|-----------|
 | `react` / `react-dom` | ^19.2.6 | UI library | The view layer; the chat interface and all rendered answers (charts, graphs, 3D) are React components. |
 | `tailwindcss` | ^4.3.0 | Utility-first CSS | Styling via composable utility classes in markup — no per-component stylesheets, no leaking. v4 uses a Vite plugin (no PostCSS). |
-| `@supabase/supabase-js` | ^2.106.2 | Supabase client | Installed now, used from Commit 6 for persistence (sessions, saved views). |
+| `react-markdown` | ^10.x | Markdown renderer | Renders assistant messages as rich text. Used with `remark-gfm` for tables, strikethrough, task lists. |
+| `remark-gfm` | ^4.x | GitHub Flavored Markdown plugin | Extends `react-markdown` with GFM syntax. |
+| `@supabase/supabase-js` | ^2.106.2 | Supabase client | Installed now, unused until the persistence milestone. |
 
 ### Dev dependencies
 
@@ -62,7 +64,7 @@ is why the `typecheck` script uses `tsc -b --noEmit`.
 | Package | Version | What it does | Why chosen |
 |---------|---------|--------------|-----------|
 | `hono` | ^4.12.23 | Web framework | Tiny, fast HTTP framework for the API. Served by bun's native server (`export default { port, fetch }` — no `@hono/node-server`). Routes: `/api/health`, `/api/chat`. |
-| `@anthropic-ai/sdk` | ^0.100.1 | Claude API client | Talks to Claude (the LLM). Used only via the connector in `backend/src/llm.ts` (`createClient()` keyed off `LLM_PROVIDER`) — the route never imports it directly, so Claude/Gemini/Ollama stay swappable. Sends the system prompt as a cached content block (`cache_control: ephemeral`). |
+| `@anthropic-ai/sdk` | ^0.100.1 | Claude API client | Talks to Claude (the LLM). Used only via the connector in `backend/src/llm.ts` (`createClient()` keyed off `LLM_PROVIDER`) — the route never imports it directly, so Claude/Gemini/Ollama stay swappable. Sends the system prompt as a cached content block (`cache_control: ephemeral`). Supports tool use: tools defined in `backend/src/tools.ts`, agent loop in `llm.ts`. |
 | `@supabase/supabase-js` | ^2.106.2 | Supabase client | Persistence (Commit 6). Two-client pattern planned: read (anon key) + write (service key). |
 
 ### Dev dependencies

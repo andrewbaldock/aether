@@ -38,12 +38,24 @@ app.post("/api/chat", async (c) => {
         },
         async () => {
           await stream.writeSSE({ data: "[DONE]" });
+        },
+        async (tool, input) => {
+          await stream.writeSSE({
+            data: JSON.stringify({ type: "tool_start", tool, input }),
+          });
+        },
+        async (tool, result) => {
+          await stream.writeSSE({
+            data: JSON.stringify({ type: "tool_result", tool, result }),
+          });
         }
       );
     } catch (err) {
       console.error("POST /api/chat stream failed:", err);
       const message =
-        err instanceof Error ? err.message : "Failed to get a reply from the model";
+        err instanceof Error
+          ? err.message
+          : "Failed to get a reply from the model";
       await stream.writeSSE({
         data: JSON.stringify({ type: "error", message }),
       });
