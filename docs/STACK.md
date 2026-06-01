@@ -3,7 +3,7 @@
 Every dependency in Aether, what it does, and why it was chosen. **Keep this current:** when a
 commit adds, removes, or upgrades a dependency, update this file in the same commit.
 
-Last updated: Commit 1 (monorepo skeleton).
+Last updated: Commit 3 (backend + LLM).
 
 ---
 
@@ -61,8 +61,8 @@ is why the `typecheck` script uses `tsc -b --noEmit`.
 
 | Package | Version | What it does | Why chosen |
 |---------|---------|--------------|-----------|
-| `hono` | ^4.12.23 | Web framework | Tiny, fast HTTP framework for the API. Runs on bun. Server arrives in Commit 3. |
-| `@anthropic-ai/sdk` | ^0.100.1 | Claude API client | Talks to Claude (the LLM). Will be abstracted behind a provider factory so Claude/Gemini/Ollama can be swapped via `LLM_PROVIDER`. |
+| `hono` | ^4.12.23 | Web framework | Tiny, fast HTTP framework for the API. Served by bun's native server (`export default { port, fetch }` — no `@hono/node-server`). Routes: `/api/health`, `/api/chat`. |
+| `@anthropic-ai/sdk` | ^0.100.1 | Claude API client | Talks to Claude (the LLM). Used only via the connector in `backend/src/llm.ts` (`createClient()` keyed off `LLM_PROVIDER`) — the route never imports it directly, so Claude/Gemini/Ollama stay swappable. Sends the system prompt as a cached content block (`cache_control: ephemeral`). |
 | `@supabase/supabase-js` | ^2.106.2 | Supabase client | Persistence (Commit 6). Two-client pattern planned: read (anon key) + write (service key). |
 
 ### Dev dependencies
