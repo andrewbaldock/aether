@@ -3,7 +3,7 @@
 How Aether fits together. **Keep this current:** update it in the same commit that changes how
 the pieces connect.
 
-Last updated: Commit 3 (backend + LLM).
+Last updated: agent loop + tools.
 
 ---
 
@@ -109,12 +109,17 @@ assistant message in state.
 
 ### The LLM connector — a platform seam
 
-The route never imports the Anthropic SDK. It calls `createClient().stream(messages, onToken, onDone)` from
+The route never imports the Anthropic SDK. It calls `createClient().stream(...)` from
 `backend/src/llm.ts`, a factory keyed off `LLM_PROVIDER` (default `claude`). Claude is the only
 provider implemented; adding Gemini/Ollama means a new branch there, not a route change. The
 system prompt (`backend/src/prompt.ts`) is sent as a cached content block
 (`cache_control: ephemeral`). The Anthropic client is built lazily on first chat turn, so the
 server (and `/api/health`) start fine without a key.
+
+Tools are defined in `backend/src/tools.ts` (a `TOOLS` array of Anthropic-schema definitions plus
+an `executeTool` dispatcher) and passed to `createClaudeClient` at construction time — the
+`LlmClient` interface stays tool-agnostic. The `stream()` method accepts optional `onToolStart` and
+`onToolResult` callbacks; the route uses these to emit `tool_start` / `tool_result` SSE events.
 
 On the frontend, the stream reader and conversation state live in `frontend/src/shell/useChat.ts`;
 `ChatPanel.tsx` is just the view.
@@ -209,22 +214,36 @@ the platform. New experiences plug in by registering a renderer; nothing in the 
 
 ## Data flow
 
-The shape the full agent loop will take. **Lit up so far** (Commit 4):
+**Lit up as of Commit 5** (agent loop + tools):
 
 ```
 user message
-   → frontend POST /api/chat              ← built
-   → Hono handler (streamSSE)             ← built
-   → Claude call via connector (stream)   ← built
-   → SSE token events → frontend reader   ← built
-   → tokens appended live in the chat     ← built
+   → frontend POST /api/chat                    ← built
+   → Hono handler (streamSSE)                   ← built
+   → Claude call via connector (stream)         ← built
+   → SSE token events → frontend reader         ← built
+   → tokens appended live in the chat           ← built
+   → agent loop: tool_use? → executeTool        ← built (Commit 5)
+       → feed tool_result back → continue       ← built (Commit 5)
+       → exits when stop_reason !== "tool_use"  ← built (Commit 5)
 ```
 
-Still ahead, each its own commit:
+SSE wire format — all event types:
+```
+data: {"type":"text","content":"..."}              // one event per token
+data: {"type":"tool_start","tool":"...","input":{}} // tool call beginning
+data: {"type":"tool_result","tool":"...","result":"..."} // tool result fed back
+data: [DONE]                                       // stream complete
+data: {"type":"error","message":"..."}             // mid-stream error
+```
+
+The agent loop runs entirely on the backend; the frontend sees only SSE events. Tool
+definitions live in `backend/src/tools.ts`; the loop in `backend/src/llm.ts`.
+
+Still ahead:
 
 ```
-   → agent loop: Claude call → tool_use? → run tool → feed result back → repeat
-   → frontend renders text + widgets (chart / graph / 3D)
+   → frontend renders widgets (chart / graph / 3D)
    → persist session + widget specs to Supabase
 ```
 

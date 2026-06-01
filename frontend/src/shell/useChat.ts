@@ -6,6 +6,7 @@ export interface Message {
   id: string;
   role: "user" | "assistant";
   text: string;
+  toolActivity?: string;
 }
 
 // Owns the conversation state and the streaming connection to the backend.
@@ -75,6 +76,9 @@ export function useChat() {
             type: string;
             content?: string;
             message?: string;
+            tool?: string;
+            input?: unknown;
+            result?: string;
           };
 
           if (event.type === "text" && event.content) {
@@ -83,6 +87,20 @@ export function useChat() {
                 m.id === assistantId
                   ? { ...m, text: m.text + event.content }
                   : m
+              )
+            );
+          } else if (event.type === "tool_start" && event.tool) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? { ...m, toolActivity: `Using ${event.tool}…` }
+                  : m
+              )
+            );
+          } else if (event.type === "tool_result") {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId ? { ...m, toolActivity: undefined } : m
               )
             );
           } else if (event.type === "error") {
