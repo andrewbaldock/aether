@@ -91,27 +91,32 @@ The backend is a Hono server (`backend/src/index.ts`) served by **bun's native s
 (`export default { port, fetch }` — no `@hono/node-server`). Two routes today:
 
 - `GET /api/health` → `{ ok: true }` — liveness, works before any API key is set.
-- `POST /api/chat` — one chat turn.
+- `POST /api/chat` — one chat turn, streamed as SSE.
 
 ```
 request   { messages: { role: "user" | "assistant", content: string }[] }
-response  { reply: string }            // 200
-error     { error: string }            // 400 (bad body) | 500 (model call failed)
+response  text/event-stream
+  data: {"type":"text","content":"..."}   // one event per token
+  data: [DONE]                            // stream complete
+  data: {"type":"error","message":"..."}  // mid-stream error
+error     { error: string }              // 400 (bad body) before streaming starts
 ```
 
 The frontend sends the **full conversation** on every turn; the server is **stateless** (no
-session storage yet). No streaming — one request in, one reply out (streaming is a later commit).
+session storage yet). Tokens are emitted via Hono's `streamSSE()` as they arrive from the SDK;
+the frontend reads them with `fetch` + `ReadableStream`, appending each token to the last
+assistant message in state.
 
 ### The LLM connector — a platform seam
 
-The route never imports the Anthropic SDK. It calls `createClient().complete(messages)` from
+The route never imports the Anthropic SDK. It calls `createClient().stream(messages, onToken, onDone)` from
 `backend/src/llm.ts`, a factory keyed off `LLM_PROVIDER` (default `claude`). Claude is the only
 provider implemented; adding Gemini/Ollama means a new branch there, not a route change. The
 system prompt (`backend/src/prompt.ts`) is sent as a cached content block
 (`cache_control: ephemeral`). The Anthropic client is built lazily on first chat turn, so the
 server (and `/api/health`) start fine without a key.
 
-On the frontend, the round-trip and conversation state live in `frontend/src/shell/useChat.ts`;
+On the frontend, the stream reader and conversation state live in `frontend/src/shell/useChat.ts`;
 `ChatPanel.tsx` is just the view.
 
 ---
@@ -204,21 +209,21 @@ the platform. New experiences plug in by registering a renderer; nothing in the 
 
 ## Data flow
 
-The shape the full agent loop will take. **Lit up so far** (Commit 3):
+The shape the full agent loop will take. **Lit up so far** (Commit 4):
 
 ```
 user message
-   → frontend POST /api/chat        ← built
-   → Hono handler                   ← built
-   → Claude call (via connector)    ← built (non-streaming, no tools)
-   → reply rendered in the chat     ← built
+   → frontend POST /api/chat              ← built
+   → Hono handler (streamSSE)             ← built
+   → Claude call via connector (stream)   ← built
+   → SSE token events → frontend reader   ← built
+   → tokens appended live in the chat     ← built
 ```
 
 Still ahead, each its own commit:
 
 ```
    → agent loop: Claude call → tool_use? → run tool → feed result back → repeat
-   → stream tokens back over SSE
    → frontend renders text + widgets (chart / graph / 3D)
    → persist session + widget specs to Supabase
 ```
