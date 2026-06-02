@@ -240,10 +240,10 @@ export function ChatPanel() {
             <button
               type="submit"
               aria-label="Send"
-              className="rounded-lg bg-gradient-to-r from-[#fd40a4] to-[#c35ed1] px-3 py-1.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-40"
+              className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-r from-[#fd40a4] to-[#c35ed1] text-2xl leading-none text-white hover:brightness-110 disabled:opacity-40"
               disabled={draft.trim().length === 0 || isLoading}
             >
-              𑁍
+              <span className={isLoading ? "animate-spin" : ""}>𑁍</span>
             </button>
           </div>
         </div>
