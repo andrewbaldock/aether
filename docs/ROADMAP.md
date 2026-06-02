@@ -24,7 +24,7 @@ deliverable; experiences are how we prove and demo it.
 | ✅ | The shell | Three-zone resizable layout: sidebar · chat body · capability column (tabbed, fullscreen-capable, AI- or user-controlled). The capability-registry seam. |
 | ✅ | Backend + LLM | Hono, the LLM connector, streaming SSE, markdown rendering |
 | ✅ | Agent loop + tools | Tool-use loop; `get_current_datetime` as the first real tool |
-| | Persistence | Supabase, JSONB, TanStack Query, session history |
+| ✅ | Persistence | Supabase (sessions + messages tables), anonymous localStorage identity, session history in sidebar, save-on-done |
 
 After Phase 1: a working full-stack conversational platform with tool use, persistence, and the
 capability column ready to host experiences.

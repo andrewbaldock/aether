@@ -3,7 +3,7 @@
 How Aether fits together. **Keep this current:** update it in the same commit that changes how
 the pieces connect.
 
-Last updated: agent loop + tools.
+Last updated: persistence (Supabase, session history).
 
 ---
 
@@ -92,9 +92,16 @@ The backend is a Hono server (`backend/src/index.ts`) served by **bun's native s
 
 - `GET /api/health` → `{ ok: true }` — liveness, works before any API key is set.
 - `POST /api/chat` — one chat turn, streamed as SSE.
+- `POST /api/sessions` — create a new session; returns `{ id }`.
+- `GET /api/sessions?userId=...` — list sessions for a user (most-recent-first).
+- `GET /api/sessions/:id/messages` — load the full message history for a session.
 
 ```
-request   { messages: { role: "user" | "assistant", content: string }[] }
+request   {
+            messages: { role: "user" | "assistant", content: string }[],
+            sessionId?: string,   // omit to skip persistence
+            userId?: string
+          }
 response  text/event-stream
   data: {"type":"text","content":"..."}   // one event per token
   data: [DONE]                            // stream complete
@@ -102,10 +109,9 @@ response  text/event-stream
 error     { error: string }              // 400 (bad body) before streaming starts
 ```
 
-The frontend sends the **full conversation** on every turn; the server is **stateless** (no
-session storage yet). Tokens are emitted via Hono's `streamSSE()` as they arrive from the SDK;
-the frontend reads them with `fetch` + `ReadableStream`, appending each token to the last
-assistant message in state.
+The frontend sends the **full conversation** on every turn. After `[DONE]`, the backend saves
+the user message and the complete assistant reply to Supabase (if `sessionId` + `userId` are
+present). The auto-title is set from the first user message if the session has none yet.
 
 ### The LLM connector — a platform seam
 
@@ -121,8 +127,9 @@ an `executeTool` dispatcher) and passed to `createClaudeClient` at construction 
 `LlmClient` interface stays tool-agnostic. The `stream()` method accepts optional `onToolStart` and
 `onToolResult` callbacks; the route uses these to emit `tool_start` / `tool_result` SSE events.
 
-On the frontend, the stream reader and conversation state live in `frontend/src/shell/useChat.ts`;
-`ChatPanel.tsx` is just the view.
+On the frontend, the stream reader lives in `frontend/src/shell/useChat.ts`; message state is
+lifted into `SessionContext` so both `ChatPanel` and `Sidebar` share it. `ChatPanel.tsx` is just
+the view.
 
 ---
 
@@ -258,11 +265,25 @@ data: {"type":"error","message":"..."}             // mid-stream error
 The agent loop runs entirely on the backend; the frontend sees only SSE events. Tool
 definitions live in `backend/src/tools.ts`; the loop in `backend/src/llm.ts`.
 
+**Persistence layer** (added in M9):
+
+```
+user message
+   → frontend POST /api/chat (with sessionId + userId)   ← built
+   → [DONE] received
+   → backend saves user + assistant messages to Supabase  ← built
+   → sidebar fetches GET /api/sessions?userId=...         ← built
+   → clicking a session loads GET /api/sessions/:id/messages ← built
+```
+
+Anonymous identity: a UUID stored in `localStorage` under `aether_user_id` (created on first
+visit, stable across reloads). No login required. `SessionContext` owns the session lifecycle;
+`useSession` creates a new session on mount and on "+ New conversation" clicks.
+
 Still ahead:
 
 ```
    → frontend renders widgets (chart / graph / 3D)
-   → persist session + widget specs to Supabase
 ```
 
 See [ROADMAP.md](./ROADMAP.md) for the build sequence.

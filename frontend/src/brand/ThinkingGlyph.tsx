@@ -80,9 +80,7 @@ export function ThinkingGlyph({
         {glyph}
       </g>
       {/* Layer 2 — crisp scanlined glyph, breathing on the X axis. */}
-      <g mask={`url(#${mask})`}>
-        {glyph}
-      </g>
+      <g mask={`url(#${mask})`}>{glyph}</g>
     </svg>
   );
 }
