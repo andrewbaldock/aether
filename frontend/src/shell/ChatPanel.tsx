@@ -4,13 +4,27 @@ import remarkGfm from "remark-gfm";
 import { ThinkingGlyph } from "../brand/ThinkingGlyph";
 import { useCapabilities } from "../capabilities/useCapabilities";
 import { AGENT_DIAGRAM_WIDGET } from "../capabilities/widgets/AgentDiagram";
+import { useSessionContext } from "./SessionContext";
 import { useChat } from "./useChat";
 
 export function ChatPanel() {
-  const { messages, sendMessage, isLoading, error } = useChat();
+  const {
+    userId,
+    messages,
+    onMessagesChange: setMessages,
+    getOrCreateSession,
+    refreshSessions,
+  } = useSessionContext();
+  const { sendMessage, isLoading, error } = useChat({
+    userId,
+    messages,
+    onMessagesChange: setMessages,
+    getOrCreateSession,
+    refreshSessions,
+  });
   const { widgets, activeId, open, close, activate } = useCapabilities();
   const [draft, setDraft] = useState("");
-  const [started, setStarted] = useState(false);
+  const started = messages.length > 0;
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -21,11 +35,11 @@ export function ChatPanel() {
   const diagramActive = diagramOpen && activeId === AGENT_DIAGRAM_WIDGET.id;
 
   // Seed from localStorage on first mount.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: open is stable, run once on mount
   useEffect(() => {
     if (localStorage.getItem("aether-diagram-open") === "true") {
       open(AGENT_DIAGRAM_WIDGET);
     }
-  // biome-ignore lint/correctness/useExhaustiveDependencies: open is stable, run once
   }, []);
 
   // Persist whenever the diagram is toggled.
@@ -51,7 +65,6 @@ export function ChatPanel() {
   function submit() {
     const text = draft.trim();
     if (!text || isLoading) return;
-    setStarted(true);
     setDraft("");
     sendMessage(text);
     textareaRef.current?.focus();
