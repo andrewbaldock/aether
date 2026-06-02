@@ -4,13 +4,16 @@ import "./capabilities/widgets/PlaceholderWidget";
 import "./capabilities/widgets/AgentDiagram";
 import { AgentEventProvider } from "./shell/AgentEventContext";
 import { Shell } from "./shell/Shell";
+import { ThemeProvider } from "./theme/useTheme";
 
 export default function App() {
   return (
-    <AgentEventProvider>
-      <CapabilityProvider>
-        <Shell />
-      </CapabilityProvider>
-    </AgentEventProvider>
+    <ThemeProvider>
+      <AgentEventProvider>
+        <CapabilityProvider>
+          <Shell />
+        </CapabilityProvider>
+      </AgentEventProvider>
+    </ThemeProvider>
   );
 }

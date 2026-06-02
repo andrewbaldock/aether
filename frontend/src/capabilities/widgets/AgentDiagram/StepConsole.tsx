@@ -13,17 +13,17 @@ export function StepConsole({ log }: { log: LogEntry[] }) {
   }, [log.length]);
 
   return (
-    <div className="border-t border-neutral-800 px-3 py-2">
+    <div className="border-t border-border px-3 py-2">
       {/* ~3 lines tall (line-height 1rem × 3) + padding, scrollable past that. */}
       <div className="h-12 overflow-y-auto font-mono text-[11px] leading-4">
         {log.length === 0 ? (
-          <div className="text-neutral-600">
+          <div className="text-content-faint">
             console — steps appear here as the loop runs
           </div>
         ) : (
           log.map((entry) => (
-            <div key={entry.seq} className="flex gap-2 text-neutral-400">
-              <span className="shrink-0 text-neutral-600">{entry.t}</span>
+            <div key={entry.seq} className="flex gap-2 text-content-muted">
+              <span className="shrink-0 text-content-faint">{entry.t}</span>
               <span className="truncate">{entry.text}</span>
             </div>
           ))

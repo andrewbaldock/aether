@@ -22,7 +22,7 @@ export function AgentDiagramWidget(_props: { widget: Widget }) {
   }
 
   return (
-    <div className="flex h-full flex-col bg-neutral-900">
+    <div className="flex h-full flex-col bg-surface">
       <Legend activeRoles={activeRoles} />
       <div className="min-h-0 flex-1 p-3">
         <DiagramSvg

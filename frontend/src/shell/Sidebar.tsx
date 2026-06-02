@@ -1,4 +1,5 @@
 import { Wordmark } from "../brand/Wordmark";
+import { ThemeToggle } from "../theme/ThemeToggle";
 
 // Left zone: logo + nav (top), conversation history (list). Stubbed for now — real
 // conversation history arrives with persistence.
@@ -10,29 +11,30 @@ const stubConversations = [
 
 export function Sidebar({ onToggle }: { onToggle: () => void }) {
   return (
-    <div className="flex h-full flex-col bg-neutral-950 text-neutral-300">
+    <div className="flex h-full flex-col bg-surface-raised text-content-muted">
       <div className="flex items-center gap-2 px-4 py-5">
         <button
           type="button"
           onClick={onToggle}
           aria-label="Collapse sidebar"
-          className="-ml-1 shrink-0 rounded-md p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+          className="-ml-1 shrink-0 rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-content"
         >
           <SidebarToggleIcon />
         </button>
         <Wordmark height={48} />
+        <ThemeToggle />
       </div>
 
       <nav className="px-2">
         <button
           type="button"
-          className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-300 hover:bg-neutral-800"
+          className="w-full rounded-md px-3 py-2 text-left text-sm text-content-muted hover:bg-elevated"
         >
           + New conversation
         </button>
       </nav>
 
-      <div className="mt-4 px-4 text-xs font-medium uppercase tracking-wide text-neutral-600">
+      <div className="mt-4 px-4 text-xs font-medium uppercase tracking-wide text-content-faint">
         Recent
       </div>
       <ul className="mt-1 flex-1 space-y-0.5 overflow-y-auto px-2 pb-4">
@@ -40,7 +42,7 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
           <li key={title}>
             <button
               type="button"
-              className="w-full truncate rounded-md px-3 py-2 text-left text-sm text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+              className="w-full truncate rounded-md px-3 py-2 text-left text-sm text-content-muted hover:bg-elevated hover:text-content"
             >
               {title}
             </button>
