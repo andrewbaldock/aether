@@ -186,6 +186,24 @@ runs inside; it is the platform's primary surface.
 Panel resize/collapse is handled by **`react-resizable-panels`** (resizable, collapsible panel
 groups) rather than hand-rolled drag math.
 
+> **⚠️ Unit trap (`react-resizable-panels` v4).** A size value's unit depends on which API
+> consumes it, and the mismatch is invisible to TypeScript/biome because every size prop accepts
+> `number | string`:
+> - `defaultSize` prop — bare number coerces toward percent; explicit strings (`"32%"`, `"240px"`) are honored.
+> - `onResize(size)` — hands you both `{ asPercentage, inPixels }`; pick the right one.
+> - **`panel.resize(x)` — a bare number is read as PIXELS, not percent.** Storing a percent and
+>   calling `resize(32)` opens the panel to 32 *pixels* (an invisible sliver), not 32%.
+> - `panel.collapse()` saves the current size into an internal `expandToSize`, then applies
+>   `collapsedSize`. `panel.expand()` restores `expandToSize ?? minSize`, but **only if still
+>   collapsed** (it's a no-op otherwise). collapse/expand/resize all commit synchronously through
+>   the same applier, so `expand()` then `resize("N%")` in one tick lands N% in a single
+>   flex-basis transition — which is exactly how the capability column slides open to its saved width.
+>
+> **Rule: always pass units as explicit strings (`"32%"`, `"240px"`), never bare numbers** — even
+> though numbers typecheck fine. This px-vs-% confusion is what made capability-panel resize
+> persistence fail repeatedly; the bug compiles clean and only shows up at runtime. See
+> `frontend/src/shell/Shell.tsx`.
+
 ## The capability registry — the first platform seam
 
 The capability column is not a fixed slot; it is a small managed system that **both the agent

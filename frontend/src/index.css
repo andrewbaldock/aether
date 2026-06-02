@@ -89,6 +89,26 @@ summary {
   cursor: pointer;
 }
 
+
+@keyframes aether-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.aether-slide-in-right {
+  animation: aether-slide-in-right 220ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .aether-slide-in-right {
+    animation: none;
+  }
+}
+
 body {
   margin: 0;
   /* Flash guard now follows the token; .dark is set pre-paint (see index.html). */
