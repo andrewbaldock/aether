@@ -13,7 +13,7 @@ const ITEMS: { role: Role; label: string }[] = [
 
 export function Legend({ activeRoles }: { activeRoles: Set<Role> }) {
   return (
-    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 border-b border-neutral-800 px-4 py-2 text-[11px]">
+    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 border-b border-border px-4 py-2 text-[11px]">
       {ITEMS.map((item) => {
         const active = activeRoles.has(item.role);
         const color = ROLE_COLOR[item.role];
@@ -21,7 +21,7 @@ export function Legend({ activeRoles }: { activeRoles: Set<Role> }) {
           <span
             key={item.role}
             className={`flex items-center gap-1.5 transition-all duration-200 ${
-              active ? "text-neutral-100" : "text-neutral-600 opacity-40"
+              active ? "text-content" : "text-content-faint opacity-40"
             }`}
           >
             <span

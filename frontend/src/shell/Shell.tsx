@@ -12,7 +12,7 @@ import { ChatPanel } from "./ChatPanel";
 import { Sidebar, SidebarToggleIcon } from "./Sidebar";
 
 const handle =
-  "w-1 bg-neutral-800 transition-colors hover:bg-neutral-600 data-[separator-state=hover]:bg-neutral-600 data-[separator-state=drag]:bg-neutral-500";
+  "w-1 bg-border transition-colors hover:bg-border-strong data-[separator-state=hover]:bg-border-strong data-[separator-state=drag]:bg-content-subtle";
 
 const SIDEBAR_COLLAPSED_KEY = "aether-sidebar-collapsed";
 
@@ -55,7 +55,7 @@ export function Shell() {
   });
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-neutral-900">
+    <div className="relative h-screen w-screen overflow-hidden bg-surface">
       <Group
         orientation="horizontal"
         defaultLayout={defaultLayout}
@@ -112,7 +112,7 @@ export function Shell() {
           type="button"
           onClick={toggleSidebar}
           aria-label="Open sidebar"
-          className="absolute left-2 top-3 z-10 rounded-md p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
+          className="absolute left-2 top-3 z-10 rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-content"
         >
           <SidebarToggleIcon />
         </button>

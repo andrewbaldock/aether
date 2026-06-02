@@ -22,31 +22,39 @@ export interface DiagramSvgProps {
   activeToolName: string | null;
 }
 
-const IDLE_FILL = "#262626"; // neutral-800
-const IDLE_STROKE = "#404040"; // neutral-700
-const COMPLETE_STROKE = "#52525b"; // zinc-600
+// Structural colours track the theme via the semantic CSS vars (see index.css);
+// role colours (ROLE_COLOR) and the green loop glow stay fixed — they're status
+// identity, not surfaces.
+const IDLE_FILL = "var(--elevated)"; // was neutral-800
+const IDLE_STROKE = "var(--border-strong)"; // was neutral-700
+const COMPLETE_STROKE = "var(--content-subtle)"; // was zinc-600
 
 // Resolve the colour for a node given its status. Active/looping use the role
-// colour; idle/complete are neutral. The hex is also written to --node-color so
-// the pulse drop-shadow (CSS) glows in the matching hue.
+// colour; idle/complete are neutral. The role hex is also written to --node-color
+// so the pulse drop-shadow (CSS) glows in the matching hue.
 function nodeColors(node: DiagramNode, status: NodeStatus) {
   const role = ROLE_COLOR[node.role];
   switch (status) {
     case "active":
     case "looping":
-      return { fill: "#171717", stroke: role, text: "#fafafa", glow: role };
+      return {
+        fill: "var(--surface)",
+        stroke: role,
+        text: "var(--content)",
+        glow: role,
+      };
     case "complete":
       return {
-        fill: "#171717",
+        fill: "var(--surface)",
         stroke: COMPLETE_STROKE,
-        text: "#a1a1aa",
+        text: "var(--content-muted)",
         glow: role,
       };
     default:
       return {
         fill: IDLE_FILL,
         stroke: IDLE_STROKE,
-        text: "#737373",
+        text: "var(--content-subtle)",
         glow: role,
       };
   }
@@ -118,7 +126,9 @@ function NodeLabel({
           dominantBaseline="central"
           fontSize={9.5}
           fontFamily="ui-monospace, monospace"
-          fill={status === "idle" ? "#525252" : "#71717a"}
+          fill={
+            status === "idle" ? "var(--content-faint)" : "var(--content-subtle)"
+          }
         >
           {node.sub}
         </text>
@@ -141,7 +151,7 @@ function Edge({ edge, status }: { edge: DiagramEdge; status: NodeStatus }) {
       <path
         d={d}
         fill="none"
-        stroke={live ? color : "#3f3f46"}
+        stroke={live ? color : "var(--border-strong)"}
         strokeWidth={live ? 2 : 1.25}
         markerEnd={`url(#arrow-${live ? "live" : "idle"})`}
         className="agent-edge"
@@ -195,7 +205,7 @@ function EdgeLabel({
       fontSize={9}
       fontFamily="ui-monospace, monospace"
       fontWeight={600}
-      fill={live ? color : "#52525b"}
+      fill={live ? color : "var(--content-faint)"}
     >
       {edge.label}
     </text>
@@ -227,7 +237,7 @@ export function DiagramSvg({
           markerHeight="6"
           orient="auto-start-reverse"
         >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#3f3f46" />
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--border-strong)" />
         </marker>
         <marker
           id="arrow-live"
@@ -238,7 +248,7 @@ export function DiagramSvg({
           markerHeight="7"
           orient="auto-start-reverse"
         >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#a1a1aa" />
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--content-muted)" />
         </marker>
       </defs>
 
@@ -248,7 +258,7 @@ export function DiagramSvg({
         y1={8}
         x2={DIVIDER_X}
         y2={VIEW_H - 8}
-        stroke="#262626"
+        stroke="var(--border)"
         strokeWidth={1}
         strokeDasharray="2 6"
       />
@@ -259,7 +269,7 @@ export function DiagramSvg({
         fontSize={15}
         fontWeight={700}
         letterSpacing={1}
-        fill="#525252"
+        fill="var(--content-faint)"
       >
         <tspan x={DIVIDER_X / 2} dy="0">
           FRONTEND
@@ -275,7 +285,7 @@ export function DiagramSvg({
         fontSize={15}
         fontWeight={700}
         letterSpacing={1}
-        fill="#525252"
+        fill="var(--content-faint)"
       >
         <tspan x={DIVIDER_X + (VIEW_W - DIVIDER_X) / 2} dy="0">
           BACKEND
@@ -300,7 +310,7 @@ export function DiagramSvg({
               height={box.h}
               rx={12}
               fill="none"
-              stroke={looping ? ROLE_COLOR.backend : "#2e2e2e"}
+              stroke={looping ? ROLE_COLOR.backend : "var(--border)"}
               strokeWidth={1.25}
               strokeDasharray="5 5"
               className="agent-loop-box"
@@ -312,7 +322,7 @@ export function DiagramSvg({
               fontSize={9.5}
               fontFamily="ui-monospace, monospace"
               fontWeight={600}
-              fill="#52525b"
+              fill="var(--content-faint)"
             >
               {box.label}
             </text>
@@ -329,7 +339,7 @@ export function DiagramSvg({
             width={40}
             height={20}
             rx={10}
-            fill="#171717"
+            fill="var(--surface)"
             stroke={ROLE_COLOR.backend}
             strokeWidth={1.25}
           />

@@ -10,17 +10,17 @@ export function CapabilityColumn() {
   const Renderer = active ? getRenderer(active.type) : undefined;
 
   return (
-    <div className="flex h-full flex-col bg-neutral-900">
+    <div className="flex h-full flex-col bg-surface">
       {/* tab bar */}
-      <div className="flex items-center gap-1 border-b border-neutral-800 px-2 py-1.5">
+      <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
         <div className="flex flex-1 items-center gap-1 overflow-x-auto">
           {widgets.map((w) => (
             <div
               key={w.id}
               className={
                 w.id === activeId
-                  ? "flex items-center gap-1 rounded-md bg-neutral-800 pr-1.5 text-xs font-medium text-neutral-100"
-                  : "flex items-center gap-1 rounded-md pr-1.5 text-xs text-neutral-400 hover:bg-neutral-800/60"
+                  ? "flex items-center gap-1 rounded-md bg-elevated pr-1.5 text-xs font-medium text-content"
+                  : "flex items-center gap-1 rounded-md pr-1.5 text-xs text-content-muted hover:bg-elevated/60"
               }
             >
               <button
@@ -34,7 +34,7 @@ export function CapabilityColumn() {
                 type="button"
                 aria-label={`Close ${w.title}`}
                 onClick={() => close(w.id)}
-                className="rounded text-neutral-500 hover:text-neutral-200"
+                className="rounded text-content-subtle hover:text-content"
               >
                 ×
               </button>
@@ -46,18 +46,18 @@ export function CapabilityColumn() {
           type="button"
           onClick={() => setFullscreen(!isFullscreen)}
           aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-          className="rounded-md px-2 py-1.5 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+          className="rounded-md px-2 py-1.5 text-sm text-content-muted hover:bg-elevated hover:text-content"
         >
           {isFullscreen ? "⤢" : "⛶"}
         </button>
       </div>
 
       {/* active widget */}
-      <div className="flex-1 overflow-auto text-neutral-200">
+      <div className="flex-1 overflow-auto text-content">
         {active && Renderer ? (
           <Renderer widget={active} />
         ) : active ? (
-          <div className="flex h-full items-center justify-center p-8 text-sm text-neutral-500">
+          <div className="flex h-full items-center justify-center p-8 text-sm text-content-subtle">
             No renderer registered for type “{active.type}”.
           </div>
         ) : null}

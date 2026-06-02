@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ThinkingGlyph } from "../brand/ThinkingGlyph";
 import { useCapabilities } from "../capabilities/useCapabilities";
 import { AGENT_DIAGRAM_WIDGET } from "../capabilities/widgets/AgentDiagram";
 import { useChat } from "./useChat";
@@ -18,6 +19,20 @@ export function ChatPanel() {
   // if it's already the one on screen.
   const diagramOpen = widgets.some((w) => w.id === AGENT_DIAGRAM_WIDGET.id);
   const diagramActive = diagramOpen && activeId === AGENT_DIAGRAM_WIDGET.id;
+
+  // Seed from localStorage on first mount.
+  useEffect(() => {
+    if (localStorage.getItem("aether-diagram-open") === "true") {
+      open(AGENT_DIAGRAM_WIDGET);
+    }
+  // biome-ignore lint/correctness/useExhaustiveDependencies: open is stable, run once
+  }, []);
+
+  // Persist whenever the diagram is toggled.
+  useEffect(() => {
+    localStorage.setItem("aether-diagram-open", String(diagramActive));
+  }, [diagramActive]);
+
   function toggleDiagram() {
     if (diagramActive) {
       close(AGENT_DIAGRAM_WIDGET.id);
@@ -55,13 +70,11 @@ export function ChatPanel() {
   }
 
   return (
-    <div className="relative flex h-full flex-col bg-neutral-900">
+    <div className="relative flex h-full flex-col bg-surface">
       <div className="flex-1 overflow-y-auto px-6 py-6">
         {!started && (
           <div className="mx-auto mt-20 max-w-md text-center">
-            <div className="text-2xl font-medium text-neutral-200">
-              Ask Aether
-            </div>
+            <div className="text-2xl font-medium text-content">Ask Aether</div>
           </div>
         )}
         <ul className="mx-auto max-w-2xl space-y-4">
@@ -75,8 +88,8 @@ export function ChatPanel() {
               <div
                 className={
                   m.role === "user"
-                    ? "max-w-[80%] rounded-2xl bg-neutral-100 px-4 py-2 text-sm text-neutral-900"
-                    : "max-w-[80%] rounded-2xl bg-neutral-800 px-4 py-2 text-sm text-neutral-200"
+                    ? "max-w-[80%] rounded-2xl bg-elevated px-4 py-2 text-sm text-content"
+                    : "max-w-[80%] px-4 py-2 text-sm text-content"
                 }
               >
                 {m.role === "user" ? (
@@ -84,7 +97,7 @@ export function ChatPanel() {
                 ) : (
                   <>
                     {m.toolActivity && (
-                      <div className="mb-1 text-xs text-neutral-500 italic">
+                      <div className="mb-1 text-xs text-content-subtle italic">
                         {m.toolActivity}
                       </div>
                     )}
@@ -128,26 +141,26 @@ export function ChatPanel() {
                           children?: React.ReactNode;
                         }) =>
                           inline ? (
-                            <code className="rounded bg-neutral-700 px-1 py-0.5 font-mono text-xs">
+                            <code className="rounded bg-elevated px-1 py-0.5 font-mono text-xs">
                               {children}
                             </code>
                           ) : (
                             <code>{children}</code>
                           ),
                         pre: ({ children }) => (
-                          <pre className="mb-2 overflow-x-auto rounded-lg bg-neutral-900 p-3 font-mono text-xs">
+                          <pre className="mb-2 overflow-x-auto rounded-lg bg-surface p-3 font-mono text-xs">
                             {children}
                           </pre>
                         ),
                         blockquote: ({ children }) => (
-                          <blockquote className="mb-2 border-l-2 border-neutral-500 pl-3 text-neutral-400">
+                          <blockquote className="mb-2 border-l-2 border-border-strong pl-3 text-content-muted">
                             {children}
                           </blockquote>
                         ),
                         a: ({ href, children }) => (
                           <a
                             href={href}
-                            className="underline hover:text-neutral-100"
+                            className="underline hover:text-content"
                             target="_blank"
                             rel="noreferrer"
                           >
@@ -157,7 +170,7 @@ export function ChatPanel() {
                         strong: ({ children }) => (
                           <strong className="font-semibold">{children}</strong>
                         ),
-                        hr: () => <hr className="my-2 border-neutral-600" />,
+                        hr: () => <hr className="my-2 border-border-strong" />,
                       }}
                     >
                       {m.text}
@@ -167,16 +180,14 @@ export function ChatPanel() {
               </div>
             </li>
           ))}
-          {isLoading && (
-            <li className="flex justify-start">
-              <div className="max-w-[80%] rounded-2xl bg-neutral-800 px-4 py-2 text-sm text-neutral-500 italic">
-                Aether is thinking…
-              </div>
+          {started && (
+            <li className="flex justify-start px-4 py-1">
+              <ThinkingGlyph height={36} animate={isLoading} />
             </li>
           )}
           {error && (
             <li className="flex justify-start">
-              <div className="max-w-[80%] rounded-2xl bg-red-900/40 px-4 py-2 text-sm text-red-300">
+              <div className="max-w-[80%] rounded-2xl bg-danger-surface px-4 py-2 text-sm text-danger-content">
                 {error}
               </div>
             </li>
@@ -189,12 +200,12 @@ export function ChatPanel() {
         onSubmit={handleSubmit}
         className={
           started
-            ? "border-t border-neutral-800 p-4 transition-all duration-600 ease-in-out"
+            ? "p-4 transition-all duration-600 ease-in-out"
             : "absolute inset-x-0 top-1/2 -translate-y-1/2 px-6 transition-all duration-600 ease-in-out"
         }
       >
         <div
-          className={`relative mx-auto rounded-lg border border-neutral-700 bg-neutral-800 focus-within:border-neutral-500 transition-colors ${started ? "max-w-2xl" : "max-w-md"}`}
+          className={`relative mx-auto rounded-lg border bg-elevated transition-colors ${started ? "max-w-2xl" : "max-w-md"} ${isLoading ? "aether-loading-border" : "border-border-strong focus-within:border-content-subtle"}`}
         >
           <textarea
             ref={textareaRef}
@@ -204,7 +215,7 @@ export function ChatPanel() {
             onKeyDown={handleKeyDown}
             placeholder="Type a message… (Shift+Enter for newline)"
             rows={1}
-            className={`w-full resize-none bg-transparent px-4 pt-3 pb-10 text-sm text-neutral-100 placeholder:text-neutral-500 focus:outline-none transition-opacity${isLoading ? " opacity-50" : ""}${started ? "" : " min-h-24"}`}
+            className={`w-full resize-none bg-transparent px-4 pt-3 pb-10 text-sm text-content placeholder:text-content-subtle focus:outline-none transition-opacity${isLoading ? " opacity-50" : ""}${started ? "" : " min-h-24"}`}
           />
           <div className="absolute bottom-2 right-2 flex items-center gap-2">
             {/* "See under the hood" — toggles the live agent-loop diagram. */}
@@ -216,22 +227,23 @@ export function ChatPanel() {
                 aria-pressed={diagramActive}
                 className={
                   diagramActive
-                    ? "rounded-lg border border-neutral-600 bg-neutral-700 p-1.5 text-neutral-100"
-                    : "rounded-lg border border-transparent p-1.5 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-100"
+                    ? "rounded-lg border border-border-strong bg-border-strong p-1.5 text-content"
+                    : "rounded-lg border border-transparent p-1.5 text-content-muted hover:bg-border-strong hover:text-content"
                 }
               >
                 <FlowChartIcon />
               </button>
-              <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 whitespace-nowrap rounded-md bg-neutral-950 px-2 py-1 text-xs text-neutral-200 opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+              <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 whitespace-nowrap rounded-md bg-surface-overlay px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
                 See under the hood
               </span>
             </div>
             <button
               type="submit"
-              className="rounded-lg bg-neutral-100 px-3 py-1.5 text-sm font-medium text-neutral-900 hover:bg-white disabled:opacity-40"
+              aria-label="Send"
+              className="rounded-lg bg-gradient-to-r from-[#fd40a4] to-[#c35ed1] px-3 py-1.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-40"
               disabled={draft.trim().length === 0 || isLoading}
             >
-              Send
+              𑁍
             </button>
           </div>
         </div>
