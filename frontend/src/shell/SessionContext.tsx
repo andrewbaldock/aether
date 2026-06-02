@@ -3,27 +3,33 @@ import {
   type ReactNode,
   useCallback,
   useContext,
-  useEffect,
+  useRef,
   useState,
 } from "react";
 import { useSession } from "../hooks/useSession";
+import {
+  type SessionActions,
+  useSessionActions,
+} from "../hooks/useSessionActions";
 import { type Session, useSessionList } from "../hooks/useSessionList";
 import { useUserId } from "../hooks/useUserId";
 import type { Message } from "./useChat";
 
-interface SessionContextValue {
+interface SessionContextValue extends SessionActions {
   userId: string;
   // null until first message sent — session is created lazily.
   sessionId: string | null;
   sessions: Session[];
   messages: Message[];
   onMessagesChange: (messages: Message[]) => void;
-  clearMessages: () => void;
   // Resolves to the current session ID, creating one if needed.
   getOrCreateSession: () => Promise<string>;
   switchSession: (id: string, messages: Message[]) => void;
   startNewConversation: () => void;
   refreshSessions: () => void;
+  // useChat registers its stream-abort here so the context can cancel an
+  // in-flight turn before switching conversations.
+  registerAbort: (fn: () => void) => void;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -33,47 +39,54 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const { sessions, refresh: refreshSessions } = useSessionList(userId);
 
-  const { sessionId, getOrCreateSession, resetSession } = useSession(
-    userId,
-    refreshSessions
-  );
+  // sessionId from useSession is the single source of truth — it drives both
+  // session creation/persistence and sidebar highlighting.
+  const { sessionId, getOrCreateSession, setSession, resetSession } =
+    useSession(userId, refreshSessions);
 
-  // Track active session for sidebar highlighting — follows sessionId from
-  // useSession OR switches when the user clicks a past session.
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (sessionId && sessionId !== activeSessionId) {
-      setActiveSessionId(sessionId);
-    }
-  }, [sessionId, activeSessionId]);
-
-  const switchSession = useCallback((id: string, loaded: Message[]) => {
-    setActiveSessionId(id);
-    setMessages(loaded);
+  // useChat owns the AbortController; it registers its abort here on mount so
+  // switchSession/startNewConversation can cancel an in-flight stream.
+  const abortStreamRef = useRef<() => void>(() => {});
+  const registerAbort = useCallback((fn: () => void) => {
+    abortStreamRef.current = fn;
   }, []);
 
+  const switchSession = useCallback(
+    (id: string, loaded: Message[]) => {
+      abortStreamRef.current();
+      setSession(id);
+      setMessages(loaded);
+    },
+    [setSession]
+  );
+
   const startNewConversation = useCallback(() => {
+    abortStreamRef.current();
     resetSession();
     setMessages([]);
-    setActiveSessionId(null);
   }, [resetSession]);
 
-  const clearMessages = useCallback(() => setMessages([]), []);
+  const actions = useSessionActions({
+    sessionId,
+    switchSession,
+    startNewConversation,
+    refreshSessions,
+  });
 
   return (
     <SessionContext.Provider
       value={{
         userId,
-        sessionId: activeSessionId,
+        sessionId,
         sessions,
         messages,
         onMessagesChange: setMessages,
-        clearMessages,
         getOrCreateSession,
         switchSession,
         startNewConversation,
         refreshSessions,
+        registerAbort,
+        ...actions,
       }}
     >
       {children}

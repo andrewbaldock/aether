@@ -16,7 +16,7 @@ export interface DbMessage {
   created_at: string;
 }
 
-function getDb() {
+function createDb() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_ANON_KEY;
   if (!url || !key) {
@@ -25,6 +25,14 @@ function getDb() {
     );
   }
   return createClient(url, key);
+}
+
+// Memoized at module level — one client for the process, created on first use.
+let _db: ReturnType<typeof createDb> | null = null;
+
+function getDb() {
+  _db ??= createDb();
+  return _db;
 }
 
 export async function createSession(
@@ -83,10 +91,22 @@ export async function updateSessionTitle(
   if (error) throw new Error(`updateSessionTitle: ${error.message}`);
 }
 
-export async function deleteSession(sessionId: string): Promise<void> {
+// Sets the title only if the session doesn't already have one. A single
+// conditional UPDATE — no read-then-write race, and a no-op after the first
+// turn — so auto-titling can't orphan a session on a transient read failure.
+export async function updateSessionTitleIfEmpty(
+  sessionId: string,
+  title: string
+): Promise<void> {
   const { error } = await getDb()
     .from("sessions")
-    .delete()
-    .eq("id", sessionId);
+    .update({ title, updated_at: new Date().toISOString() })
+    .eq("id", sessionId)
+    .is("title", null);
+  if (error) throw new Error(`updateSessionTitleIfEmpty: ${error.message}`);
+}
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  const { error } = await getDb().from("sessions").delete().eq("id", sessionId);
   if (error) throw new Error(`deleteSession: ${error.message}`);
 }
