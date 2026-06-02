@@ -205,7 +205,7 @@ export function ChatPanel() {
         }
       >
         <div
-          className={`relative mx-auto rounded-lg border bg-elevated transition-colors ${started ? "max-w-2xl" : "max-w-md"} ${isLoading ? "aether-loading-border" : "border-border-strong focus-within:border-content-subtle"}`}
+          className={`relative mx-auto rounded-lg border bg-elevated transition-colors max-w-2xl ${isLoading ? "aether-loading-border" : "border-border-strong focus-within:border-content-subtle"}`}
         >
           <textarea
             ref={textareaRef}
