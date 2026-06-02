@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "check": "biome check .",
     "check:fix": "biome check --write .",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "test": "vitest"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
@@ -23,11 +24,15 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
     "@tailwindcss/vite": "^4.3.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
+    "jsdom": "^29.1.1",
     "typescript": "^6.0.3",
-    "vite": "^8.0.14"
+    "vite": "^8.0.14",
+    "vitest": "^4.1.8"
   }
 }
