@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useAgentEvents } from "./AgentEventContext";
+import { parseSseChunk } from "./parseSseChunk";
 
 export interface Message {
   id: string;
@@ -135,14 +136,13 @@ export function useChat({
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
+        const { events, remaining } = parseSseChunk(
+          buffer,
+          decoder.decode(value, { stream: true })
+        );
+        buffer = remaining;
 
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6);
-
+        for (const data of events) {
           if (data === "[DONE]") {
             bus.emit({ type: "done" });
             // Only refresh on the first turn — that's when a title is assigned;
