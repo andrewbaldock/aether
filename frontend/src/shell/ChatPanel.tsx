@@ -14,14 +14,21 @@ export function ChatPanel() {
     onMessagesChange: setMessages,
     getOrCreateSession,
     refreshSessions,
+    registerAbort,
   } = useSessionContext();
-  const { sendMessage, isLoading, error } = useChat({
+  const { sendMessage, abortStream, isLoading, error } = useChat({
     userId,
     messages,
     onMessagesChange: setMessages,
     getOrCreateSession,
     refreshSessions,
   });
+
+  // Let the session context cancel an in-flight stream before switching
+  // conversations.
+  useEffect(() => {
+    registerAbort(abortStream);
+  }, [registerAbort, abortStream]);
   const { widgets, activeId, open, close, activate } = useCapabilities();
   const [draft, setDraft] = useState("");
   const started = messages.length > 0;

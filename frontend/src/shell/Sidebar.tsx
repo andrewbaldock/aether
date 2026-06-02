@@ -2,61 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "../brand/Wordmark";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { useSessionContext } from "./SessionContext";
-import type { Message } from "./useChat";
 
 export function Sidebar({ onToggle }: { onToggle: () => void }) {
   const {
     sessionId,
     sessions,
-    switchSession,
     startNewConversation,
-    refreshSessions,
+    loadSession,
+    renameSession,
+    deleteSession,
   } = useSessionContext();
-
-  async function handleSessionClick(id: string) {
-    if (id === sessionId) return;
-    try {
-      const res = await fetch(`/api/sessions/${id}/messages`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const dbMessages = (await res.json()) as {
-        id: string;
-        role: "user" | "assistant";
-        content: string;
-      }[];
-      const messages: Message[] = dbMessages.map((m) => ({
-        id: m.id,
-        role: m.role,
-        text: m.content,
-      }));
-      switchSession(id, messages);
-    } catch (err) {
-      console.error("Failed to load session messages:", err);
-    }
-  }
-
-  async function handleRename(id: string, newTitle: string) {
-    try {
-      await fetch(`/api/sessions/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: newTitle }),
-      });
-      refreshSessions();
-    } catch (err) {
-      console.error("Failed to rename session:", err);
-    }
-  }
-
-  async function handleDelete(id: string) {
-    try {
-      await fetch(`/api/sessions/${id}`, { method: "DELETE" });
-      refreshSessions();
-      // If the deleted session was active, start fresh.
-      if (id === sessionId) startNewConversation();
-    } catch (err) {
-      console.error("Failed to delete session:", err);
-    }
-  }
 
   const titled = sessions.filter((s) => s.title);
 
@@ -101,9 +56,9 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
             title={s.title ?? ""}
             date={s.created_at}
             active={s.id === sessionId}
-            onClick={() => handleSessionClick(s.id)}
-            onRename={(t) => handleRename(s.id, t)}
-            onDelete={() => handleDelete(s.id)}
+            onClick={() => loadSession(s.id)}
+            onRename={(t) => renameSession(s.id, t)}
+            onDelete={() => deleteSession(s.id)}
           />
         ))}
       </ul>

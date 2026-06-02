@@ -7,6 +7,7 @@ import {
   listSessions,
   saveMessage,
   updateSessionTitle,
+  updateSessionTitleIfEmpty,
 } from "./db";
 import { type ChatMessage, createClient } from "./llm";
 
@@ -113,11 +114,15 @@ app.post("/api/chat", async (c) => {
     return c.json({ error: "Expected { messages: { role, content }[] }" }, 400);
   }
 
-  const persist =
+  // Narrow once here; persistSession is a string exactly when persist is true,
+  // so the streaming callback below doesn't need to re-cast at every call site.
+  const persistSession =
     typeof sessionId === "string" &&
     sessionId.length > 0 &&
     typeof userId === "string" &&
-    userId.length > 0;
+    userId.length > 0
+      ? sessionId
+      : null;
 
   // The last user message — needed for saving and for auto-titling the session.
   const lastUserMessage = [...messages]
@@ -140,31 +145,37 @@ app.post("/api/chat", async (c) => {
           await stream.writeSSE({ data: "[DONE]" });
 
           // Persist after [DONE] so we only save complete turns.
-          if (persist && lastUserMessage) {
+          if (persistSession && lastUserMessage) {
+            // Message persistence is the critical path. If it fails, warn the
+            // client after [DONE] so the turn isn't silently lost on reload.
             try {
               await saveMessage(
-                sessionId as string,
+                persistSession,
                 "user",
                 lastUserMessage.content
               );
-              await saveMessage(
-                sessionId as string,
-                "assistant",
-                assistantText
-              );
-
-              // Auto-title the session from the first user message if it has no
-              // title yet — we do a best-effort update, errors are non-fatal.
-              const sessions = await listSessions(userId as string);
-              const session = sessions.find((s) => s.id === sessionId);
-              if (session && !session.title && lastUserMessage.content) {
-                const title = lastUserMessage.content.slice(0, 60);
-                await updateSessionTitle(sessionId as string, title).catch(
-                  () => {}
-                );
-              }
+              await saveMessage(persistSession, "assistant", assistantText);
             } catch (err) {
               console.error("Failed to persist chat turn:", err);
+              await stream.writeSSE({
+                data: JSON.stringify({
+                  type: "warning",
+                  message:
+                    "This message could not be saved and may be lost on reload.",
+                }),
+              });
+            }
+
+            // Auto-title the session from the first user message. The
+            // conditional UPDATE is a no-op once a title exists, and a failure
+            // here must never affect message persistence — so it's decoupled.
+            if (lastUserMessage.content) {
+              try {
+                const title = lastUserMessage.content.slice(0, 60);
+                await updateSessionTitleIfEmpty(persistSession, title);
+              } catch (err) {
+                console.error("Failed to auto-title session:", err);
+              }
             }
           }
         },

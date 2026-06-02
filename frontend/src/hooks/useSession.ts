@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 interface UseSessionResult {
   sessionId: string | null;
   getOrCreateSession: () => Promise<string>;
+  setSession: (id: string) => void;
   resetSession: () => void;
 }
 
@@ -45,10 +46,17 @@ export function useSession(
     return pending;
   }, [userId, sessionId]);
 
+  // Point at an existing session (e.g. the user clicked a past conversation).
+  // Clears any pending create so the next getOrCreateSession returns this id.
+  const setSession = useCallback((id: string) => {
+    setSessionId(id);
+    pendingRef.current = null;
+  }, []);
+
   const resetSession = useCallback(() => {
     setSessionId(null);
     pendingRef.current = null;
   }, []);
 
-  return { sessionId, getOrCreateSession, resetSession };
+  return { sessionId, getOrCreateSession, setSession, resetSession };
 }
