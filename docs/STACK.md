@@ -35,7 +35,7 @@ source. See [ARCHITECTURE.md](./ARCHITECTURE.md#two-runtimes).
 
 | Package | Version | What it does | Why chosen |
 |---------|---------|--------------|-----------|
-| `vite` | ^8.0.14 | Dev server + bundler | Compiles `.tsx`/Tailwind on the fly in dev, bundles for production. Fast HMR. |
+| `vite` | ^8.0.14 | Dev server + bundler | Compiles `.tsx`/Tailwind on the fly in dev, bundles for production. Fast HMR. Dev server pinned to **port 5174** (`frontend/vite.config.ts`) so it doesn't collide with the website project on 5173. |
 | `@vitejs/plugin-react` | ^6.0.2 | React support for Vite | JSX transform + React Fast Refresh. |
 | `@tailwindcss/vite` | ^4.3.0 | Tailwind v4 Vite plugin | The v4 way to wire Tailwind — replaces PostCSS + `tailwind.config.js`. Pairs with `@import "tailwindcss"` in `src/index.css`. |
 | `@biomejs/biome` | ^2.4.16 | Linter + formatter | One fast tool for lint + format. v2.x: `biome check --write` applies fixes. |
