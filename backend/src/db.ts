@@ -4,6 +4,7 @@ export interface Session {
   id: string;
   user_id: string;
   title: string | null;
+  graph_mode: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -37,11 +38,17 @@ function getDb() {
 
 export async function createSession(
   userId: string,
-  title?: string
+  title?: string,
+  graphMode?: boolean
 ): Promise<{ id: string }> {
   const { data, error } = await getDb()
     .from("sessions")
-    .insert({ user_id: userId, title: title ?? null })
+    .insert({
+      user_id: userId,
+      title: title ?? null,
+      // Omit when undefined so the column default applies.
+      ...(graphMode === undefined ? {} : { graph_mode: graphMode }),
+    })
     .select("id")
     .single();
   if (error) throw new Error(`createSession: ${error.message}`);
@@ -104,6 +111,17 @@ export async function updateSessionTitleIfEmpty(
     .eq("id", sessionId)
     .is("title", null);
   if (error) throw new Error(`updateSessionTitleIfEmpty: ${error.message}`);
+}
+
+export async function updateSessionGraphMode(
+  sessionId: string,
+  graphMode: boolean
+): Promise<void> {
+  const { error } = await getDb()
+    .from("sessions")
+    .update({ graph_mode: graphMode, updated_at: new Date().toISOString() })
+    .eq("id", sessionId);
+  if (error) throw new Error(`updateSessionGraphMode: ${error.message}`);
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {

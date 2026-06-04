@@ -113,7 +113,7 @@ aether/
 
 | What | Service | URL |
 |------|---------|-----|
-| Frontend (React SPA) | Vercel | `aether.andrewbaldock.com` |
+| Frontend (React SPA) | Vercel | `https://aether.andrewbaldock.com` |
 | Backend (Hono API) | Fly.io | `https://aether-ab-api.fly.dev` |
 | Database | Supabase | `ltjnrftafphaampgihdf.supabase.co` |
 | Source of truth | GitHub | `andrewbaldock/aether` → auto-deploys to Vercel on push |

@@ -4,6 +4,7 @@ export interface Session {
   id: string;
   user_id: string;
   title: string | null;
+  graph_mode: boolean;
   created_at: string;
   updated_at: string;
 }

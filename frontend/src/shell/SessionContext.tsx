@@ -22,8 +22,9 @@ interface SessionContextValue extends SessionActions {
   sessions: Session[];
   messages: Message[];
   onMessagesChange: (messages: Message[]) => void;
-  // Resolves to the current session ID, creating one if needed.
-  getOrCreateSession: () => Promise<string>;
+  // Resolves to the current session ID, creating one if needed. An optional
+  // graphMode is applied only when a brand-new session is created.
+  getOrCreateSession: (graphMode?: boolean) => Promise<string>;
   switchSession: (id: string, messages: Message[]) => void;
   startNewConversation: () => void;
   refreshSessions: () => void;

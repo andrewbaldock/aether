@@ -5,15 +5,21 @@ import { useTheme } from "./useTheme";
 export function ThemeToggle() {
   const { theme, toggle } = useTheme();
   const isDark = theme === "dark";
+  const label = isDark ? "Switch to light theme" : "Switch to dark theme";
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
-      className="ml-auto shrink-0 rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-neon-pink"
-    >
-      {isDark ? <SunIcon /> : <MoonIcon />}
-    </button>
+    <div className="group relative ml-auto flex">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={label}
+        className="shrink-0 rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-neon-pink"
+      >
+        {isDark ? <SunIcon /> : <MoonIcon />}
+      </button>
+      <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 whitespace-nowrap rounded-md bg-surface-overlay px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+        {label}
+      </span>
+    </div>
   );
 }
 

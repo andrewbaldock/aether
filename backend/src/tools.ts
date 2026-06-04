@@ -2,7 +2,8 @@ import type Anthropic from "@anthropic-ai/sdk";
 
 export type ToolDefinition = Anthropic.Messages.Tool;
 
-export const TOOLS: ToolDefinition[] = [
+// Always-on tools, available regardless of mode.
+export const BASE_TOOLS: ToolDefinition[] = [
   {
     name: "get_current_datetime",
     description:
@@ -11,10 +12,76 @@ export const TOOLS: ToolDefinition[] = [
   },
 ];
 
-export function executeTool(name: string, _input: unknown): string {
+// Gated tool, offered only when Knowledge Graph mode is on. It carries structured
+// entity/relationship data to the frontend over the existing tool_result SSE seam —
+// the executor just echoes the input back, so the wire payload IS the graph data.
+export const BUILD_KNOWLEDGE_GRAPH_TOOL: ToolDefinition = {
+  name: "build_knowledge_graph",
+  description:
+    "Extract the key entities and relationships from the conversation so far and emit them as a knowledge graph. Call this whenever new entities or links emerge. Only send NEW or CHANGED entities/relationships each call — the frontend merges additively, never resets.",
+  input_schema: {
+    type: "object",
+    properties: {
+      entities: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            id: {
+              type: "string",
+              description: "stable slug, e.g. 'marie-curie'",
+            },
+            label: { type: "string", description: "display name" },
+            type: {
+              type: "string",
+              enum: ["person", "place", "concept", "org", "event"],
+            },
+            wikipediaTitle: {
+              type: "string",
+              description:
+                "exact Wikipedia article title for summary lookup, if one exists",
+            },
+          },
+          required: ["id", "label", "type"],
+        },
+      },
+      relationships: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            from: { type: "string", description: "source entity id" },
+            to: { type: "string", description: "target entity id" },
+            label: {
+              type: "string",
+              description: "short relationship label, e.g. 'discovered'",
+            },
+          },
+          required: ["from", "to"],
+        },
+      },
+    },
+    required: ["entities", "relationships"],
+  },
+};
+
+// The tool list for a turn. Knowledge Graph mode adds the graph tool; everything
+// else is always present.
+export function buildTools(opts: { graphMode: boolean }): ToolDefinition[] {
+  return opts.graphMode
+    ? [...BASE_TOOLS, BUILD_KNOWLEDGE_GRAPH_TOOL]
+    : BASE_TOOLS;
+}
+
+export function executeTool(name: string, input: unknown): string {
   switch (name) {
     case "get_current_datetime":
       return new Date().toISOString();
+    case "build_knowledge_graph":
+      // Echo the structured input straight back. This same string is both the
+      // tool_result the frontend parses into the graph AND the result fed back to
+      // Claude — fine, since it's a faithful record of what was emitted.
+      return JSON.stringify(input);
     default:
       throw new Error(`Unknown tool: "${name}"`);
   }
