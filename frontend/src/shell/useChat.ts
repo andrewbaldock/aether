@@ -15,8 +15,11 @@ interface UseChatOptions {
   onMessagesChange: (messages: Message[]) => void;
   // Called just before the first message is sent — creates a session lazily
   // so page loads and hot reloads don't spawn orphan sessions.
-  getOrCreateSession: () => Promise<string>;
+  getOrCreateSession: (graphMode?: boolean) => Promise<string>;
   refreshSessions: () => void;
+  // Knowledge Graph mode for this conversation. Read via a ref at send time so
+  // it's always current; gates the build_knowledge_graph tool on the backend.
+  graphMode: boolean;
 }
 
 export interface UseChatResult {
@@ -38,6 +41,7 @@ export function useChat({
   onMessagesChange,
   getOrCreateSession,
   refreshSessions,
+  graphMode,
 }: UseChatOptions) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +51,11 @@ export function useChat({
   // list without stale-closure issues — we mutate the ref each render.
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
+
+  // Same pattern for graphMode — current at send time without re-creating the
+  // sendMessage closure.
+  const graphModeRef = useRef(graphMode);
+  graphModeRef.current = graphMode;
 
   // Stream lifecycle guards. abortRef stops the fetch; epochRef invalidates any
   // late writes from a stream that's already been superseded (new send, or the
@@ -102,8 +111,10 @@ export function useChat({
 
     try {
       // Create the session lazily on first message — avoids orphan sessions
-      // from page loads and hot reloads.
-      const resolvedSessionId = await getOrCreateSession();
+      // from page loads and hot reloads. Pass the current graph mode so a
+      // brand-new session is created already carrying the inherited value.
+      const currentGraphMode = graphModeRef.current;
+      const resolvedSessionId = await getOrCreateSession(currentGraphMode);
 
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -112,6 +123,7 @@ export function useChat({
           messages: next.map((m) => ({ role: m.role, content: m.text })),
           sessionId: resolvedSessionId,
           userId,
+          graphMode: currentGraphMode,
         }),
         signal: controller.signal,
       });

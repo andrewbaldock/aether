@@ -18,14 +18,19 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
   return (
     <div className="flex h-full flex-col bg-surface-raised text-content-muted">
       <div className="flex items-center gap-2 px-4 py-5">
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-label="Collapse sidebar"
-          className="-ml-1 shrink-0 rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-content"
-        >
-          <SidebarToggleIcon />
-        </button>
+        <div className="group relative flex">
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label="Collapse sidebar"
+            className="-ml-1 shrink-0 rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-content"
+          >
+            <SidebarToggleIcon />
+          </button>
+          <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 whitespace-nowrap rounded-md bg-surface-overlay px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+            Collapse sidebar
+          </span>
+        </div>
         <Wordmark height={48} />
         <ThemeToggle />
       </div>
@@ -62,6 +67,17 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
           />
         ))}
       </ul>
+
+      <div className="px-4 pb-3 pt-2 text-center">
+        <a
+          href="https://andrewbaldock.com"
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs text-content-faint transition-colors hover:text-content-muted"
+        >
+          andrewbaldock.com
+        </a>
+      </div>
     </div>
   );
 }

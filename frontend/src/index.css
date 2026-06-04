@@ -162,11 +162,31 @@ body {
   filter: drop-shadow(0 0 6px #22c55e);
 }
 
+/* ── Knowledge-graph nodes ───────────────────────────────────────────────────
+   New nodes fade + scale in as the simulation places them. transform-box keeps
+   the scale anchored to the node's own translate origin, not the SVG root. */
+@keyframes kg-node-in {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.kg-node {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: kg-node-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .agent-node[data-status="active"],
   .agent-node[data-status="looping"],
   .agent-edge-flow,
-  .agent-edge-flow-loop {
+  .agent-edge-flow-loop,
+  .kg-node {
     animation: none;
   }
 }

@@ -10,9 +10,8 @@ const handle =
   "w-1 bg-border transition-colors hover:bg-border-strong data-[separator-state=hover]:bg-border-strong data-[separator-state=drag]:bg-content-subtle";
 
 const SIDEBAR_COLLAPSED_KEY = "aether-sidebar-collapsed";
-const SIDEBAR_SIZE_KEY = "aether-sidebar-size";
+const SIDEBAR_WIDTH = 240; // px — fixed so the wordmark never gets cramped
 const CAPABILITY_SIZE_KEY = "aether-capability-size";
-const SIDEBAR_DEFAULT_SIZE = 240; // px
 const CAPABILITY_DEFAULT_SIZE = 32; // percent
 
 function readCapabilitySize(): number {
@@ -33,7 +32,6 @@ export function Shell() {
 function ShellInner() {
   const { isOpen, isFullscreen } = useCapabilities();
 
-  const sidebarRef = usePanelRef();
   const capabilityRef = usePanelRef();
   const capabilityMounted = useRef(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
@@ -42,11 +40,7 @@ function ShellInner() {
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed));
-    const panel = sidebarRef.current;
-    if (!panel) return;
-    if (sidebarCollapsed && !panel.isCollapsed()) panel.collapse();
-    if (!sidebarCollapsed && panel.isCollapsed()) panel.expand();
-  }, [sidebarCollapsed, sidebarRef]);
+  }, [sidebarCollapsed]);
 
   const toggleSidebar = () => setSidebarCollapsed((c) => !c);
 
@@ -67,34 +61,16 @@ function ShellInner() {
   }, [isOpen, capabilityRef]);
 
   const savedCapabilitySize = readCapabilitySize();
-  const savedSidebarSize =
-    Number(localStorage.getItem(SIDEBAR_SIZE_KEY)) || SIDEBAR_DEFAULT_SIZE;
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-surface">
-      <Group orientation="horizontal">
-        <Panel
-          id="sidebar"
-          panelRef={sidebarRef}
-          defaultSize={sidebarCollapsed ? 0 : savedSidebarSize}
-          minSize={180}
-          maxSize={300}
-          collapsible
-          collapsedSize={0}
-          onResize={(size) => {
-            const collapsed = size.inPixels === 0;
-            setSidebarCollapsed((prev) =>
-              prev === collapsed ? prev : collapsed
-            );
-            if (size.inPixels > 0) {
-              localStorage.setItem(SIDEBAR_SIZE_KEY, String(size.inPixels));
-            }
-          }}
-        >
+    <div className="relative flex h-screen w-screen overflow-hidden bg-surface">
+      {!sidebarCollapsed && (
+        <div className="shrink-0" style={{ width: SIDEBAR_WIDTH }}>
           <Sidebar onToggle={toggleSidebar} />
-        </Panel>
-        {!sidebarCollapsed && <Separator className={handle} />}
+        </div>
+      )}
 
+      <Group orientation="horizontal" className="min-w-0 flex-1">
         {!isFullscreen && (
           <>
             <Panel id="chat" defaultSize={isOpen ? "50%" : "82%"} minSize="30%">
@@ -128,14 +104,19 @@ function ShellInner() {
       </Group>
 
       {sidebarCollapsed && (
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          aria-label="Open sidebar"
-          className="absolute left-2 top-3 z-10 rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-content"
-        >
-          <SidebarToggleIcon />
-        </button>
+        <div className="group absolute left-2 top-3 z-10 flex">
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label="Open sidebar"
+            className="rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-content"
+          >
+            <SidebarToggleIcon />
+          </button>
+          <span className="pointer-events-none absolute left-full ml-1.5 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-surface-overlay px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+            Open sidebar
+          </span>
+        </div>
       )}
     </div>
   );

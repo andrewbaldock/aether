@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { SYSTEM_PROMPT } from "./prompt";
-import { executeTool, TOOLS, type ToolDefinition } from "./tools";
+import { buildSystemPrompt } from "./prompt";
+import { buildTools, executeTool, type ToolDefinition } from "./tools";
 
 // The LLM connector — a Platform seam. The route calls `createClient().complete()`
 // and never names a provider. Swapping Claude for Gemini/Ollama later means adding
@@ -39,7 +39,10 @@ const DEFAULT_MODEL = "claude-sonnet-4-6";
 // once tool_use / tool_result blocks appear.
 type ApiMessage = Anthropic.Messages.MessageParam;
 
-function createClaudeClient(tools: ToolDefinition[]): LlmClient {
+function createClaudeClient(
+  tools: ToolDefinition[],
+  systemPrompt: string
+): LlmClient {
   // Build the SDK client lazily on first use, not at construction time. This lets
   // the server start (and /api/health respond) without a key set — only an actual
   // chat turn requires ANTHROPIC_API_KEY.
@@ -58,15 +61,21 @@ function createClaudeClient(tools: ToolDefinition[]): LlmClient {
   }
 
   const model = process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL;
+  // Output budget. 1024 is too tight once tools are in play: a single
+  // build_knowledge_graph call can emit a large JSON entity dump and get
+  // truncated (stop_reason "max_tokens"), leaving a partial tool_use that can't
+  // be parsed and a turn that produces no usable output. Override with
+  // ANTHROPIC_MAX_TOKENS.
+  const maxTokens = Number(process.env.ANTHROPIC_MAX_TOKENS) || 4096;
 
   function apiParams(messages: ApiMessage[]) {
     return {
       model,
-      max_tokens: 1024,
+      max_tokens: maxTokens,
       system: [
         {
           type: "text" as const,
-          text: SYSTEM_PROMPT,
+          text: systemPrompt,
           cache_control: { type: "ephemeral" as const },
         },
       ],
@@ -163,6 +172,16 @@ function createClaudeClient(tools: ToolDefinition[]): LlmClient {
           }
         }
 
+        // Truncated by the output budget. Any pending tool_use JSON is partial
+        // and unparseable — don't try to parse it (that would throw and kill the
+        // turn silently). Fail loudly so the cause is visible, not a frozen UI.
+        if (stopReason === "max_tokens") {
+          throw new Error(
+            "The model hit its output limit before finishing (stop_reason=max_tokens). " +
+              "Raise ANTHROPIC_MAX_TOKENS or ask for a smaller result."
+          );
+        }
+
         // No tool calls — stream is complete.
         if (stopReason !== "tool_use" || pendingTools.size === 0) {
           await onDone();
@@ -206,12 +225,14 @@ function createClaudeClient(tools: ToolDefinition[]): LlmClient {
 }
 
 // Factory keyed off LLM_PROVIDER. Defaults to Claude. Throws on an unknown
-// provider rather than silently doing the wrong thing.
-export function createClient(): LlmClient {
+// provider rather than silently doing the wrong thing. `graphMode` gates the
+// Knowledge Graph tool + its prompt guidance — called per request, so each turn
+// gets exactly the right tool surface.
+export function createClient(opts: { graphMode: boolean }): LlmClient {
   const provider = process.env.LLM_PROVIDER ?? "claude";
   switch (provider) {
     case "claude":
-      return createClaudeClient(TOOLS);
+      return createClaudeClient(buildTools(opts), buildSystemPrompt(opts));
     default:
       throw new Error(
         `Unknown LLM_PROVIDER: "${provider}" (expected "claude")`

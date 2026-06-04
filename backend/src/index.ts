@@ -6,13 +6,13 @@ import {
   getMessages,
   listSessions,
   saveMessage,
+  updateSessionGraphMode,
   updateSessionTitle,
   updateSessionTitleIfEmpty,
 } from "./db";
 import { type ChatMessage, createClient } from "./llm";
 
 const app = new Hono();
-const llm = createClient();
 
 app.get("/api/health", (c) => c.json({ ok: true }));
 
@@ -27,8 +27,13 @@ app.post("/api/sessions", async (c) => {
   if (typeof userId !== "string" || !userId) {
     return c.json({ error: "Expected { userId: string }" }, 400);
   }
+  // Optional initial graph mode so a new conversation inherits the last-used
+  // value rather than always defaulting to the column default.
+  const graphModeRaw = (body as { graphMode?: unknown }).graphMode;
+  const graphMode =
+    typeof graphModeRaw === "boolean" ? graphModeRaw : undefined;
   try {
-    const session = await createSession(userId);
+    const session = await createSession(userId, undefined, graphMode);
     return c.json(session);
   } catch (err) {
     console.error("POST /api/sessions failed:", err);
@@ -58,16 +63,27 @@ app.patch("/api/sessions/:id", async (c) => {
   } catch {
     return c.json({ error: "Request body must be JSON" }, 400);
   }
-  const title = (body as { title?: unknown }).title;
-  if (typeof title !== "string" || !title.trim()) {
-    return c.json({ error: "Expected { title: string }" }, 400);
+  // Accepts a title rename and/or a graph_mode change — whichever fields are
+  // present and valid. One endpoint for all session mutation.
+  const { title, graph_mode: graphMode } = body as {
+    title?: unknown;
+    graph_mode?: unknown;
+  };
+  const hasTitle = typeof title === "string" && title.trim().length > 0;
+  const hasGraphMode = typeof graphMode === "boolean";
+  if (!hasTitle && !hasGraphMode) {
+    return c.json(
+      { error: "Expected { title: string } and/or { graph_mode: boolean }" },
+      400
+    );
   }
   try {
-    await updateSessionTitle(id, title.trim());
+    if (hasTitle) await updateSessionTitle(id, (title as string).trim());
+    if (hasGraphMode) await updateSessionGraphMode(id, graphMode as boolean);
     return c.json({ ok: true });
   } catch (err) {
     console.error("PATCH /api/sessions/:id failed:", err);
-    return c.json({ error: "Failed to rename session" }, 500);
+    return c.json({ error: "Failed to update session" }, 500);
   }
 });
 
@@ -104,15 +120,20 @@ app.post("/api/chat", async (c) => {
     return c.json({ error: "Request body must be JSON" }, 400);
   }
 
-  const { messages, sessionId, userId } = body as {
+  const { messages, sessionId, userId, graphMode } = body as {
     messages?: unknown;
     sessionId?: unknown;
     userId?: unknown;
+    graphMode?: unknown;
   };
 
   if (!isChatMessageArray(messages)) {
     return c.json({ error: "Expected { messages: { role, content }[] }" }, 400);
   }
+
+  // Build the client per request so the tool surface (and graph-mode prompt)
+  // matches this conversation's mode.
+  const llm = createClient({ graphMode: graphMode === true });
 
   // Narrow once here; persistSession is a string exactly when persist is true,
   // so the streaming callback below doesn't need to re-cast at every call site.
