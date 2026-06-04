@@ -63,16 +63,15 @@ The app has two halves — run each in its own terminal.
 cd backend
 bun run dev
 
-# terminal 2 — frontend (Vite, port 5173)
+# terminal 2 — frontend (Vite, port 5174)
 cd frontend
 bun dev
 ```
 
-Then open **http://localhost:5173**. The frontend proxies `/api` requests to the backend on
+Then open **http://localhost:5174**. The frontend proxies `/api` requests to the backend on
 `:8000` (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#frontend--backend-wiring-the-api-proxy)).
 
-> **Note:** this project is built incrementally — see [docs/ROADMAP.md](docs/ROADMAP.md). The
-> chat now does a real round-trip to Claude (no streaming yet); set `ANTHROPIC_API_KEY` first.
+> **Note:** this project is built incrementally — see [docs/ROADMAP.md](docs/ROADMAP.md). Set `ANTHROPIC_API_KEY` in `backend/.env` before running.
 
 ---
 
@@ -110,7 +109,48 @@ aether/
 
 ## Deploy
 
-Vercel (frontend) · Fly.io (backend) — both free tiers. No Docker.
+### Production URLs
+
+| What | Service | URL |
+|------|---------|-----|
+| Frontend (React SPA) | Vercel | `aether.andrewbaldock.com` |
+| Backend (Hono API) | Fly.io | `https://aether-ab-api.fly.dev` |
+| Database | Supabase | `ltjnrftafphaampgihdf.supabase.co` |
+| Source of truth | GitHub | `andrewbaldock/aether` → auto-deploys to Vercel on push |
+
+The frontend has no hardcoded URLs — all API calls are relative `/api/*` paths. `frontend/vercel.json` rewrites those to Fly.io at the edge, so Vercel acts as a proxy. No CORS config needed.
+
+### Deploying a new version
+
+```bash
+# frontend: automatic — just push to main
+git push
+
+# backend: manual deploy required when backend/ changes
+cd backend
+fly deploy
+```
+
+### First-time backend setup (Fly.io)
+
+```bash
+brew install flyctl
+fly auth login
+cd backend
+fly apps create aether-ab-api
+fly deploy
+fly secrets set \
+  ANTHROPIC_API_KEY="..." \
+  SUPABASE_URL="..." \
+  SUPABASE_ANON_KEY="..."
+```
+
+### First-time frontend setup (Vercel)
+
+1. Import `andrewbaldock/aether` on vercel.com, set Root Directory to `frontend`
+2. Deploy — no environment variables needed
+3. Add custom domain: `vercel domains add aether.andrewbaldock.com`
+4. Add CNAME `aether → cname.vercel-dns.com` at your DNS provider
 
 ---
 
