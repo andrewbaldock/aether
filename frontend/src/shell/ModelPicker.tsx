@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiFetch } from "../lib/queryClient";
 import { Tooltip } from "./Tooltip";
 
 export interface ModelOption {
@@ -7,28 +8,16 @@ export interface ModelOption {
   blurb: string;
 }
 
-// Module-level cache + in-flight promise so every mounted picker shares one
-// fetch of the allowlist (the options never change within a session).
-let cachedModels: ModelOption[] | null = null;
-let modelsPromise: Promise<ModelOption[]> | null = null;
-
-function fetchModels(): Promise<ModelOption[]> {
-  if (cachedModels) return Promise.resolve(cachedModels);
-  modelsPromise ??= fetch("/api/models")
-    .then((res) => {
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json() as Promise<{ models: ModelOption[] }>;
-    })
-    .then((data) => {
-      cachedModels = data.models;
-      return cachedModels;
-    })
-    .catch((err) => {
-      console.error("Failed to load model list:", err);
-      modelsPromise = null; // allow a retry on the next mount
-      return [];
-    });
-  return modelsPromise;
+// The allowlist never changes within a session, so a long staleTime keeps it
+// cached app-wide; TanStack dedups the fetch across every mounted picker.
+function useModels(): ModelOption[] {
+  const { data } = useQuery({
+    queryKey: ["models"],
+    queryFn: () => apiFetch<{ models: ModelOption[] }>("/api/models"),
+    staleTime: Number.POSITIVE_INFINITY,
+    select: (d) => d.models,
+  });
+  return data ?? [];
 }
 
 interface ModelPickerProps {
@@ -43,17 +32,7 @@ interface ModelPickerProps {
 // fetch, cached). The selected value follows the active conversation; choosing
 // one persists it to the session (handled by the parent).
 export function ModelPicker({ value, onChange, disabled }: ModelPickerProps) {
-  const [models, setModels] = useState<ModelOption[]>(cachedModels ?? []);
-
-  useEffect(() => {
-    let alive = true;
-    fetchModels().then((m) => {
-      if (alive) setModels(m);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  const models = useModels();
 
   // Until the list loads (or if it failed), render nothing rather than an empty
   // select — the conversation still works on the server default.

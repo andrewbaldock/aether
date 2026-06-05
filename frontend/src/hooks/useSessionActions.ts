@@ -1,15 +1,18 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
+import { apiFetch } from "../lib/queryClient";
 import type { Message } from "../shell/useChat";
+import { sessionsKey } from "./useSessionList";
 
 interface UseSessionActionsArgs {
+  // The user whose session list should be invalidated after a mutation.
+  userId: string;
   // The currently active session id, or null before the first message.
   sessionId: string | null;
   // Point at an existing session and hydrate its messages into the view.
   switchSession: (id: string, messages: Message[]) => void;
   // Reset to a fresh, unsent conversation.
   startNewConversation: () => void;
-  // Re-fetch the session list (after a rename or delete).
-  refreshSessions: () => void;
 }
 
 export interface SessionActions {
@@ -18,73 +21,90 @@ export interface SessionActions {
   deleteSession: (id: string) => Promise<void>;
 }
 
-// Session-list CRUD, lifted out of the Sidebar so it's pure UI. The fetch +
-// state-mutation logic lives here alongside the other session hooks.
+interface DbMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+}
+
+// Session-list CRUD, lifted out of the Sidebar so it's pure UI. Reads go through
+// the query cache; writes are mutations that invalidate the session list.
 export function useSessionActions({
+  userId,
   sessionId,
   switchSession,
   startNewConversation,
-  refreshSessions,
 }: UseSessionActionsArgs): SessionActions {
+  const queryClient = useQueryClient();
+  const invalidateSessions = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: sessionsKey(userId) }),
+    [queryClient, userId]
+  );
+
   const loadSession = useCallback(
     async (id: string) => {
       if (id === sessionId) return;
+      // fetchQuery caches the messages so re-opening a recent conversation is instant.
+      // The query cache's onError logs failures; bail quietly on error so a failed
+      // load doesn't switch the view to an empty conversation.
+      let dbMessages: DbMessage[];
       try {
-        const res = await fetch(`/api/sessions/${id}/messages`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const dbMessages = (await res.json()) as {
-          id: string;
-          role: "user" | "assistant";
-          content: string;
-        }[];
-        const messages: Message[] = dbMessages.map((m) => ({
-          id: m.id,
-          role: m.role,
-          text: m.content,
-        }));
-        switchSession(id, messages);
-        // Re-sync the list on switch so any session that was created moments ago
-        // (and may have been briefly untitled in memory) picks up its persisted
-        // auto-title from the DB. Cheap insurance against the first-turn refresh
-        // racing the title write.
-        refreshSessions();
-      } catch (err) {
-        console.error("Failed to load session messages:", err);
+        dbMessages = await queryClient.fetchQuery({
+          queryKey: ["messages", id],
+          queryFn: () => apiFetch<DbMessage[]>(`/api/sessions/${id}/messages`),
+        });
+      } catch {
+        return;
       }
+      const messages: Message[] = dbMessages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        text: m.content,
+      }));
+      switchSession(id, messages);
+      // Re-sync the list on switch so any session created moments ago (and briefly
+      // untitled in memory) picks up its persisted auto-title from the DB.
+      invalidateSessions();
     },
-    [sessionId, switchSession, refreshSessions]
+    [sessionId, switchSession, queryClient, invalidateSessions]
   );
 
+  const renameMutation = useMutation({
+    mutationKey: ["renameSession"],
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      apiFetch<void>(`/api/sessions/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      }),
+    onSuccess: invalidateSessions,
+  });
+
+  const deleteMutation = useMutation({
+    mutationKey: ["deleteSession"],
+    mutationFn: (id: string) =>
+      apiFetch<void>(`/api/sessions/${id}`, { method: "DELETE" }),
+    onSuccess: (_data, id) => {
+      invalidateSessions();
+      // If the deleted session was active, start fresh.
+      if (id === sessionId) startNewConversation();
+    },
+  });
+
+  // Fire-and-forget from the UI: the mutation cache's onError logs failures, so we
+  // swallow the rejection here to avoid unhandled-rejection noise (callers don't await).
   const renameSession = useCallback(
     async (id: string, title: string) => {
-      try {
-        const res = await fetch(`/api/sessions/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title }),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        refreshSessions();
-      } catch (err) {
-        console.error("Failed to rename session:", err);
-      }
+      await renameMutation.mutateAsync({ id, title }).catch(() => {});
     },
-    [refreshSessions]
+    [renameMutation]
   );
 
   const deleteSession = useCallback(
     async (id: string) => {
-      try {
-        const res = await fetch(`/api/sessions/${id}`, { method: "DELETE" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        refreshSessions();
-        // If the deleted session was active, start fresh.
-        if (id === sessionId) startNewConversation();
-      } catch (err) {
-        console.error("Failed to delete session:", err);
-      }
+      await deleteMutation.mutateAsync(id).catch(() => {});
     },
-    [sessionId, refreshSessions, startNewConversation]
+    [deleteMutation]
   );
 
   return { loadSession, renameSession, deleteSession };

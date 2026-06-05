@@ -1,4 +1,7 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
+import { apiFetch } from "../lib/queryClient";
+import { sessionsKey } from "./useSessionList";
 
 interface UseSessionResult {
   sessionId: string | null;
@@ -13,45 +16,51 @@ export function useSession(
   userId: string,
   onNewSession?: () => void
 ): UseSessionResult {
+  const queryClient = useQueryClient();
   const [sessionId, setSessionId] = useState<string | null>(null);
+  // Dedups concurrent creates: getOrCreateSession can be called twice before the
+  // first POST resolves; both callers should share one in-flight create.
   const pendingRef = useRef<Promise<string> | null>(null);
   // Ref so onNewSession is always current without being a useCallback dep.
   const onNewSessionRef = useRef(onNewSession);
   onNewSessionRef.current = onNewSession;
 
-  const getOrCreateSession = useCallback(
-    async (graphMode?: boolean): Promise<string> => {
-      if (sessionId) return sessionId;
-      if (pendingRef.current) return pendingRef.current;
-
-      const pending = fetch("/api/sessions", {
+  const createSession = useMutation({
+    mutationKey: ["createSession"],
+    mutationFn: (graphMode?: boolean) =>
+      apiFetch<{ id: string }>("/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId,
           ...(graphMode === undefined ? {} : { graphMode }),
         }),
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          return res.json() as Promise<{ id: string }>;
-        })
+      }),
+  });
+
+  const getOrCreateSession = useCallback(
+    async (graphMode?: boolean): Promise<string> => {
+      if (sessionId) return sessionId;
+      if (pendingRef.current) return pendingRef.current;
+
+      const pending = createSession
+        .mutateAsync(graphMode)
         .then((data) => {
           setSessionId(data.id);
           pendingRef.current = null;
+          queryClient.invalidateQueries({ queryKey: sessionsKey(userId) });
           onNewSessionRef.current?.();
           return data.id;
         })
         .catch((err) => {
           pendingRef.current = null;
-          console.error("Failed to create session:", err);
           throw err;
         });
 
       pendingRef.current = pending;
       return pending;
     },
-    [userId, sessionId]
+    [userId, sessionId, createSession, queryClient]
   );
 
   // Point at an existing session (e.g. the user clicked a past conversation).

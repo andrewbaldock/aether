@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { apiFetch, logApiError } from "../../../lib/queryClient";
 import { useSessionContext } from "../../../shell/SessionContext";
 import {
   type GraphSnapshot,
@@ -46,16 +47,17 @@ export function GraphPersistenceBridge() {
     loadedSessionRef.current = null; // block saves until the load resolves
     (async () => {
       try {
-        const res = await fetch(`/api/sessions/${sessionId}/graph`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const snapshot = (await res.json()) as GraphSnapshot;
+        const snapshot = await apiFetch<GraphSnapshot>(
+          `/api/sessions/${sessionId}/graph`
+        );
         if (cancelled) return;
         loadGraph({
           nodes: snapshot.nodes ?? [],
           links: snapshot.links ?? [],
         });
       } catch (err) {
-        console.error("Failed to load session graph:", err);
+        logApiError(`graph load ${sessionId}`, err);
+        // Clear so we don't show a stale graph for a session whose load failed.
         if (!cancelled) clearGraph();
       } finally {
         if (!cancelled) loadedSessionRef.current = sessionId;
@@ -77,11 +79,11 @@ export function GraphPersistenceBridge() {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       const snapshot = getSnapshot();
-      fetch(`/api/sessions/${sessionId}/graph`, {
+      apiFetch<void>(`/api/sessions/${sessionId}/graph`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(snapshot),
-      }).catch((err) => console.error("Failed to save session graph:", err));
+      }).catch((err) => logApiError(`graph save ${sessionId}`, err));
     }, SAVE_DEBOUNCE_MS);
 
     return () => {

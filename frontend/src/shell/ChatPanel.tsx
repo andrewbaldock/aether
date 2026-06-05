@@ -7,6 +7,7 @@ import { Wordmark } from "../brand/Wordmark";
 import { useCapabilities } from "../capabilities/useCapabilities";
 import { AGENT_DIAGRAM_WIDGET } from "../capabilities/widgets/AgentDiagram";
 import { KNOWLEDGE_GRAPH_WIDGET } from "../capabilities/widgets/KnowledgeGraph";
+import { useUpdateSession } from "../hooks/useUpdateSession";
 import { useAgentEvents } from "./AgentEventContext";
 import { ModelPicker } from "./ModelPicker";
 import { useSessionContext } from "./SessionContext";
@@ -74,6 +75,7 @@ export function ChatPanel() {
     registerAbort(abortStream);
   }, [registerAbort, abortStream]);
   const { open, activate } = useCapabilities();
+  const updateSession = useUpdateSession(userId);
   const bus = useAgentEvents();
   const [draft, setDraft] = useState("");
   const started = messages.length > 0;
@@ -135,16 +137,7 @@ export function ChatPanel() {
       activate(KNOWLEDGE_GRAPH_WIDGET.id);
     }
     if (sessionId) {
-      fetch(`/api/sessions/${sessionId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ graph_mode: nextValue }),
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          refreshSessions();
-        })
-        .catch((err) => console.error("Failed to update graph mode:", err));
+      updateSession.mutate({ id: sessionId, patch: { graph_mode: nextValue } });
     }
   }
 
@@ -155,16 +148,7 @@ export function ChatPanel() {
     localStorage.setItem(LAST_MODEL_KEY, nextModel);
     setLastModel(nextModel);
     if (sessionId) {
-      fetch(`/api/sessions/${sessionId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: nextModel }),
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          refreshSessions();
-        })
-        .catch((err) => console.error("Failed to update model:", err));
+      updateSession.mutate({ id: sessionId, patch: { model: nextModel } });
     }
   }
 
