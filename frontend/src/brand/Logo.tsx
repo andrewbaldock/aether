@@ -1,8 +1,9 @@
 import { useId } from "react";
 
-// Aether mark — the neon "A" in Ubuntu, with CRT scanlines and a 60/40 pink→cyan
-// diagonal gradient (cyan top-right → pink bottom-left). Renders identically on dark,
-// light, and art themes (the scanlines give the glow dark gaps to bleed into).
+// Aether mark — the neon "A" in Ubuntu with a pink→cyan diagonal gradient
+// (cyan top-right → pink bottom-left). A tight neon RIM (half opacity) behind a SOLID
+// crisp "A" on top — sharp at small sizes rather than washed out by a soft bloom.
+// Renders across dark, light, and art themes.
 //
 // Requires the "Ubuntu" font (700) to be loaded — see brand/fonts.css.
 export function Logo({
@@ -16,8 +17,20 @@ export function Logo({
   const uid = useId().replace(/:/g, "");
   const glow = `glow-${uid}`;
   const grad = `grad-${uid}`;
-  const scan = `scan-${uid}`;
-  const mask = `mask-${uid}`;
+
+  const letter = (
+    <text
+      x="65"
+      y="104"
+      textAnchor="middle"
+      fontFamily="Ubuntu, ui-sans-serif, system-ui, sans-serif"
+      fontWeight={700}
+      fontSize={130}
+      fill={`url(#${grad})`}
+    >
+      A
+    </text>
+  );
 
   return (
     <svg
@@ -30,13 +43,9 @@ export function Logo({
     >
       <title>{title}</title>
       <defs>
-        <filter id={glow} x="-60%" y="-60%" width="220%" height="220%">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b1" />
-          <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="b2" />
-          <feMerge>
-            <feMergeNode in="b2" />
-            <feMergeNode in="b1" />
-          </feMerge>
+        {/* Single tight blur — a rim that hugs the edges, not a soft cloud. */}
+        <filter id={glow} x="-25%" y="-25%" width="150%" height="150%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" />
         </filter>
 
         {/* Pink(bottom-left) → cyan(top-right), even 50/50, subtle upward slant */}
@@ -45,43 +54,13 @@ export function Logo({
           <stop offset="50%" stopColor="#b54bd0" />
           <stop offset="100%" stopColor="#16c2ff" />
         </linearGradient>
-
-        <pattern id={scan} width="10" height="13" patternUnits="userSpaceOnUse">
-          <rect width="10" height="8" fill="#fff" />
-          <rect y="8" width="10" height="5" fill="#000" />
-        </pattern>
-        <mask id={mask}>
-          <rect width="130" height="130" fill={`url(#${scan})`} />
-        </mask>
       </defs>
 
-      {/* Glow behind (un-masked) + crisp scanlined letter on top */}
-      <g filter={`url(#${glow})`} opacity={0.9}>
-        <text
-          x="65"
-          y="104"
-          textAnchor="middle"
-          fontFamily="Ubuntu, ui-sans-serif, system-ui, sans-serif"
-          fontWeight={700}
-          fontSize={130}
-          fill={`url(#${grad})`}
-        >
-          A
-        </text>
+      {/* Layer 1 — tight neon rim (half opacity) + Layer 2 — solid crisp letter */}
+      <g filter={`url(#${glow})`} opacity={0.5}>
+        {letter}
       </g>
-      <g mask={`url(#${mask})`}>
-        <text
-          x="65"
-          y="104"
-          textAnchor="middle"
-          fontFamily="Ubuntu, ui-sans-serif, system-ui, sans-serif"
-          fontWeight={700}
-          fontSize={130}
-          fill={`url(#${grad})`}
-        >
-          A
-        </text>
-      </g>
+      <g>{letter}</g>
     </svg>
   );
 }

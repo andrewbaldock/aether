@@ -2,7 +2,9 @@
   <title>Aether</title>
   <rect width="64" height="64" rx="14" fill="#110d1a"/>
 
-  <text x="32" y="50" text-anchor="middle"
-    font-family="Helvetica, Arial, sans-serif" font-weight="700"
-    font-size="52" fill="#ff2e9a">A</text>
+  <!-- Grenze Gotisch capital "A", outline baked as a path (favicons can't load web fonts).
+       transform = matrix(scale,0,0,-scale,tx,ty) flips the font's Y-up coords to SVG Y-down. -->
+  <g transform="matrix(0.06558 0 0 -0.06558 11.439 52.318)" fill="#ff2e9a">
+    <path d="M78 402Q89 422 104.0 441.5Q119 461 138.5 480.5Q158 500 179 519H213Q208 500 205.0 472.0Q202 444 200.5 396.0Q199 348 198.5 269.0Q198 190 198 70L276 53L251 5Q237 3 216.0 0.0Q195 -3 173.5 -5.5Q152 -8 136.0 -9.5Q120 -11 117 -10Q110 -9 101.0 -1.0Q92 7 85.0 16.5Q78 26 77 30Q79 69 83.5 105.0Q88 141 88 191Q88 230 84.5 266.0Q81 302 78.5 336.0Q76 370 78 402ZM255 297 428 304V240L255 247ZM299 518V110Q299 104 293.0 88.5Q287 73 276 53H247V518ZM44 540 52 630Q111 626 176.5 619.5Q242 613 304.0 605.5Q366 598 413.0 591.0Q460 584 482 579Q484 578 491.0 571.5Q498 565 506.0 556.0Q514 547 520.0 539.5Q526 532 526 528V72L583 53V4Q568 2 546.0 -0.5Q524 -3 502.0 -5.5Q480 -8 464.0 -9.5Q448 -11 443 -10Q437 -9 428.0 -0.5Q419 8 412.5 17.0Q406 26 405 31V483L203 509L168 507L166 513Z"/>
+  </g>
 </svg>
