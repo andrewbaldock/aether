@@ -65,8 +65,9 @@ const VALID_TYPES: ReadonlySet<EntityType> = new Set([
 ]);
 
 // Parse + validate a build_knowledge_graph tool_result string. Returns null on
-// any malformed payload so one bad call can't tear down the graph.
-function parsePayload(raw: string): GraphPayload | null {
+// any malformed payload so one bad call can't tear down the graph. Exported for
+// unit tests.
+export function parsePayload(raw: string): GraphPayload | null {
   let data: unknown;
   try {
     data = JSON.parse(raw);
@@ -97,8 +98,8 @@ function parsePayload(raw: string): GraphPayload | null {
 }
 
 // Key a link by its endpoints — endpoints can be strings (fresh) or node refs
-// (after the sim binds them), so normalise to ids.
-function linkKey(l: GraphLink): string {
+// (after the sim binds them), so normalise to ids. Exported for unit tests.
+export function linkKey(l: GraphLink): string {
   const from = typeof l.source === "string" ? l.source : l.source.id;
   const to = typeof l.target === "string" ? l.target : l.target.id;
   return `${from}→${to}`;
