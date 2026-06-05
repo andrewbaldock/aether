@@ -319,4 +319,9 @@ const port = Number(process.env.PORT ?? 8000);
 export default {
   port: Number.isFinite(port) ? port : 8000,
   fetch: app.fetch,
+  // SSE chat responses stream Claude's output, which can idle longer than Bun's
+  // default 10s idleTimeout between chunks (time-to-first-token, long answers) —
+  // the server would cut the socket mid-stream and the browser saw a NetworkError.
+  // 255s is Bun's max; LLM turns comfortably fit under it.
+  idleTimeout: 255,
 };

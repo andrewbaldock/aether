@@ -40,7 +40,7 @@ export function Tooltip({
   function blurTrigger(e: React.MouseEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement;
     const focusable = target.closest<HTMLElement>(
-      "button, select, a, input, [tabindex]",
+      "button, select, a, input, [tabindex]"
     );
     focusable?.blur();
   }

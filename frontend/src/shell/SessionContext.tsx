@@ -68,10 +68,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [resetSession]);
 
   const actions = useSessionActions({
+    userId,
     sessionId,
     switchSession,
     startNewConversation,
-    refreshSessions,
   });
 
   return (

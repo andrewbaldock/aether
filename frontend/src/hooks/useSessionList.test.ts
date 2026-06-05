@@ -1,4 +1,10 @@
+import {
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Session } from "./useSessionList";
 import { useSessionList } from "./useSessionList";
@@ -24,6 +30,20 @@ const SESSIONS: Session[] = [
   },
 ];
 
+// A fresh client per test so cache state never leaks. Retries off so a failed
+// fetch surfaces immediately (the real client retries 5xx to ride out cold starts);
+// onError mirrors the production cache so error-logging assertions hold.
+function makeWrapper() {
+  const client = new QueryClient({
+    queryCache: new QueryCache({
+      onError: (err) => console.error(err),
+    }),
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  return ({ children }: { children: ReactNode }) =>
+    createElement(QueryClientProvider, { client }, children);
+}
+
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());
 });
@@ -43,12 +63,17 @@ describe("useSessionList", () => {
         )
     );
 
-    const { result } = renderHook(() => useSessionList("user-1"));
+    const { result } = renderHook(() => useSessionList("user-1"), {
+      wrapper: makeWrapper(),
+    });
 
     await waitFor(() => expect(result.current.sessions).toHaveLength(2));
 
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledWith("/api/sessions?userId=user-1");
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/sessions?userId=user-1",
+      undefined
+    );
     expect(result.current.sessions[0]?.id).toBe("s1");
     expect(result.current.sessions[1]?.id).toBe("s2");
   });
@@ -61,11 +86,14 @@ describe("useSessionList", () => {
         .mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }))
     );
 
-    renderHook(() => useSessionList("user id with spaces"));
+    renderHook(() => useSessionList("user id with spaces"), {
+      wrapper: makeWrapper(),
+    });
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(fetch).toHaveBeenCalledWith(
-      "/api/sessions?userId=user%20id%20with%20spaces"
+      "/api/sessions?userId=user%20id%20with%20spaces",
+      undefined
     );
   });
 
@@ -80,7 +108,9 @@ describe("useSessionList", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    const { result } = renderHook(() => useSessionList("user-1"));
+    const { result } = renderHook(() => useSessionList("user-1"), {
+      wrapper: makeWrapper(),
+    });
 
     await waitFor(() => expect(result.current.sessions).toHaveLength(1));
 
@@ -102,7 +132,9 @@ describe("useSessionList", () => {
       .mockResolvedValueOnce(new Response("", { status: 500 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const { result } = renderHook(() => useSessionList("user-1"));
+    const { result } = renderHook(() => useSessionList("user-1"), {
+      wrapper: makeWrapper(),
+    });
 
     await waitFor(() => expect(result.current.sessions).toHaveLength(1));
 
@@ -110,7 +142,7 @@ describe("useSessionList", () => {
       result.current.refresh();
     });
 
-    // Sessions unchanged, error logged
+    // Sessions unchanged (query keeps previous data on error), error logged.
     await waitFor(() => expect(consoleSpy).toHaveBeenCalledTimes(1));
     expect(result.current.sessions).toHaveLength(1);
     consoleSpy.mockRestore();

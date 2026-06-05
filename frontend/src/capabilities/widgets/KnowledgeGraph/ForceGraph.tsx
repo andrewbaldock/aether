@@ -230,11 +230,8 @@ export function ForceGraph({
       0.3,
       Math.min(
         3,
-        Math.min(
-          (VIEW_W - PADDING * 2) / bboxW,
-          (VIEW_H - PADDING * 2) / bboxH,
-        ),
-      ),
+        Math.min((VIEW_W - PADDING * 2) / bboxW, (VIEW_H - PADDING * 2) / bboxH)
+      )
     );
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
