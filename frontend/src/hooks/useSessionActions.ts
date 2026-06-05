@@ -43,11 +43,16 @@ export function useSessionActions({
           text: m.content,
         }));
         switchSession(id, messages);
+        // Re-sync the list on switch so any session that was created moments ago
+        // (and may have been briefly untitled in memory) picks up its persisted
+        // auto-title from the DB. Cheap insurance against the first-turn refresh
+        // racing the title write.
+        refreshSessions();
       } catch (err) {
         console.error("Failed to load session messages:", err);
       }
     },
-    [sessionId, switchSession]
+    [sessionId, switchSession, refreshSessions]
   );
 
   const renameSession = useCallback(

@@ -11,16 +11,19 @@ export interface ModelOption {
   blurb: string;
 }
 
+// Order matters: the FIRST entry is what the picker shows (and uses) when a
+// conversation hasn't explicitly chosen a model. Keep Sonnet first so it's the
+// default everywhere — it must also match DEFAULT_MODEL below.
 export const MODELS: ModelOption[] = [
-  {
-    id: "claude-opus-4-8",
-    label: "Opus 4.8",
-    blurb: "Most capable — best for hard reasoning",
-  },
   {
     id: "claude-sonnet-4-6",
     label: "Sonnet 4.6",
     blurb: "Balanced — the default",
+  },
+  {
+    id: "claude-opus-4-8",
+    label: "Opus 4.8",
+    blurb: "Most capable — best for hard reasoning",
   },
   {
     id: "claude-haiku-4-5-20251001",

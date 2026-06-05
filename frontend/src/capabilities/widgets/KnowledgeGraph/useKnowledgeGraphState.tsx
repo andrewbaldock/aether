@@ -227,6 +227,25 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
     };
   }, [bus, bump]);
 
+  // Watchdog: a last-resort cap on the loading state. The bus events
+  // (done/error/idle/tool_result) are the normal way "mapping…" clears, and the
+  // abort path now emits idle too — but a dropped connection, a backgrounded tab
+  // that never delivers the terminal event, or any future gap could still strand
+  // the spinner. If it's been on longer than any real turn should take, force it
+  // off. Re-armed whenever the flag turns on.
+  const MAX_LOADING_MS = 90_000;
+  useEffect(() => {
+    if (!isAwaitingGraph) return;
+    const watchdog = setTimeout(() => {
+      setIsAwaitingGraph(false);
+      if (clearTimer.current) {
+        clearTimeout(clearTimer.current);
+        clearTimer.current = null;
+      }
+    }, MAX_LOADING_MS);
+    return () => clearTimeout(watchdog);
+  }, [isAwaitingGraph]);
+
   // --- Persistence helpers --------------------------------------------------
   const reportPositions = useCallback(
     (positions: Map<string, NodePosition>) => {

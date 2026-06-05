@@ -31,16 +31,18 @@ export function CapabilityColumn() {
               >
                 {w.title}
               </button>
-              <Tooltip label={`Close ${w.title}`} side="bottom">
-                <button
-                  type="button"
-                  aria-label={`Close ${w.title}`}
-                  onClick={() => close(w.id)}
-                  className="rounded text-content-subtle hover:text-content"
-                >
-                  ×
-                </button>
-              </Tooltip>
+              {/* No Tooltip wrapper here: this row is an overflow-x-auto scroll
+                  container, and the tooltip's positioned bubble overflowed it
+                  vertically, showing a spurious scrollbar. The × close affordance
+                  is self-evident; aria-label keeps it accessible. */}
+              <button
+                type="button"
+                aria-label={`Close ${w.title}`}
+                onClick={() => close(w.id)}
+                className="rounded text-content-subtle hover:text-content"
+              >
+                ×
+              </button>
             </div>
           ))}
         </div>
