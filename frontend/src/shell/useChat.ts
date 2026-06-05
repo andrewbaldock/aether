@@ -72,9 +72,17 @@ export function useChat({
   const epochRef = useRef(0);
 
   const abortStream = useCallback(() => {
+    const wasInFlight = abortRef.current !== null;
     abortRef.current?.abort();
+    abortRef.current = null;
     epochRef.current++;
-  }, []);
+    // A turn that's torn down (conversation switch, or a new send superseding
+    // this one) emits no done/error over the wire — the fetch just rejects with
+    // AbortError. Without a terminal signal, bus listeners that track per-turn
+    // activity (e.g. the graph "mapping…" spinner) would hang on forever. Emit
+    // idle so they reset. Only when something was actually in flight.
+    if (wasInFlight) bus.emit({ type: "idle" });
+  }, [bus]);
 
   async function sendMessage(text: string) {
     // Supersede any in-flight stream so its late writes are dropped.
@@ -257,8 +265,11 @@ export function useChat({
       setError(message);
       bus.emit({ type: "error", message });
     } finally {
-      // Only the current stream owns the loading flag.
-      if (epoch === epochRef.current) setIsLoading(false);
+      // Only the current stream owns the loading flag + abort handle.
+      if (epoch === epochRef.current) {
+        setIsLoading(false);
+        abortRef.current = null;
+      }
     }
   }
 
