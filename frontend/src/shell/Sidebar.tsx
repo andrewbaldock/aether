@@ -24,6 +24,10 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
   // active-check), even though its row exists. Untitled non-active rows fall back
   // to a generic label rather than disappearing.
   const visible = sessions;
+  // While the chat panel's hero wordmark is on screen (no messages yet), the sidebar
+  // shows just the "A" so the brand doesn't read twice; once a conversation starts and
+  // the hero is gone, it expands to the full "Aether".
+  const started = messages.length > 0;
   const provisionalTitle =
     messages.find((m) => m.role === "user")?.text ?? "New conversation";
 
@@ -37,7 +41,7 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
 
   return (
     <div className="flex h-full flex-col bg-surface-raised text-content-muted">
-      <div className="flex items-center gap-2 px-4 py-5">
+      <div className="relative flex items-center justify-between px-4 py-3">
         <div className="group relative flex">
           <button
             type="button"
@@ -54,7 +58,11 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
             Collapse sidebar
           </span>
         </div>
-        <Wordmark height={60} />
+        {/* Absolutely centred against the full bar so the differing widths of the
+            toggle (left) and theme toggle (right) don't push it off-centre. */}
+        <div className="pointer-events-none absolute left-1/2 -translate-x-1/2">
+          <Wordmark height={28} compact={!started} />
+        </div>
         <ThemeToggle />
       </div>
 
