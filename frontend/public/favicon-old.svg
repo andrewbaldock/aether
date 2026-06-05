@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Aether</title>
+  <defs>
+    <filter id="g" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2.6" result="b2"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.1" result="b1"/>
+      <feBlend in="b2" in2="b1" mode="screen" result="glow"/>
+      <feBlend in="SourceGraphic" in2="glow" mode="screen" result="lit"/>
+      <feComposite in="lit" in2="SourceGraphic" operator="over"/>
+    </filter>
+    <!-- Pink(bottom-left) -> electric violet(mid) -> cyan(top-right) -->
+    <linearGradient id="d" x1="0" y1="0.65" x2="1" y2="0.35">
+      <stop offset="0%" stop-color="#ff2e9a"/>
+      <stop offset="50%" stop-color="#dd22ff"/>
+      <stop offset="100%" stop-color="#16c2ff"/>
+    </linearGradient>
+    <pattern id="s" width="4" height="2.5" patternUnits="userSpaceOnUse">
+      <rect width="4" height="2" fill="#fff"/>
+      <rect y="2" width="4" height="0.5" fill="#000"/>
+    </pattern>
+    <mask id="m"><rect width="64" height="64" fill="url(#s)"/></mask>
+  </defs>
+
+  <!-- rounded-square ground so the neon A pops -->
+  <rect width="64" height="64" rx="14" fill="#0C0C13"/>
+
+  <g filter="url(#g)" mask="url(#m)">
+    <text x="32" y="50" text-anchor="middle"
+      font-family="Helvetica, Arial, sans-serif" font-weight="700"
+      font-size="52" fill="url(#d)" stroke="#ffffff" stroke-width="3" paint-order="stroke">A</text>
+  </g>
+</svg>
