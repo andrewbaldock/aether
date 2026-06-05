@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aether — Thinking Glyph: assembles itself</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Grenze+Gotisch:wght@500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      :root { --pink:#ff2e9a; --mid:#b54bd0; --cyan:#16c2ff; }
+      * { box-sizing:border-box; }
+      body { margin:0; font-family:ui-sans-serif,system-ui,sans-serif; padding:40px 48px 80px; transition:background .25s,color .25s; }
+      body[data-theme="dark"]  { background:radial-gradient(120% 120% at 30% 10%,#15131f 0%,#0a0a0f 60%,#050507 100%); color:#e6e6ef; }
+      body[data-theme="light"] { background:radial-gradient(120% 120% at 30% 10%,#fff 0%,#f1f1f5 70%,#e7e7ee 100%); color:#2a2a33; }
+      body[data-theme="art"]   { background:radial-gradient(120% 120% at 25% 10%,#2a0a3d 0%,#140a28 55%,#0a0512 100%); color:#f0e6ff; }
+      header { max-width:1000px; margin:0 auto 28px; }
+      h1 { font-weight:600; letter-spacing:-.02em; margin:0 0 4px; font-size:26px; }
+      .sub { opacity:.6; margin-bottom:22px; font-size:14px; line-height:1.5; }
+      .controls { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+      .controls button { font:inherit; font-size:13px; cursor:pointer; padding:7px 16px; border-radius:999px; border:1px solid currentColor; background:transparent; color:inherit; opacity:.5; }
+      .controls button.active { opacity:1; font-weight:600; }
+      .spacer { flex:1; }
+      .grid { max-width:1000px; margin:0 auto; display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:18px; }
+      .card { border-radius:16px; padding:22px 22px 18px; text-align:center; }
+      body[data-theme="dark"]  .card { background:radial-gradient(90% 120% at 50% 30%,#14121d 0%,#0b0b11 70%,#08080c 100%); border:1px solid #1c1c28; }
+      body[data-theme="light"] .card { background:#fff; border:1px solid #e2e2ea; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+      body[data-theme="art"]   .card { background:radial-gradient(90% 120% at 50% 30%,#221038 0%,#160a28 70%,#0e0620 100%); border:1px solid #3a1f55; }
+      .label { font-size:11px; opacity:.55; text-transform:uppercase; letter-spacing:.1em; margin-bottom:4px; }
+      .note  { font-size:11px; opacity:.4; margin-bottom:16px; min-height:30px; }
+      .stage { display:flex; align-items:center; justify-content:center; gap:24px; min-height:120px; }
+      .glyph.big  { width:96px; height:96px; }
+      .glyph.real { width:36px; height:36px; }
+    </style>
+  </head>
+  <body data-theme="dark">
+    <header>
+      <h1>Aether — Thinking Glyph: <em>assembles / draws itself</em></h1>
+      <div class="sub">
+        Variations where the Grenze "A" builds itself while the agent thinks. The constellation
+        ones tie back to your Knowledge Graph (nodes + edges resolving into the mark). Nodes sit
+        on real coordinates sampled from the actual glyph outline. Big (96px) + real size (36px).
+      </div>
+      <div class="controls">
+        <button data-theme-set="dark" class="active">Dark</button>
+        <button data-theme-set="light">Light</button>
+        <button data-theme-set="art">Art</button>
+        <span class="spacer"></span>
+        <button id="restartBtn">Restart all</button>
+      </div>
+    </header>
+    <div class="grid" id="grid"></div>
+
+    <script>
+      // Real points sampled along the Grenze Gotisch "A" outline (0..100 box).
+      const NODES = [[6.3,35.6],[28.9,40.8],[36.2,88.8],[6.9,85.0],[10.0,37.5],[68.5,51.0],[41.8,46.2],[47.3,41.6],[38.3,90.1],[37.7,37.5],[0.1,12.8],[49.2,3.9],[89.4,31.2],[89.4,84.4],[67.0,91.1],[67.0,37.9]];
+      // A plausible "skeleton" edge set connecting nearby nodes into an A-like frame.
+      const EDGES = [[10,11],[11,12],[0,4],[4,1],[1,9],[9,7],[7,6],[6,5],[5,15],[15,12],[12,13],[13,14],[2,3],[2,8],[14,8]];
+
+      function grad(uid) {
+        return `<linearGradient id="g-${uid}" x1="0" y1="0.65" x2="1" y2="0.35">
+          <stop offset="0%" stop-color="#ff2e9a"/><stop offset="50%" stop-color="#b54bd0"/><stop offset="100%" stop-color="#16c2ff"/>
+        </linearGradient>`;
+      }
+      function letter(uid, opts="") {
+        return `<text x="50" y="78" text-anchor="middle" font-family="'Grenze Gotisch',serif" font-weight="600" font-size="92" fill="url(#g-${uid})" ${opts}>A</text>`;
+      }
+      function colorAt(t){ // pink→cyan along the gradient
+        return t<.5 ? "#ff2e9a" : "#16c2ff";
+      }
+
+      // ── reusable fragments (so combos can layer them on a shared DUR cycle) ──
+      const DUR = 3.4; // shared cycle; longer hold in the united state (matches ThinkingGlyph.tsx)
+
+      // constellation backdrop: nodes pop in, edges draw. (no letter fill — that's separate)
+      function fragConstellation(uid){
+        const nodes = NODES.map((p,i)=>`
+          <circle cx="${p[0]}" cy="${p[1]}" r="0" fill="${colorAt(i/NODES.length)}">
+            <animate attributeName="r" values="0;2.4;2;2;0" keyTimes="0;0.12;0.5;0.85;1"
+              dur="${DUR}s" begin="${i*0.05}s" repeatCount="indefinite"/>
+          </circle>`).join("");
+        const edges = EDGES.map((e,i)=>{
+          const a=NODES[e[0]], b=NODES[e[1]];
+          return `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"
+            stroke="url(#g-${uid})" stroke-width="1.1" pathLength="1"
+            stroke-dasharray="1" stroke-dashoffset="1" opacity="0.9">
+            <animate attributeName="stroke-dashoffset" values="1;1;0;0;1"
+              keyTimes="0;0.25;0.5;0.85;1" dur="${DUR}s" begin="${0.6+i*0.03}s" repeatCount="indefinite"/>
+          </line>`;
+        }).join("");
+        return edges+nodes;
+      }
+
+      // node-pulse backdrop: glowing points breathe along the path
+      function fragNodesPulse(uid){
+        return NODES.map((p,i)=>`
+          <circle cx="${p[0]}" cy="${p[1]}" r="2" fill="${colorAt(i/NODES.length)}">
+            <animate attributeName="r" values="0.5;2.8;0.5" dur="1.8s" begin="${i*0.09}s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.3;1;0.3" dur="1.8s" begin="${i*0.09}s" repeatCount="indefinite"/>
+          </circle>`).join("");
+      }
+
+      // THREE colored A's (Warhol-ish: pink / purple / cyan) that drift apart in different
+      // directions, wander, then CONVERGE so they stack exactly at center and register as one
+      // unified A. Hold there, then drift apart again. Ping-pong, no dead gap.
+      //
+      // Each copy shares the same keyTimes: spread → wander → MEET at 0.5 (all at 0,0) → wander
+      // → spread. They overlap (multiply-ish via mix-blend) when stacked, so the meeting reads
+      // as a single richer mark. Slightly transparent so overlaps blend instead of one hiding others.
+      function fragScatterA(uid){
+        // keyTimes: drift … MEET at 0.46 … united HOLD through 0.66 … drift again.
+        const KT = "0;0.18;0.34;0.46;0.66;0.82;1";
+        const SPL = "0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1;0.4 0 0.2 1";
+        // Overlaps blend; pink drawn LAST at full opacity, so pink wins the stack. Each path
+        // returns to "0 0" at the MEET + HOLD keyframes (0.46, 0.66) so they register at center.
+        const A = (color, vals, op) => `
+          <text x="50" y="78" text-anchor="middle" font-family="'Grenze Gotisch',serif"
+            font-weight="600" font-size="92" fill="${color}" opacity="${op}">A
+            <animateTransform attributeName="transform" type="translate"
+              values="${vals}" keyTimes="${KT}" dur="${DUR}s"
+              calcMode="spline" keySplines="${SPL}" repeatCount="indefinite"/>
+          </text>`;
+        return `<g>
+          ${A("#16c2ff", "4 14; -6 -12; 12 10; 0 0; 0 0; 10 8; 4 14", 0.55)}
+          ${A("#b54bd0", "12 -8; 16 4; 4 -14; 0 0; 0 0; 8 -10; 12 -8", 0.55)}
+          ${A("#ff2e9a", "-14 -10; -8 6; -16 2; 0 0; 0 0; -6 8; -14 -10", 1)}
+        </g>`;
+      }
+
+      const BUILD = {
+        // 1 — constellation assemble: nodes pop in, edges draw, then letter fills
+        constellation: (uid) =>
+          `<defs>${grad(uid)}</defs>${fragConstellation(uid)}
+            ${letter(uid,'fill-opacity="0"').replace('</text>',
+              `<animate attributeName="fill-opacity" values="0;0;0;0.95;0.95;0" keyTimes="0;0.5;0.7;0.82;0.92;1" dur="${DUR}s" repeatCount="indefinite"/></text>`)}`,
+
+        // 2 — nodes only: glowing points appear along the path and pulse, no hard fill
+        nodesOnly: (uid) => `<defs>${grad(uid)}</defs>${fragNodesPulse(uid)}`,
+
+        // 3 — stroke draw + flood fill
+        drawFill: (uid) => `
+          <defs>${grad(uid)}</defs>
+          <text x="50" y="78" text-anchor="middle" font-family="'Grenze Gotisch',serif" font-weight="600"
+            font-size="92" fill="url(#g-${uid})" fill-opacity="0" stroke="url(#g-${uid})" stroke-width="1.3"
+            stroke-dasharray="300" stroke-dashoffset="300">A
+            <animate attributeName="stroke-dashoffset" values="300;0;0;0;300" keyTimes="0;0.4;0.6;0.9;1" dur="2.8s" repeatCount="indefinite"/>
+            <animate attributeName="fill-opacity" values="0;0;0.95;0.95;0" keyTimes="0;0.45;0.6;0.9;1" dur="2.8s" repeatCount="indefinite"/>
+          </text>`,
+
+        // 4 — assemble from scatter (ping-pong: converge → hold → de-converge → re-converge)
+        scatter: (uid) => `<defs>${grad(uid)}</defs>${fragScatterA(uid)}`,
+
+        // 5 — node trace: a single bright "cursor" runs the constellation path leaving a fading trail
+        trace: (uid) => {
+          const order=[10,11,12,4,0,1,9,7,6,5,15,13,14,8,2,3];
+          const dots = NODES.map((p,i)=>`<circle cx="${p[0]}" cy="${p[1]}" r="1.4" fill="url(#g-${uid})" opacity="0.35"/>`).join("");
+          // moving cursor visits nodes in order
+          const xs=order.map(i=>NODES[i][0]).join(";");
+          const ys=order.map(i=>NODES[i][1]).join(";");
+          return `<defs>${grad(uid)}</defs>${dots}
+            <circle r="3" fill="#fff">
+              <animate attributeName="cx" values="${xs};${NODES[order[0]][0]}" dur="2.4s" repeatCount="indefinite"/>
+              <animate attributeName="cy" values="${ys};${NODES[order[0]][1]}" dur="2.4s" repeatCount="indefinite"/>
+              <animate attributeName="fill" values="#ff2e9a;#16c2ff;#ff2e9a" dur="2.4s" repeatCount="indefinite"/>
+            </circle>`;
+        },
+
+        // 6 — COMBO: constellation backdrop + the A settling in on top
+        constellationScatter: (uid) =>
+          `<defs>${grad(uid)}</defs>${fragConstellation(uid)}${fragScatterA(uid)}`,
+
+        // 7 — COMBO: pulsing nodes backdrop + the A settling in on top
+        nodesScatter: (uid) =>
+          `<defs>${grad(uid)}</defs>${fragNodesPulse(uid)}${fragScatterA(uid)}`,
+      };
+
+      const ITEMS = [
+        ["scatter","★ Warhol — colors find each other","Pink / purple / cyan A's drift apart, wander, then meet & stack into one. Transparent overlaps blend. Ping-pong."],
+        ["constellationScatter","★ Warhol + constellation","The three drifting A's over the building node-graph backdrop."],
+        ["nodesScatter","★ Warhol + node-pulse","The three drifting A's over softly pulsing nodes."],
+        ["constellation","Constellation assemble","Nodes pop in → edges connect → the A fills. The Knowledge-Graph callback."],
+        ["nodesOnly","Nodes pulse (soft)","Just glowing points along the A's path, breathing. No hard fill — calmer."],
+        ["drawFill","Draw + flood fill","Outline writes on, then gradient floods in. Clean 'forming'."],
+        ["trace","Node trace cursor","A bright cursor runs the constellation, leaving the nodes lit. Like a path being found."],
+      ];
+
+      const grid=document.getElementById("grid");
+      function svgEl(id,cls,uid){
+        const ns="http://www.w3.org/2000/svg";
+        const el=document.createElementNS(ns,"svg");
+        el.setAttribute("viewBox","0 0 100 100");
+        el.setAttribute("class","glyph "+cls);
+        el.innerHTML=BUILD[id](uid);
+        return el;
+      }
+      let c=0;
+      function render(){
+        grid.innerHTML="";
+        for(const [id,label,note] of ITEMS){
+          const card=document.createElement("div"); card.className="card";
+          const l=document.createElement("div"); l.className="label"; l.textContent=label;
+          const n=document.createElement("div"); n.className="note"; n.textContent=note;
+          const stage=document.createElement("div"); stage.className="stage";
+          stage.append(svgEl(id,"big","b"+c), svgEl(id,"real","r"+c)); c++;
+          card.append(l,n,stage); grid.append(card);
+        }
+      }
+      render();
+      for(const btn of document.querySelectorAll("[data-theme-set]")){
+        btn.addEventListener("click",()=>{ document.body.dataset.theme=btn.dataset.themeSet;
+          for(const b of document.querySelectorAll("[data-theme-set]")) b.classList.toggle("active",b===btn); });
+      }
+      document.getElementById("restartBtn").addEventListener("click",render);
+    </script>
+  </body>
+</html>
