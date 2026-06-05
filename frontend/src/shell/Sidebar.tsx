@@ -41,7 +41,10 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
         <div className="group relative flex">
           <button
             type="button"
-            onClick={onToggle}
+            onClick={(e) => {
+              onToggle();
+              e.currentTarget.blur();
+            }}
             aria-label="Collapse sidebar"
             className="-ml-1 shrink-0 rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-content"
           >
@@ -178,7 +181,7 @@ function SessionItem({
           type="button"
           onClick={onClick}
           className={`w-full rounded-md px-3 py-2 text-left text-sm hover:bg-elevated hover:text-content ${
-            active ? "bg-elevated text-content" : "text-content-muted"
+            active ? "bg-selected text-content" : "text-content-muted"
           }`}
         >
           <div className="truncate pr-5">{title}</div>

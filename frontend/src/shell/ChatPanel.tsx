@@ -78,6 +78,7 @@ export function ChatPanel() {
   const [draft, setDraft] = useState("");
   const started = messages.length > 0;
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // When graph mode is on, make sure the Knowledge Graph tab exists so it's ready
@@ -174,10 +175,18 @@ export function ChatPanel() {
     activate(AGENT_DIAGRAM_WIDGET.id);
   }
 
+  // Follow streaming output: re-fire as the last message's text grows (tokens
+  // append in place, so messages.length is unchanged mid-stream). Only auto-scroll
+  // when the user is already near the bottom — if they scrolled up to read, leave
+  // them be. "auto" (not "smooth") keeps up with fast streaming without lagging.
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps are triggers, not values the effect reads
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, isLoading]);
+    const el = scrollRef.current;
+    const nearBottom = el
+      ? el.scrollHeight - el.scrollTop - el.clientHeight < 120
+      : true;
+    if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: "auto" });
+  }, [messages.length, messages.at(-1)?.text, isLoading]);
 
   function submit() {
     const text = draft.trim();
@@ -201,7 +210,7 @@ export function ChatPanel() {
 
   return (
     <div className="relative flex h-full flex-col bg-surface">
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
         {!started && (
           <div className="mx-auto mt-20 flex max-w-md flex-col items-center gap-4 text-center">
             <Wordmark height={72} />
@@ -370,7 +379,10 @@ export function ChatPanel() {
             <div className="group relative flex">
               <button
                 type="button"
-                onClick={toggleGraphMode}
+                onClick={(e) => {
+                  toggleGraphMode();
+                  e.currentTarget.blur();
+                }}
                 aria-label="Knowledge Graph"
                 aria-pressed={graphMode}
                 className={
@@ -400,7 +412,10 @@ export function ChatPanel() {
             <div className="group relative flex">
               <button
                 type="button"
-                onClick={revealDataFlow}
+                onClick={(e) => {
+                  revealDataFlow();
+                  e.currentTarget.blur();
+                }}
                 aria-label="Show data flow"
                 className="rounded-lg border border-transparent p-1.5 text-content-muted hover:bg-border-strong hover:text-content"
               >
@@ -418,6 +433,7 @@ export function ChatPanel() {
             <div className="group relative flex">
               <button
                 type="submit"
+                onClick={(e) => e.currentTarget.blur()}
                 aria-label="Send message"
                 className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-r from-[#fd40a4] to-[#c35ed1] text-2xl leading-none text-white hover:brightness-110 disabled:opacity-40"
                 disabled={draft.trim().length === 0 || isLoading}

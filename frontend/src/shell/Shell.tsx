@@ -111,7 +111,10 @@ function ShellInner() {
         <div className="group absolute left-2 top-3 z-10 flex">
           <button
             type="button"
-            onClick={toggleSidebar}
+            onClick={(e) => {
+              toggleSidebar();
+              e.currentTarget.blur();
+            }}
             aria-label="Open sidebar"
             className="rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-content"
           >
