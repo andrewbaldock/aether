@@ -11,7 +11,7 @@ export function CapabilityColumn() {
   const Renderer = active ? getRenderer(active.type) : undefined;
 
   return (
-    <div className="flex h-full flex-col bg-surface">
+    <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-surface">
       {/* tab bar */}
       <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
         <div className="flex flex-1 items-center gap-1 overflow-x-auto">
@@ -62,8 +62,10 @@ export function CapabilityColumn() {
         </Tooltip>
       </div>
 
-      {/* active widget */}
-      <div className="flex-1 overflow-auto text-content">
+      {/* active widget — vertical scroll only; widgets manage their own width
+          (the graph pans/zooms internally), so a horizontal scrollbar here is
+          always spurious. */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden text-content">
         {active && Renderer ? (
           <Renderer widget={active} />
         ) : active ? (
