@@ -7,17 +7,29 @@ import { useId } from "react";
 // own. `height` drives the size.
 //
 // Requires the "Grenze Gotisch" font — loaded in index.html.
+//
+// `compact` renders just the capital "A" (matching the favicon) in a square box —
+// used in the sidebar when the full hero wordmark is already on screen, so the
+// brand doesn't read twice.
 export function Wordmark({
   height = 40,
   title = "Aether",
+  compact = false,
 }: {
   height?: number;
   title?: string;
+  compact?: boolean;
 }) {
   const uid = useId().replace(/:/g, "");
   const grad = `grad-${uid}`;
 
-  const width = Math.round(height * 4.4);
+  // Full: viewBox cropped to 600×112 to hug the letters (baseline y=98, fontSize 108) —
+  // the old 0 0 600 130 box left dead space below the baseline that pushed the header's
+  // centered toggle/theme icons visually low. Compact: a square box around the lone "A",
+  // centred horizontally, same baseline. Width follows the active box's aspect ratio.
+  const viewBox = compact ? "230 6 140 112" : "0 6 600 112";
+  const aspect = compact ? 140 / 112 : 600 / 112;
+  const width = Math.round(height * aspect);
 
   const text = (
     <text
@@ -30,7 +42,7 @@ export function Wordmark({
       letterSpacing={1}
       fill={`url(#${grad})`}
     >
-      Aether
+      {compact ? "A" : "Aether"}
     </text>
   );
 
@@ -38,7 +50,7 @@ export function Wordmark({
     <svg
       width={width}
       height={height}
-      viewBox="0 0 600 130"
+      viewBox={viewBox}
       role="img"
       aria-label={title}
       xmlns="http://www.w3.org/2000/svg"
