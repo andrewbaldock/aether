@@ -5,6 +5,8 @@ export interface Session {
   user_id: string;
   title: string | null;
   graph_mode: boolean;
+  // The Claude model last selected for this conversation; null = server default.
+  model: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -1,5 +1,6 @@
 import { getRenderer } from "../capabilities/registry";
 import { useCapabilities } from "../capabilities/useCapabilities";
+import { Tooltip } from "./Tooltip";
 
 // Right zone: tabbed widget host. Both agent and user drive it via the capability store.
 // Each widget is drawn by the renderer registered against its `type`.
@@ -30,26 +31,33 @@ export function CapabilityColumn() {
               >
                 {w.title}
               </button>
-              <button
-                type="button"
-                aria-label={`Close ${w.title}`}
-                onClick={() => close(w.id)}
-                className="rounded text-content-subtle hover:text-content"
-              >
-                ×
-              </button>
+              <Tooltip label={`Close ${w.title}`} side="bottom">
+                <button
+                  type="button"
+                  aria-label={`Close ${w.title}`}
+                  onClick={() => close(w.id)}
+                  className="rounded text-content-subtle hover:text-content"
+                >
+                  ×
+                </button>
+              </Tooltip>
             </div>
           ))}
         </div>
 
-        <button
-          type="button"
-          onClick={() => setFullscreen(!isFullscreen)}
-          aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-          className="rounded-md px-2 py-1.5 text-sm text-content-muted hover:bg-elevated hover:text-content"
+        <Tooltip
+          label={isFullscreen ? "Exit full page" : "Expand to full page"}
+          side="bottom"
         >
-          {isFullscreen ? "⤢" : "⛶"}
-        </button>
+          <button
+            type="button"
+            onClick={() => setFullscreen(!isFullscreen)}
+            aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            className="rounded-md px-2 py-1.5 text-sm text-content-muted hover:bg-elevated hover:text-content"
+          >
+            {isFullscreen ? "⤢" : "⛶"}
+          </button>
+        </Tooltip>
       </div>
 
       {/* active widget */}

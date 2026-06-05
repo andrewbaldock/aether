@@ -35,6 +35,11 @@ export interface KnowledgeGraphState {
   selectedId: string | null;
   select: (id: string | null) => void;
 
+  // True between a build_knowledge_graph tool_start and its result (or the
+  // turn ending). Lets the widget show a "mapping…" loading state when the
+  // graph tool is running but no nodes have landed yet.
+  isAwaitingGraph: boolean;
+
   // --- Persistence ---------------------------------------------------------
   // Bumped whenever the graph meaningfully changes (merge, remove, pin/unpin,
   // drag end). The persistence bridge watches this to debounce-save.
@@ -119,6 +124,8 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [links, setLinks] = useState<GraphLink[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // True while a build_knowledge_graph call is in flight this turn (see below).
+  const [isAwaitingGraph, setIsAwaitingGraph] = useState(false);
   // Bumped on any meaningful change so the persistence bridge can react.
   const [revision, setRevision] = useState(0);
   const bump = useCallback(() => setRevision((r) => r + 1), []);
@@ -131,11 +138,59 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
 
   const select = useCallback((id: string | null) => setSelectedId(id), []);
 
+  // Minimum on-screen time for the "mapping…" loading state. A fast tool call
+  // (start→result in a few ms) would otherwise flash by before it's perceptible
+  // — and the tab only activates on tool_start, so the user would never see it.
+  const MIN_LOADING_MS = 700;
+  const loadingStartedAt = useRef(0);
+  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // --- Bus subscription: additive merge -------------------------------------
   useEffect(() => {
+    // Clear the loading flag, but not before MIN_LOADING_MS has elapsed since it
+    // turned on — so a near-instant tool call still shows a visible animation.
+    function endLoading() {
+      const elapsed = Date.now() - loadingStartedAt.current;
+      const remaining = MIN_LOADING_MS - elapsed;
+      if (clearTimer.current) clearTimeout(clearTimer.current);
+      if (remaining <= 0) {
+        setIsAwaitingGraph(false);
+      } else {
+        clearTimer.current = setTimeout(() => {
+          setIsAwaitingGraph(false);
+          clearTimer.current = null;
+        }, remaining);
+      }
+    }
+
     function handle(event: AgentEvent) {
+      // Loading flag: start "mapping…" the moment a turn begins (request_start)
+      // and hold it until the graph data lands or the turn ends (done/error/idle).
+      // Starting on the request — not on the build_knowledge_graph tool_start —
+      // means the animation is up the whole time the model is working, not just
+      // the sliver between the tool firing and returning. The widget only renders
+      // when its tab is active (graph mode), so a non-graph turn shows nothing.
+      if (event.type === "request_start") {
+        if (clearTimer.current) {
+          clearTimeout(clearTimer.current);
+          clearTimer.current = null;
+        }
+        loadingStartedAt.current = Date.now();
+        setIsAwaitingGraph(true);
+        return;
+      }
+      if (
+        event.type === "done" ||
+        event.type === "error" ||
+        event.type === "idle"
+      ) {
+        endLoading();
+        return;
+      }
+
       if (event.type !== "tool_result") return;
       if (event.tool !== "build_knowledge_graph") return;
+      endLoading();
 
       const payload = parsePayload(event.result);
       if (!payload) return;
@@ -166,7 +221,10 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
     }
 
     const unsubscribe = bus.subscribe(handle);
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      if (clearTimer.current) clearTimeout(clearTimer.current);
+    };
   }, [bus, bump]);
 
   // --- Persistence helpers --------------------------------------------------
@@ -274,6 +332,7 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
       links,
       selectedId,
       select,
+      isAwaitingGraph,
       revision,
       reportPositions,
       getSnapshot,
@@ -289,6 +348,7 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
       links,
       selectedId,
       select,
+      isAwaitingGraph,
       revision,
       reportPositions,
       getSnapshot,

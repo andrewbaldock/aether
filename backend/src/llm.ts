@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { DEFAULT_MODEL } from "./models";
 import { buildSystemPrompt } from "./prompt";
 import { buildTools, executeTool, type ToolDefinition } from "./tools";
 
@@ -30,10 +31,6 @@ export interface LlmClient {
   ): Promise<void>;
 }
 
-// A current, fast, inexpensive Claude model — good default for a first slice.
-// Override with ANTHROPIC_MODEL; bump to an Opus model when quality matters more.
-const DEFAULT_MODEL = "claude-sonnet-4-6";
-
 // Internal type alias — the Anthropic SDK's MessageParam. The public ChatMessage
 // uses plain strings; internally the agent loop needs structured content blocks
 // once tool_use / tool_result blocks appear.
@@ -41,7 +38,8 @@ type ApiMessage = Anthropic.Messages.MessageParam;
 
 function createClaudeClient(
   tools: ToolDefinition[],
-  systemPrompt: string
+  systemPrompt: string,
+  selectedModel?: string
 ): LlmClient {
   // Build the SDK client lazily on first use, not at construction time. This lets
   // the server start (and /api/health respond) without a key set — only an actual
@@ -60,13 +58,53 @@ function createClaudeClient(
     return anthropic;
   }
 
-  const model = process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL;
+  // Resolution order: the per-request model the user picked (already validated
+  // against the allowlist by the route) → the ANTHROPIC_MODEL env override → the
+  // built-in default.
+  const model = selectedModel ?? process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL;
   // Output budget. 1024 is too tight once tools are in play: a single
   // build_knowledge_graph call can emit a large JSON entity dump and get
   // truncated (stop_reason "max_tokens"), leaving a partial tool_use that can't
   // be parsed and a turn that produces no usable output. Override with
   // ANTHROPIC_MAX_TOKENS.
   const maxTokens = Number(process.env.ANTHROPIC_MAX_TOKENS) || 4096;
+
+  // Tools are static for the life of this client (graphMode is fixed per
+  // request). Mark the LAST tool with cache_control so the whole tool block —
+  // re-sent on every agent-loop iteration — is read from cache after the first
+  // call. One breakpoint covers all preceding tools.
+  const cachedTools: ToolDefinition[] =
+    tools.length > 0
+      ? tools.map((t, i) =>
+          i === tools.length - 1
+            ? { ...t, cache_control: { type: "ephemeral" as const } }
+            : t
+        )
+      : tools;
+
+  // Return a copy of the history with a cache breakpoint on the last message's
+  // last content block. Across agent-loop iterations the conversation prefix
+  // (prior tool_use / tool_result turns) is then read from cache instead of
+  // re-tokenised. We copy rather than mutate so `history` stays marker-free and
+  // we never accumulate more than the allowed cache breakpoints.
+  function withConversationCache(messages: ApiMessage[]): ApiMessage[] {
+    const last = messages[messages.length - 1];
+    if (!last) return messages;
+    const out = messages.slice();
+    const blocks: Anthropic.Messages.ContentBlockParam[] =
+      typeof last.content === "string"
+        ? [{ type: "text", text: last.content }]
+        : last.content.map((b) => ({ ...b }));
+    const tail = blocks[blocks.length - 1];
+    if (tail) {
+      blocks[blocks.length - 1] = {
+        ...tail,
+        cache_control: { type: "ephemeral" as const },
+      } as Anthropic.Messages.ContentBlockParam;
+    }
+    out[out.length - 1] = { ...last, content: blocks };
+    return out;
+  }
 
   function apiParams(messages: ApiMessage[]) {
     return {
@@ -79,8 +117,8 @@ function createClaudeClient(
           cache_control: { type: "ephemeral" as const },
         },
       ],
-      messages,
-      ...(tools.length > 0 ? { tools } : {}),
+      messages: withConversationCache(messages),
+      ...(cachedTools.length > 0 ? { tools: cachedTools } : {}),
     };
   }
 
@@ -228,11 +266,18 @@ function createClaudeClient(
 // provider rather than silently doing the wrong thing. `graphMode` gates the
 // Knowledge Graph tool + its prompt guidance — called per request, so each turn
 // gets exactly the right tool surface.
-export function createClient(opts: { graphMode: boolean }): LlmClient {
+export function createClient(opts: {
+  graphMode: boolean;
+  model?: string;
+}): LlmClient {
   const provider = process.env.LLM_PROVIDER ?? "claude";
   switch (provider) {
     case "claude":
-      return createClaudeClient(buildTools(opts), buildSystemPrompt(opts));
+      return createClaudeClient(
+        buildTools(opts),
+        buildSystemPrompt(opts),
+        opts.model
+      );
     default:
       throw new Error(
         `Unknown LLM_PROVIDER: "${provider}" (expected "claude")`

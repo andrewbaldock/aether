@@ -2,6 +2,7 @@ import { useAgentEvents } from "../../../shell/AgentEventContext";
 import type { Widget } from "../../registry";
 import { TYPE_COLOR, TYPE_LABEL } from "./colors";
 import { ForceGraph } from "./ForceGraph";
+import { GraphLoading } from "./GraphLoading";
 import { NodeDetail } from "./NodeDetail";
 import type { EntityType, GraphNode } from "./types";
 import { useKnowledgeGraphState } from "./useKnowledgeGraphState";
@@ -24,6 +25,7 @@ export function KnowledgeGraphWidget(_props: { widget: Widget }) {
     links,
     selectedId,
     select,
+    isAwaitingGraph,
     reportPositions,
     pinNode,
     unpinNode,
@@ -59,10 +61,14 @@ export function KnowledgeGraphWidget(_props: { widget: Widget }) {
       {/* Graph / empty state */}
       <div className="min-h-0 flex-1">
         {nodes.length === 0 ? (
-          <div className="flex h-full items-center justify-center p-8 text-center text-sm text-content-subtle">
-            Start chatting — entities will appear here as the conversation
-            unfolds.
-          </div>
+          isAwaitingGraph ? (
+            <GraphLoading />
+          ) : (
+            <div className="flex h-full items-center justify-center p-8 text-center text-sm text-content-subtle">
+              Start chatting — entities will appear here as the conversation
+              unfolds.
+            </div>
+          )
         ) : (
           <ForceGraph
             nodes={nodes}

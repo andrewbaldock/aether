@@ -1,3 +1,4 @@
+import { Tooltip } from "../shell/Tooltip";
 import { useTheme } from "./useTheme";
 
 // Sun/moon theme switch. Shows the icon for the theme you'd switch TO so the
@@ -7,7 +8,7 @@ export function ThemeToggle() {
   const isDark = theme === "dark";
   const label = isDark ? "Switch to light theme" : "Switch to dark theme";
   return (
-    <div className="group relative ml-auto flex">
+    <Tooltip label={label} side="bottom" className="ml-auto">
       <button
         type="button"
         onClick={toggle}
@@ -16,10 +17,7 @@ export function ThemeToggle() {
       >
         {isDark ? <SunIcon /> : <MoonIcon />}
       </button>
-      <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 whitespace-nowrap rounded-md bg-surface-overlay px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-        {label}
-      </span>
-    </div>
+    </Tooltip>
   );
 }
 

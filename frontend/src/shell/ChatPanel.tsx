@@ -1,3 +1,4 @@
+import { Network, Wrench } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -7,6 +8,7 @@ import { useCapabilities } from "../capabilities/useCapabilities";
 import { AGENT_DIAGRAM_WIDGET } from "../capabilities/widgets/AgentDiagram";
 import { KNOWLEDGE_GRAPH_WIDGET } from "../capabilities/widgets/KnowledgeGraph";
 import { useAgentEvents } from "./AgentEventContext";
+import { ModelPicker } from "./ModelPicker";
 import { useSessionContext } from "./SessionContext";
 import { useChat } from "./useChat";
 
@@ -16,6 +18,14 @@ const LAST_GRAPH_MODE_KEY = "aether-last-graph-mode";
 
 function readLastGraphMode(): boolean {
   return localStorage.getItem(LAST_GRAPH_MODE_KEY) !== "false";
+}
+
+// Seed for a new conversation's model (until its session row exists). undefined
+// means "no explicit choice yet" — the backend uses its default.
+const LAST_MODEL_KEY = "aether-last-model";
+
+function readLastModel(): string | undefined {
+  return localStorage.getItem(LAST_MODEL_KEY) ?? undefined;
 }
 
 export function ChatPanel() {
@@ -36,6 +46,17 @@ export function ChatPanel() {
   const [lastGraphMode, setLastGraphMode] = useState(readLastGraphMode);
   const currentSession = sessions.find((s) => s.id === sessionId);
   const graphMode = currentSession ? currentSession.graph_mode : lastGraphMode;
+  // Current graph mode read inside the bus subscription (avoids re-subscribing
+  // every time it flips).
+  const graphModeRef = useRef(graphMode);
+  graphModeRef.current = graphMode;
+
+  // Model follows the same pattern as graph mode: the active session row is the
+  // source of truth; before a session exists, fall back to the last-used value.
+  const [lastModel, setLastModel] = useState(readLastModel);
+  const model = currentSession
+    ? (currentSession.model ?? undefined)
+    : lastModel;
 
   const { sendMessage, abortStream, isLoading, error } = useChat({
     userId,
@@ -44,6 +65,7 @@ export function ChatPanel() {
     getOrCreateSession,
     refreshSessions,
     graphMode,
+    model,
   });
 
   // Let the session context cancel an in-flight stream before switching
@@ -64,12 +86,21 @@ export function ChatPanel() {
     if (graphMode) open(KNOWLEDGE_GRAPH_WIDGET);
   }, [graphMode, open]);
 
-  // Auto-open + activate the KG tab on the first graph-data event of a session.
+  // Surface the KG tab at the right moments so its "mapping…" loading state and
+  // the resulting graph are actually on-screen:
+  //   • request_start while graph mode is on — activate the tab as the turn
+  //     begins, so the loading animation is visible the whole time the model
+  //     works (not just when data lands).
+  //   • tool_result — belt-and-braces: ensure the tab is up when graph data
+  //     arrives, even if graph mode was off at request time.
   // The widget can't open itself before it's mounted, so ChatPanel (which has
   // useCapabilities) does it from the bus.
   useEffect(() => {
     const unsubscribe = bus.subscribe((event) => {
-      if (
+      if (event.type === "request_start" && graphModeRef.current) {
+        open(KNOWLEDGE_GRAPH_WIDGET);
+        activate(KNOWLEDGE_GRAPH_WIDGET.id);
+      } else if (
         event.type === "tool_result" &&
         event.tool === "build_knowledge_graph"
       ) {
@@ -116,6 +147,26 @@ export function ChatPanel() {
     }
   }
 
+  // Pick a model. Mirrors toggleGraphMode: update the seed for the next new
+  // conversation, and (if a session exists) persist to the row, then refresh so
+  // the derived `model` recomputes from the row.
+  function selectModel(nextModel: string) {
+    localStorage.setItem(LAST_MODEL_KEY, nextModel);
+    setLastModel(nextModel);
+    if (sessionId) {
+      fetch(`/api/sessions/${sessionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: nextModel }),
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          refreshSessions();
+        })
+        .catch((err) => console.error("Failed to update model:", err));
+    }
+  }
+
   // The eyeball: a momentary reveal of the Data Flow tab. Opens the column if
   // closed and surfaces that tab — no longer a sticky on/off mode.
   function revealDataFlow() {
@@ -154,7 +205,13 @@ export function ChatPanel() {
         {!started && (
           <div className="mx-auto mt-20 flex max-w-md flex-col items-center gap-4 text-center">
             <Wordmark height={56} />
-            <p className="text-lg font-medium text-content">I Use Tools</p>
+            <div className="flex items-center gap-2.5">
+              <Wrench className="h-5 w-5 text-content-muted" aria-hidden />
+              <p className="font-display text-lg font-semibold text-content">
+                I Can Use Tools
+              </p>
+              <Network className="h-5 w-5 text-content-muted" aria-hidden />
+            </div>
             <p className="text-sm text-content-muted">
               {graphMode
                 ? "Knowledge Graph is on — just start talking and I'll map the people, places, and ideas as a live diagram beside us."
@@ -303,6 +360,12 @@ export function ChatPanel() {
             className={`w-full resize-none bg-transparent px-4 pt-3 pb-10 text-sm text-content placeholder:text-content-subtle focus:outline-none transition-opacity${isLoading ? " opacity-50" : ""}${started ? "" : " min-h-24"}`}
           />
           <div className="absolute bottom-2 right-2 flex items-center gap-2">
+            {/* Model picker — which Claude answers this conversation. */}
+            <ModelPicker
+              value={model}
+              onChange={selectModel}
+              disabled={isLoading}
+            />
             {/* Knowledge Graph — a per-conversation MODE toggle. */}
             <div className="group relative flex">
               <button

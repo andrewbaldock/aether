@@ -10,14 +10,20 @@ import {
   saveMessage,
   updateSessionGraphData,
   updateSessionGraphMode,
+  updateSessionModel,
   updateSessionTitle,
   updateSessionTitleIfEmpty,
 } from "./db";
 import { type ChatMessage, createClient } from "./llm";
+import { MODELS, resolveModel } from "./models";
 
 const app = new Hono();
 
 app.get("/api/health", (c) => c.json({ ok: true }));
+
+// The model picker's options — single source of truth so the frontend doesn't
+// hardcode the allowlist.
+app.get("/api/models", (c) => c.json({ models: MODELS }));
 
 app.post("/api/sessions", async (c) => {
   let body: unknown;
@@ -66,23 +72,35 @@ app.patch("/api/sessions/:id", async (c) => {
   } catch {
     return c.json({ error: "Request body must be JSON" }, 400);
   }
-  // Accepts a title rename and/or a graph_mode change — whichever fields are
-  // present and valid. One endpoint for all session mutation.
-  const { title, graph_mode: graphMode } = body as {
+  // Accepts a title rename, a graph_mode change, and/or a model change —
+  // whichever fields are present and valid. One endpoint for all session
+  // mutation.
+  const {
+    title,
+    graph_mode: graphMode,
+    model,
+  } = body as {
     title?: unknown;
     graph_mode?: unknown;
+    model?: unknown;
   };
   const hasTitle = typeof title === "string" && title.trim().length > 0;
   const hasGraphMode = typeof graphMode === "boolean";
-  if (!hasTitle && !hasGraphMode) {
+  // Only persist a model that's in the allowlist.
+  const validModel = resolveModel(model);
+  if (!hasTitle && !hasGraphMode && !validModel) {
     return c.json(
-      { error: "Expected { title: string } and/or { graph_mode: boolean }" },
+      {
+        error:
+          "Expected { title: string }, { graph_mode: boolean }, and/or { model: string }",
+      },
       400
     );
   }
   try {
     if (hasTitle) await updateSessionTitle(id, (title as string).trim());
     if (hasGraphMode) await updateSessionGraphMode(id, graphMode as boolean);
+    if (validModel) await updateSessionModel(id, validModel);
     return c.json({ ok: true });
   } catch (err) {
     console.error("PATCH /api/sessions/:id failed:", err);
@@ -163,20 +181,28 @@ app.post("/api/chat", async (c) => {
     return c.json({ error: "Request body must be JSON" }, 400);
   }
 
-  const { messages, sessionId, userId, graphMode } = body as {
+  const { messages, sessionId, userId, graphMode, model } = body as {
     messages?: unknown;
     sessionId?: unknown;
     userId?: unknown;
     graphMode?: unknown;
+    model?: unknown;
   };
 
   if (!isChatMessageArray(messages)) {
     return c.json({ error: "Expected { messages: { role, content }[] }" }, 400);
   }
 
+  // Validate the requested model against the allowlist; an unknown/absent value
+  // resolves to undefined, which lets the client fall back to the env/default.
+  const selectedModel = resolveModel(model);
+
   // Build the client per request so the tool surface (and graph-mode prompt)
-  // matches this conversation's mode.
-  const llm = createClient({ graphMode: graphMode === true });
+  // matches this conversation's mode, and so the chosen model applies this turn.
+  const llm = createClient({
+    graphMode: graphMode === true,
+    model: selectedModel,
+  });
 
   // Narrow once here; persistSession is a string exactly when persist is true,
   // so the streaming callback below doesn't need to re-cast at every call site.

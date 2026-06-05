@@ -16,6 +16,9 @@ export interface Session {
   title: string | null;
   graph_mode: boolean;
   graph_data: GraphSnapshot | null;
+  // The Claude model the user last selected for this conversation. null means
+  // "use the server default" (env override or built-in default).
+  model: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -133,6 +136,17 @@ export async function updateSessionGraphMode(
     .update({ graph_mode: graphMode, updated_at: new Date().toISOString() })
     .eq("id", sessionId);
   if (error) throw new Error(`updateSessionGraphMode: ${error.message}`);
+}
+
+export async function updateSessionModel(
+  sessionId: string,
+  model: string
+): Promise<void> {
+  const { error } = await getDb()
+    .from("sessions")
+    .update({ model, updated_at: new Date().toISOString() })
+    .eq("id", sessionId);
+  if (error) throw new Error(`updateSessionModel: ${error.message}`);
 }
 
 // Read just the persisted graph snapshot for a session. Returns null when the
