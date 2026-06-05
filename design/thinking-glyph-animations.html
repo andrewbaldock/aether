@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aether — Thinking Glyph Animations</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Grenze+Gotisch:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root { --pink: #ff2e9a; --mid: #b54bd0; --cyan: #16c2ff; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; font-family: ui-sans-serif, system-ui, sans-serif;
+        padding: 40px 48px 80px; transition: background .25s, color .25s;
+      }
+      body[data-theme="dark"]  { background: radial-gradient(120% 120% at 30% 10%, #15131f 0%, #0a0a0f 60%, #050507 100%); color: #e6e6ef; }
+      body[data-theme="light"] { background: radial-gradient(120% 120% at 30% 10%, #fff 0%, #f1f1f5 70%, #e7e7ee 100%); color: #2a2a33; }
+      body[data-theme="art"]   { background: radial-gradient(120% 120% at 25% 10%, #2a0a3d 0%, #140a28 55%, #0a0512 100%); color: #f0e6ff; }
+
+      header { max-width: 1100px; margin: 0 auto 28px; }
+      h1 { font-weight: 600; letter-spacing: -.02em; margin: 0 0 4px; font-size: 26px; }
+      .sub { opacity: .6; margin-bottom: 22px; font-size: 14px; line-height: 1.5; }
+      .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      .controls button {
+        font: inherit; font-size: 13px; cursor: pointer; padding: 7px 16px;
+        border-radius: 999px; border: 1px solid currentColor; background: transparent; color: inherit; opacity: .5;
+      }
+      .controls button.active { opacity: 1; font-weight: 600; }
+      .spacer { flex: 1; }
+
+      .grid {
+        max-width: 1100px; margin: 0 auto;
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px;
+      }
+      .card {
+        border-radius: 16px; padding: 22px 22px 16px; text-align: center;
+        transition: background .25s, border-color .25s;
+      }
+      body[data-theme="dark"]  .card { background: radial-gradient(90% 120% at 50% 30%, #14121d 0%, #0b0b11 70%, #08080c 100%); border: 1px solid #1c1c28; }
+      body[data-theme="light"] .card { background: #fff; border: 1px solid #e2e2ea; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+      body[data-theme="art"]   .card { background: radial-gradient(90% 120% at 50% 30%, #221038 0%, #160a28 70%, #0e0620 100%); border: 1px solid #3a1f55; }
+
+      .label { font-size: 11px; opacity: .55; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 4px; }
+      .note  { font-size: 11px; opacity: .4; margin-bottom: 16px; min-height: 28px; }
+
+      /* the glyph stage — two SVGs are injected per card: a big one + a 36px "real" size */
+      .stage { display: flex; align-items: center; justify-content: center; gap: 22px; min-height: 120px; }
+      .glyph { display: block; }
+      .glyph.big  { width: 96px;  height: 96px; }
+      .glyph.real { width: 36px;  height: 36px; opacity: .95; }
+
+      /* gradient text base for CSS-fill variants (used by some animations) */
+      .gtext {
+        font-family: 'Grenze Gotisch', serif; font-weight: 600;
+        background-image: linear-gradient(105deg, var(--pink) 0%, var(--mid) 50%, var(--cyan) 100%);
+        -webkit-background-clip: text; background-clip: text;
+        -webkit-text-fill-color: transparent; color: transparent;
+      }
+
+      /* ───────────────────────── animations ───────────────────────── */
+
+      /* 1 — gradient sweep (SVG handles the actual flow via animated x1/x2; nothing here) */
+
+      /* 2 — two-color pulse (SVG animates stop colors; just breathe opacity) */
+      @keyframes a-breatheOpacity { 0%,100%{opacity:.6} 50%{opacity:1} }
+      .anim-pulse .glyph { animation: a-breatheOpacity 1.4s ease-in-out infinite; }
+
+      /* 3 — hue rotation */
+      @keyframes a-hue { to { filter: hue-rotate(360deg); } }
+      .anim-hue .glyph { animation: a-hue 3s linear infinite; }
+
+      /* 4 — gradient angle rotation (SVG rotates the gradient transform; nothing here) */
+
+      /* 5 — shimmer glint: a bright streak sweeps across (SVG mask anim); nothing here */
+
+      /* 6 — stroke draw-on (SVG dash anim); nothing here */
+
+      /* 7 — breathe (scale) */
+      @keyframes a-breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+      .anim-breathe .glyph { animation: a-breathe 1.6s ease-in-out infinite; transform-origin: 50% 55%; }
+
+      /* 8 — wobble */
+      @keyframes a-wobble { 0%,100%{transform:rotate(-4deg)} 50%{transform:rotate(4deg)} }
+      .anim-wobble .glyph { animation: a-wobble 1.4s ease-in-out infinite; transform-origin: 50% 60%; }
+
+      /* 9 — 3D coin flip */
+      @keyframes a-flip { to { transform: rotateY(360deg); } }
+      .anim-flip .glyph { animation: a-flip 2.4s ease-in-out infinite; }
+
+      /* 10 — bob (float up/down) */
+      @keyframes a-bob { 0%,100%{transform:translateY(3px)} 50%{transform:translateY(-3px)} }
+      .anim-bob .glyph { animation: a-bob 1.5s ease-in-out infinite; }
+
+      @media (prefers-reduced-motion: reduce) {
+        .glyph, .glyph * { animation: none !important; }
+      }
+    </style>
+  </head>
+  <body data-theme="dark">
+    <header>
+      <h1>Aether — Thinking Glyph Animations</h1>
+      <div class="sub">
+        The Grenze Gotisch "A" in the pink→cyan gradient (no glow), each card a different
+        animation. Big (96px) + real indicator size (36px) side by side. Flip the theme to
+        check each on light / art. These run continuously here; in the app they'd only run
+        while the agent is working.
+      </div>
+      <div class="controls">
+        <button data-theme-set="dark" class="active">Dark</button>
+        <button data-theme-set="light">Light</button>
+        <button data-theme-set="art">Art</button>
+        <span class="spacer"></span>
+        <button id="speedBtn">Speed: normal</button>
+      </div>
+    </header>
+
+    <div class="grid" id="grid"></div>
+
+    <script>
+      // Each animation: id (drives CSS class anim-<id>), label, note, and an SVG builder.
+      // The SVG builder returns the inner markup for ONE glyph at a given uid (for unique ids).
+      // Letter "A" baseline tuned for Grenze Gotisch in a 100x100 box.
+
+      function gradientDefs(uid, opts = {}) {
+        // base pink→cyan diagonal gradient
+        const animateXY = opts.sweep
+          ? `<animate attributeName="x1" values="-1;0.65" dur="1.6s" repeatCount="indefinite"/>
+             <animate attributeName="x2" values="0;1.65" dur="1.6s" repeatCount="indefinite"/>`
+          : "";
+        const rotate = opts.rotate
+          ? `<animateTransform attributeName="gradientTransform" type="rotate"
+               from="0 50 50" to="360 50 50" dur="3s" repeatCount="indefinite"/>`
+          : "";
+        const pulseStops = opts.pulse
+          ? `<animate xlink:href="#s1-${uid}" attributeName="stop-color"
+               values="#ff2e9a;#16c2ff;#ff2e9a" dur="1.6s" repeatCount="indefinite"/>`
+          : "";
+        return `
+          <linearGradient id="g-${uid}" x1="0" y1="0.65" x2="1" y2="0.35"
+              gradientUnits="objectBoundingBox">
+            <stop id="s1-${uid}" offset="0%"  stop-color="#ff2e9a">
+              ${opts.pulse ? `<animate attributeName="stop-color" values="#ff2e9a;#16c2ff;#ff2e9a" dur="1.6s" repeatCount="indefinite"/>` : ""}
+            </stop>
+            <stop offset="50%" stop-color="#b54bd0"/>
+            <stop offset="100%" stop-color="#16c2ff">
+              ${opts.pulse ? `<animate attributeName="stop-color" values="#16c2ff;#ff2e9a;#16c2ff" dur="1.6s" repeatCount="indefinite"/>` : ""}
+            </stop>
+            ${animateXY}${rotate}
+          </linearGradient>`;
+      }
+
+      function letterText(uid) {
+        return `<text x="50" y="78" text-anchor="middle"
+          font-family="'Grenze Gotisch', serif" font-weight="600"
+          font-size="92" fill="url(#g-${uid})">A</text>`;
+      }
+
+      // Builders keyed by animation id.
+      const SVG = {
+        sweep: (uid) => `<defs>${gradientDefs(uid,{sweep:true})}</defs>${letterText(uid)}`,
+        pulse: (uid) => `<defs>${gradientDefs(uid,{pulse:true})}</defs>${letterText(uid)}`,
+        hue:   (uid) => `<defs>${gradientDefs(uid)}</defs>${letterText(uid)}`,
+        rotate:(uid) => `<defs>${gradientDefs(uid,{rotate:true})}</defs>${letterText(uid)}`,
+        breathe:(uid)=> `<defs>${gradientDefs(uid)}</defs>${letterText(uid)}`,
+        wobble:(uid) => `<defs>${gradientDefs(uid)}</defs>${letterText(uid)}`,
+        flip:  (uid) => `<defs>${gradientDefs(uid)}</defs>${letterText(uid)}`,
+        bob:   (uid) => `<defs>${gradientDefs(uid)}</defs>${letterText(uid)}`,
+        // shimmer: a moving white streak masked to the letter shape
+        shimmer:(uid) => `
+          <defs>
+            ${gradientDefs(uid)}
+            <linearGradient id="sh-${uid}" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
+              <stop offset="50%" stop-color="#fff" stop-opacity=".85"/>
+              <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+              <animateTransform attributeName="gradientTransform" type="translate"
+                values="-1 0; 1 0" dur="1.8s" repeatCount="indefinite"/>
+            </linearGradient>
+            <mask id="m-${uid}"><rect width="100" height="100" fill="#fff" mask-type="luminance"/>
+              ${letterText(uid).replace('url(#g-'+uid+')', '#fff')}
+            </mask>
+          </defs>
+          ${letterText(uid)}
+          <rect width="100" height="100" fill="url(#sh-${uid})" mask="url(#m-${uid})"/>`,
+        // stroke draw-on: outline that writes itself
+        draw:(uid) => `
+          <defs>${gradientDefs(uid)}</defs>
+          <text x="50" y="78" text-anchor="middle" font-family="'Grenze Gotisch', serif"
+            font-weight="600" font-size="92" fill="none" stroke="url(#g-${uid})"
+            stroke-width="1.5" stroke-dasharray="320" stroke-dashoffset="320">A
+            <animate attributeName="stroke-dashoffset" values="320;0;0;320"
+              dur="2.4s" repeatCount="indefinite"/>
+            <animate attributeName="fill-opacity" values="0;0;1;0"
+              dur="2.4s" repeatCount="indefinite" begin="0s"/>
+          </text>`,
+      };
+
+      const ANIMS = [
+        ["sweep",   "Gradient sweep",  "Pink→cyan band flows through the A. Calm, on-brand."],
+        ["pulse",   "Two-color pulse", "Fill eases pink ⇄ cyan. Heartbeat, strictly on-brand."],
+        ["shimmer", "Shimmer glint",   "A bright streak sweeps across, like light on metal."],
+        ["draw",    "Stroke draw-on",  "Outline writes itself, then fills. 'Forming an idea.'"],
+        ["rotate",  "Gradient rotate", "The gradient angle orbits the A. Hypnotic, subtle."],
+        ["hue",     "Hue rotation",    "Whole A cycles the color wheel. Vivid but off-brand."],
+        ["breathe", "Breathe (scale)", "Gentle 1→1.08 pulse. Quiet, ambient."],
+        ["wobble",  "Wobble",          "Tiny ±4° sway. Playful, a bit busy."],
+        ["bob",     "Bob (float)",     "Floats up/down a few px. Light, drifting."],
+        ["flip",    "3D coin flip",    "Rotates on its Y axis. Most attention-grabbing."],
+      ];
+
+      const grid = document.getElementById("grid");
+      let speed = 1;
+
+      function svgEl(id, cls, uid) {
+        const ns = "http://www.w3.org/2000/svg";
+        const el = document.createElementNS(ns, "svg");
+        el.setAttribute("viewBox", "0 0 100 100");
+        el.setAttribute("class", "glyph " + cls);
+        // perspective for flip
+        if (id === "flip") el.style.transformStyle = "preserve-3d";
+        el.innerHTML = SVG[id](uid);
+        return el;
+      }
+
+      let counter = 0;
+      function render() {
+        grid.innerHTML = "";
+        for (const [id, label, note] of ANIMS) {
+          const card = document.createElement("div");
+          card.className = "card anim-" + id;
+
+          const l = document.createElement("div"); l.className = "label"; l.textContent = label;
+          const n = document.createElement("div"); n.className = "note"; n.textContent = note;
+          const stage = document.createElement("div"); stage.className = "stage";
+          stage.append(svgEl(id, "big", "b" + counter), svgEl(id, "real", "r" + counter));
+          counter++;
+
+          card.append(l, n, stage);
+          grid.append(card);
+        }
+        applySpeed();
+      }
+
+      function applySpeed() {
+        // scale all CSS + SMIL durations by changing playbackRate-ish via animation-duration.
+        // Simplest: set a CSS var consumers could use; here we just toggle a body class.
+        document.body.style.setProperty("--speed-mult", speed);
+      }
+
+      render();
+
+      for (const btn of document.querySelectorAll("[data-theme-set]")) {
+        btn.addEventListener("click", () => {
+          document.body.dataset.theme = btn.dataset.themeSet;
+          for (const b of document.querySelectorAll("[data-theme-set]"))
+            b.classList.toggle("active", b === btn);
+        });
+      }
+
+      // Speed toggle: normal / slow / fast — re-render with scaled durations isn't trivial for
+      // SMIL, so we use CSS animation-duration scaling on the wrapper for the CSS-driven ones,
+      // and leave SMIL ones at their authored speed (still useful for comparing feel).
+      const speedBtn = document.getElementById("speedBtn");
+      const speeds = [["normal",1],["slow",1.8],["fast",0.6]];
+      let si = 0;
+      speedBtn.addEventListener("click", () => {
+        si = (si + 1) % speeds.length;
+        const [name, mult] = speeds[si];
+        speedBtn.textContent = "Speed: " + name;
+        document.querySelectorAll(".glyph").forEach((g) => {
+          g.style.animationDuration = "";
+          const base = getComputedStyle(g).animationDuration;
+          // scale only if there's a CSS animation
+          if (base && base !== "0s") {
+            const secs = parseFloat(base) * mult;
+            g.style.animationDuration = secs + "s";
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
