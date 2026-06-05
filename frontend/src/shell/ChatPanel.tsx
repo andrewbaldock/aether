@@ -80,6 +80,17 @@ export function ChatPanel() {
     return unsubscribe;
   }, [bus, open, activate]);
 
+  // "Explore further" from a graph node: the widget emits an explore_request on
+  // the bus; here we turn it into a real chat turn (only when not mid-stream).
+  useEffect(() => {
+    const unsubscribe = bus.subscribe((event) => {
+      if (event.type === "explore_request" && !isLoading) {
+        sendMessage(event.prompt);
+      }
+    });
+    return unsubscribe;
+  }, [bus, sendMessage, isLoading]);
+
   // Toggle graph mode. Updates the seed for the next new conversation, and (if a
   // session exists) persists to the session row, then refreshes so the derived
   // `graphMode` recomputes from the row.

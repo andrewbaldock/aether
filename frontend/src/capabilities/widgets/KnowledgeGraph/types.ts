@@ -10,6 +10,10 @@ export interface RawEntity {
   label: string;
   type: EntityType;
   wikipediaTitle?: string;
+  // Optional lucide-react icon name (PascalCase) the model picked as the best
+  // visual match for this entity. Resolved dynamically at render; falls back to
+  // a per-type icon when missing or unrecognised.
+  icon?: string;
 }
 
 // One relationship as it arrives in a tool_result payload.

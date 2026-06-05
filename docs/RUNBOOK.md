@@ -116,6 +116,19 @@ SUPABASE_ANON_KEY=eyJ...
 SUPABASE_SERVICE_KEY=eyJ...
 ```
 
+#### Schema changes
+
+There is no migrations framework — schema is managed by hand in the Supabase
+SQL editor. When the backend gains a column, run the matching SQL there.
+
+**`sessions.graph_data`** (knowledge-graph persistence): stores the saved graph
+snapshot `{ nodes, links }` per conversation so reopening/reloading restores the
+graph the user built (and any drag-pinned node positions), rather than relying
+on the model to re-emit it. Run once:
+```sql
+alter table sessions add column if not exists graph_data jsonb;
+```
+
 ### Lint & Format
 
 Both frontend and backend use **Biome**:

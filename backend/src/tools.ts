@@ -41,6 +41,11 @@ export const BUILD_KNOWLEDGE_GRAPH_TOOL: ToolDefinition = {
               description:
                 "exact Wikipedia article title for summary lookup, if one exists",
             },
+            icon: {
+              type: "string",
+              description:
+                "Optional. The single best-matching lucide-react icon name in PascalCase that visually represents THIS specific entity — e.g. 'Atom' for a physicist, 'FlaskConical' for a chemist, 'Landmark' for a monument, 'Crown' for a monarch, 'BookOpen' for a novel, 'Rocket' for a space program. Pick the most evocative real lucide icon you know; if none fits well, omit it and a generic type icon is used.",
+            },
           },
           required: ["id", "label", "type"],
         },

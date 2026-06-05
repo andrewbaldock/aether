@@ -116,7 +116,14 @@ export function useChat({
       const currentGraphMode = graphModeRef.current;
       const resolvedSessionId = await getOrCreateSession(currentGraphMode);
 
-      const res = await fetch("/api/chat", {
+      // On the first turn the session row was just created (still untitled).
+      // Refresh now so it appears in the sidebar immediately — the user shouldn't
+      // wait for the whole answer to stream before their conversation shows up.
+      // The post-[DONE] refresh below then swaps the provisional label for the
+      // auto-assigned title. Guard against a superseded stream firing stale.
+      if (isFirstTurn && epoch === epochRef.current) refreshSessions();
+
+      const requestInit: RequestInit = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -126,7 +133,19 @@ export function useChat({
           graphMode: currentGraphMode,
         }),
         signal: controller.signal,
-      });
+      };
+
+      // The Fly backend can scale to zero; a request landing during a
+      // cold-start window gets a transient 502/503/504 from the proxy before
+      // the app runs. Retry once after a short backoff — safe because nothing
+      // has streamed yet (no body consumed). Never retry once bytes arrive.
+      let res = await fetch("/api/chat", requestInit);
+      if ([502, 503, 504].includes(res.status)) {
+        await new Promise((r) => setTimeout(r, 1500));
+        if (epoch === epochRef.current) {
+          res = await fetch("/api/chat", requestInit);
+        }
+      }
 
       if (!res.ok || !res.body) {
         const body = await res.json().catch(() => null);
