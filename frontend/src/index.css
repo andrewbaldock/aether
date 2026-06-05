@@ -28,6 +28,9 @@
   --color-neon-cyan: var(--neon-cyan);
   --color-danger-surface: var(--danger-surface);
   --color-danger-content: var(--danger-content);
+  /* Space Grotesk — Aether's "voice" font for branded UI copy (font-display
+     utility). Loaded in index.html. Falls back to the system stack. */
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
 }
 
 /* LIGHT (default) — warm-white surfaces, ink text, neon-pink accent. */
@@ -188,6 +191,29 @@ body {
   .agent-edge-flow-loop,
   .kg-node {
     animation: none;
+  }
+}
+
+/* ── Knowledge-graph loading state ───────────────────────────────────────────
+   Ghost nodes/links that breathe while build_knowledge_graph is running but no
+   real nodes have arrived yet (GraphLoading.tsx). Opacity-only so it reads as a
+   graph "forming" without competing with the real node-in animation. */
+@keyframes kg-loading-pulse {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+.kg-loading-pulse {
+  animation: kg-loading-pulse 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .kg-loading-pulse {
+    animation: none;
+    opacity: 0.5;
   }
 }
 

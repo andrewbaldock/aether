@@ -20,6 +20,9 @@ interface UseChatOptions {
   // Knowledge Graph mode for this conversation. Read via a ref at send time so
   // it's always current; gates the build_knowledge_graph tool on the backend.
   graphMode: boolean;
+  // The Claude model id for this conversation. Read via a ref at send time.
+  // Undefined lets the backend fall back to its default.
+  model?: string;
 }
 
 export interface UseChatResult {
@@ -42,6 +45,7 @@ export function useChat({
   getOrCreateSession,
   refreshSessions,
   graphMode,
+  model,
 }: UseChatOptions) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +60,10 @@ export function useChat({
   // sendMessage closure.
   const graphModeRef = useRef(graphMode);
   graphModeRef.current = graphMode;
+
+  // Same pattern for the selected model.
+  const modelRef = useRef(model);
+  modelRef.current = model;
 
   // Stream lifecycle guards. abortRef stops the fetch; epochRef invalidates any
   // late writes from a stream that's already been superseded (new send, or the
@@ -131,6 +139,7 @@ export function useChat({
           sessionId: resolvedSessionId,
           userId,
           graphMode: currentGraphMode,
+          model: modelRef.current,
         }),
         signal: controller.signal,
       };

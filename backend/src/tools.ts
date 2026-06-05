@@ -12,6 +12,77 @@ export const BASE_TOOLS: ToolDefinition[] = [
   },
 ];
 
+// A closed vocabulary of real lucide-react icon names (PascalCase) the model may
+// choose from for a node. Left open-ended, the model confidently invents
+// plausible-but-nonexistent names (e.g. "VinylRecord", "MicrophoneStand"), which
+// the frontend then has to discard. Constraining it to this curated set — every
+// name verified to exist in lucide — means almost every suggestion resolves to a
+// real icon. Spread across the entity types (person/place/org/event/concept) and
+// common subjects (science, arts, music, tech, nature, history). Extend freely,
+// but only with names confirmed to exist in lucide-react.
+export const ICON_VOCABULARY = [
+  // People / roles
+  "User",
+  "Users",
+  "Crown",
+  "Drama",
+  "Mic",
+  "Music",
+  "Brush",
+  "Palette",
+  "PenTool",
+  "Camera",
+  "Film",
+  "Gavel",
+  "GraduationCap",
+  "Stethoscope",
+  // Science / ideas
+  "Atom",
+  "FlaskConical",
+  "Microscope",
+  "Dna",
+  "Brain",
+  "Lightbulb",
+  "Calculator",
+  "Sigma",
+  "Telescope",
+  "Orbit",
+  "Rocket",
+  // Places / structures
+  "MapPin",
+  "Landmark",
+  "Building2",
+  "Church",
+  "Castle",
+  "Mountain",
+  "TreePine",
+  "Globe",
+  "Waves",
+  "Tent",
+  // Orgs / things
+  "Briefcase",
+  "Factory",
+  "Cpu",
+  "CircuitBoard",
+  "Server",
+  "Cog",
+  "Banknote",
+  "ShoppingBag",
+  // Works / media / events
+  "BookOpen",
+  "Newspaper",
+  "Scroll",
+  "Trophy",
+  "Medal",
+  "Flag",
+  "Calendar",
+  "Swords",
+  "Sword",
+  "Star",
+  "Heart",
+  "Zap",
+] as const;
+
 // Gated tool, offered only when Knowledge Graph mode is on. It carries structured
 // entity/relationship data to the frontend over the existing tool_result SSE seam —
 // the executor just echoes the input back, so the wire payload IS the graph data.
@@ -43,8 +114,9 @@ export const BUILD_KNOWLEDGE_GRAPH_TOOL: ToolDefinition = {
             },
             icon: {
               type: "string",
+              enum: [...ICON_VOCABULARY],
               description:
-                "Optional. The single best-matching lucide-react icon name in PascalCase that visually represents THIS specific entity — e.g. 'Atom' for a physicist, 'FlaskConical' for a chemist, 'Landmark' for a monument, 'Crown' for a monarch, 'BookOpen' for a novel, 'Rocket' for a space program. Pick the most evocative real lucide icon you know; if none fits well, omit it and a generic type icon is used.",
+                "Optional. The single best-matching icon for THIS specific entity, chosen ONLY from the allowed list — e.g. 'Atom' for a physicist, 'FlaskConical' for a chemist, 'Landmark' for a monument, 'Crown' for a monarch, 'BookOpen' for a novel, 'Rocket' for a space program. Do NOT invent icon names outside the list. If none fits well, omit this field and a generic type icon is used.",
             },
           },
           required: ["id", "label", "type"],

@@ -25,8 +25,9 @@ import {
 // Lazy per-icon loader: resolves a model-chosen icon by name on demand without
 // bundling all ~1500 icons. Unknown names render its fallback, so an invalid
 // model suggestion degrades gracefully.
-import { DynamicIcon, type IconName } from "lucide-react/dynamic";
+import { DynamicIcon, type IconName, iconNames } from "lucide-react/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Tooltip } from "../../../shell/Tooltip";
 import { TYPE_COLOR } from "./colors";
 import type { GraphLink, GraphNode } from "./types";
 import type { NodePosition } from "./useKnowledgeGraphState";
@@ -473,13 +474,19 @@ export function ForceGraph({
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={resetView}
-        className="absolute bottom-2 right-2 rounded-md border border-border bg-surface-raised px-2 py-1 text-xs text-content-muted hover:text-content"
+      <Tooltip
+        label="Reset zoom & pan to fit the graph"
+        side="left"
+        className="absolute bottom-2 right-2"
       >
-        Reset view
-      </button>
+        <button
+          type="button"
+          onClick={resetView}
+          className="rounded-md border border-border bg-surface-raised px-2 py-1 text-xs text-content-muted hover:text-content"
+        >
+          Reset view
+        </button>
+      </Tooltip>
     </div>
   );
 }
@@ -496,12 +503,28 @@ const TYPE_ICON: Record<GraphNode["type"], LucideIcon> = {
   concept: Lightbulb,
 };
 
-// "FlaskConical" → "flask-conical"; lucide's dynamic loader keys off kebab-case.
+// "FlaskConical" → "flask-conical", "Building2" → "building-2"; lucide's dynamic
+// loader keys off kebab-case. A letter→digit boundary also gets a dash, matching
+// lucide's naming (Building2 is "building-2", not "building2").
 function toKebab(name: string): string {
   return name
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+    .replace(/([a-zA-Z])([0-9])/g, "$1-$2")
     .toLowerCase();
+}
+
+// The set of real lucide icon names, for O(1) validation. The model frequently
+// guesses plausible-but-nonexistent names (e.g. "vinyl-record"); handing one to
+// DynamicIcon makes it attempt a dynamic import that rejects and logs a console
+// error before the fallback renders. Checking membership first means we only
+// ever lazy-load names that exist, and silently use the type icon otherwise.
+const VALID_ICON_NAMES = new Set<string>(iconNames);
+
+// Returns the kebab name if it's a real lucide icon, else null.
+function resolveIconName(icon: string): IconName | null {
+  const kebab = toKebab(icon);
+  return VALID_ICON_NAMES.has(kebab) ? (kebab as IconName) : null;
 }
 
 function NodeIcon({
@@ -524,14 +547,15 @@ function NodeIcon({
     className: "pointer-events-none",
   } as const;
 
-  // No model suggestion — use the type icon directly (no lazy load).
-  if (!icon) return <Fallback {...common} />;
+  // No model suggestion, or the suggested name isn't a real lucide icon — use
+  // the type icon directly (no lazy load, no console error from a bad import).
+  const name = icon ? resolveIconName(icon) : null;
+  if (!name) return <Fallback {...common} />;
 
-  // Lazy-resolve the model's icon; render the type icon while loading and if the
-  // name doesn't exist in lucide.
+  // Lazy-resolve the validated icon; render the type icon while it loads.
   return (
     <DynamicIcon
-      name={toKebab(icon) as IconName}
+      name={name}
       fallback={() => <Fallback {...common} />}
       {...common}
     />

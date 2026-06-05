@@ -1,3 +1,4 @@
+import { Tooltip } from "../../../shell/Tooltip";
 import { TYPE_COLOR, TYPE_LABEL } from "./colors";
 import type { GraphNode } from "./types";
 import { useWikipedia } from "./useWikipedia";
@@ -28,14 +29,16 @@ export function NodeDetail({ node, onClose }: NodeDetailProps) {
             {TYPE_LABEL[node.type]}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close detail"
-          className="rounded text-content-subtle hover:text-content"
-        >
-          ×
-        </button>
+        <Tooltip label="Close detail" side="left">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close detail"
+            className="rounded text-content-subtle hover:text-content"
+          >
+            ×
+          </button>
+        </Tooltip>
       </div>
 
       {loading && <p className="text-xs text-content-subtle">Loading…</p>}
