@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import { useCapabilities } from "../capabilities/useCapabilities";
+import { GraphPersistenceBridge } from "../capabilities/widgets/KnowledgeGraph/GraphPersistenceBridge";
 import { CapabilityColumn } from "./CapabilityColumn";
 import { ChatPanel } from "./ChatPanel";
 import { SessionProvider } from "./SessionContext";
@@ -24,6 +25,9 @@ function readCapabilitySize(): number {
 export function Shell() {
   return (
     <SessionProvider>
+      {/* Loads/saves the per-session knowledge graph. Inside SessionProvider so
+          it can read sessionId; the graph state itself lives at the app root. */}
+      <GraphPersistenceBridge />
       <ShellInner />
     </SessionProvider>
   );

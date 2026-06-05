@@ -1,8 +1,9 @@
+import { useAgentEvents } from "../../../shell/AgentEventContext";
 import type { Widget } from "../../registry";
 import { TYPE_COLOR, TYPE_LABEL } from "./colors";
 import { ForceGraph } from "./ForceGraph";
 import { NodeDetail } from "./NodeDetail";
-import type { EntityType } from "./types";
+import type { EntityType, GraphNode } from "./types";
 import { useKnowledgeGraphState } from "./useKnowledgeGraphState";
 
 const LEGEND_TYPES: EntityType[] = [
@@ -18,8 +19,27 @@ const LEGEND_TYPES: EntityType[] = [
 // subscribes to the same AgentEventBus the agent diagram does. Click a node for
 // its Wikipedia summary. The `widget` prop is unused; all state is live.
 export function KnowledgeGraphWidget(_props: { widget: Widget }) {
-  const { nodes, links, selectedId, select } = useKnowledgeGraphState();
+  const {
+    nodes,
+    links,
+    selectedId,
+    select,
+    reportPositions,
+    pinNode,
+    unpinNode,
+    removeNode,
+  } = useKnowledgeGraphState();
+  const bus = useAgentEvents();
   const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
+
+  // "Explore further" — ask the chat (via the bus) to dig into this node and how
+  // it connects to the rest of the graph. ChatPanel turns this into a real turn.
+  function exploreNode(node: GraphNode) {
+    bus.emit({
+      type: "explore_request",
+      prompt: `Tell me more about ${node.label}, and how it connects to the other entities in this conversation.`,
+    });
+  }
 
   return (
     <div className="flex h-full flex-col bg-surface">
@@ -49,6 +69,11 @@ export function KnowledgeGraphWidget(_props: { widget: Widget }) {
             links={links}
             selectedId={selectedId}
             onSelect={select}
+            onReportPositions={reportPositions}
+            onPin={pinNode}
+            onUnpin={unpinNode}
+            onRemove={removeNode}
+            onExplore={exploreNode}
           />
         )}
       </div>

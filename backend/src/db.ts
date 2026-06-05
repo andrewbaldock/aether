@@ -1,10 +1,21 @@
 import { createClient } from "@supabase/supabase-js";
 
+// A persisted knowledge-graph snapshot for a session: the merged nodes/links
+// plus any drag-pinned positions. Stored as-is in the `graph_data` jsonb column
+// so reopening (or reloading) a conversation restores the graph the user built,
+// rather than relying on the model to re-emit it. The backend doesn't interpret
+// the shape — it round-trips whatever the frontend saves.
+export type GraphSnapshot = {
+  nodes: unknown[];
+  links: unknown[];
+};
+
 export interface Session {
   id: string;
   user_id: string;
   title: string | null;
   graph_mode: boolean;
+  graph_data: GraphSnapshot | null;
   created_at: string;
   updated_at: string;
 }
@@ -122,6 +133,31 @@ export async function updateSessionGraphMode(
     .update({ graph_mode: graphMode, updated_at: new Date().toISOString() })
     .eq("id", sessionId);
   if (error) throw new Error(`updateSessionGraphMode: ${error.message}`);
+}
+
+// Read just the persisted graph snapshot for a session. Returns null when the
+// session has no saved graph yet (the column default).
+export async function getSessionGraph(
+  sessionId: string
+): Promise<GraphSnapshot | null> {
+  const { data, error } = await getDb()
+    .from("sessions")
+    .select("graph_data")
+    .eq("id", sessionId)
+    .single();
+  if (error) throw new Error(`getSessionGraph: ${error.message}`);
+  return (data?.graph_data as GraphSnapshot | null) ?? null;
+}
+
+export async function updateSessionGraphData(
+  sessionId: string,
+  graphData: GraphSnapshot
+): Promise<void> {
+  const { error } = await getDb()
+    .from("sessions")
+    .update({ graph_data: graphData, updated_at: new Date().toISOString() })
+    .eq("id", sessionId);
+  if (error) throw new Error(`updateSessionGraphData: ${error.message}`);
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {

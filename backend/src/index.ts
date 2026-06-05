@@ -3,9 +3,12 @@ import { streamSSE } from "hono/streaming";
 import {
   createSession,
   deleteSession,
+  type GraphSnapshot,
   getMessages,
+  getSessionGraph,
   listSessions,
   saveMessage,
+  updateSessionGraphData,
   updateSessionGraphMode,
   updateSessionTitle,
   updateSessionTitleIfEmpty,
@@ -106,6 +109,46 @@ app.get("/api/sessions/:id/messages", async (c) => {
   } catch (err) {
     console.error("GET /api/sessions/:id/messages failed:", err);
     return c.json({ error: "Failed to load messages" }, 500);
+  }
+});
+
+// The persisted knowledge-graph snapshot for a session. Loaded alongside
+// messages when a conversation is reopened so the graph the user built (and any
+// dragged-pinned positions) is restored. Returns { nodes: [], links: [] } when
+// nothing has been saved yet.
+app.get("/api/sessions/:id/graph", async (c) => {
+  const id = c.req.param("id");
+  try {
+    const graph = await getSessionGraph(id);
+    return c.json(graph ?? { nodes: [], links: [] });
+  } catch (err) {
+    console.error("GET /api/sessions/:id/graph failed:", err);
+    return c.json({ error: "Failed to load graph" }, 500);
+  }
+});
+
+// Save the current graph snapshot. The frontend debounces this as the graph
+// grows or nodes are dragged/removed. The body is round-tripped as-is; we only
+// check it has node/link arrays so a malformed save can't corrupt the column.
+app.put("/api/sessions/:id/graph", async (c) => {
+  const id = c.req.param("id");
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Request body must be JSON" }, 400);
+  }
+  const { nodes, links } = body as { nodes?: unknown; links?: unknown };
+  if (!Array.isArray(nodes) || !Array.isArray(links)) {
+    return c.json({ error: "Expected { nodes: [], links: [] }" }, 400);
+  }
+  try {
+    const snapshot: GraphSnapshot = { nodes, links };
+    await updateSessionGraphData(id, snapshot);
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("PUT /api/sessions/:id/graph failed:", err);
+    return c.json({ error: "Failed to save graph" }, 500);
   }
 });
 

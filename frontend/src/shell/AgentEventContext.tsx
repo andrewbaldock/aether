@@ -23,7 +23,10 @@ export type AgentEvent =
   | { type: "loop_start"; iteration: number }
   | { type: "done" }
   | { type: "error"; message: string }
-  | { type: "idle" };
+  | { type: "idle" }
+  // Frontend-only: the graph widget asks the chat to send a follow-up turn (the
+  // "Explore further" node action). ChatPanel subscribes and calls sendMessage.
+  | { type: "explore_request"; prompt: string };
 
 type Listener = (event: AgentEvent) => void;
 

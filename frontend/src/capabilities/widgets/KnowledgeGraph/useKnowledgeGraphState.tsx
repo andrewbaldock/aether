@@ -14,11 +14,46 @@ import {
 } from "../../../shell/AgentEventContext";
 import type { EntityType, GraphLink, GraphNode, GraphPayload } from "./types";
 
+// Position fields a ForceGraph reports back so saves capture the live layout
+// (incl. drag-pinned coordinates), not just the seed positions on the nodes.
+export interface NodePosition {
+  x?: number;
+  y?: number;
+  fx?: number | null;
+  fy?: number | null;
+}
+
+// A save-ready snapshot of the whole graph. Shape matches PUT /api/sessions/:id/graph.
+export interface GraphSnapshot {
+  nodes: GraphNode[];
+  links: GraphLink[];
+}
+
 export interface KnowledgeGraphState {
   nodes: GraphNode[];
   links: GraphLink[];
   selectedId: string | null;
   select: (id: string | null) => void;
+
+  // --- Persistence ---------------------------------------------------------
+  // Bumped whenever the graph meaningfully changes (merge, remove, pin/unpin,
+  // drag end). The persistence bridge watches this to debounce-save.
+  revision: number;
+  // ForceGraph reports live node positions here so getSnapshot can include them.
+  reportPositions: (positions: Map<string, NodePosition>) => void;
+  // Build the current save snapshot, merging live positions over the nodes.
+  getSnapshot: () => GraphSnapshot;
+  // Replace the whole graph (used when a conversation is opened/restored).
+  loadGraph: (snapshot: GraphSnapshot) => void;
+  // Empty the graph (used when starting a new conversation).
+  clearGraph: () => void;
+
+  // --- Editing -------------------------------------------------------------
+  removeNode: (id: string) => void;
+  pinNode: (id: string, x: number, y: number) => void;
+  unpinNode: (id: string) => void;
+  // ForceGraph calls this on drag end so the bridge re-saves the new layout.
+  markDirty: () => void;
 }
 
 const VALID_TYPES: ReadonlySet<EntityType> = new Set([
@@ -61,26 +96,41 @@ function parsePayload(raw: string): GraphPayload | null {
   return { entities: validEntities, relationships: validRelationships };
 }
 
+// Key a link by its endpoints — endpoints can be strings (fresh) or node refs
+// (after the sim binds them), so normalise to ids.
+function linkKey(l: GraphLink): string {
+  const from = typeof l.source === "string" ? l.source : l.source.id;
+  const to = typeof l.target === "string" ? l.target : l.target.id;
+  return `${from}→${to}`;
+}
+
 const KnowledgeGraphContext = createContext<KnowledgeGraphState | null>(null);
 
 // Builds the live graph from build_knowledge_graph tool_results on the agent bus.
 // Mounted at the app root so it subscribes once and never misses a payload — the
 // widget itself only mounts when its tab is active, which can be *after* the
 // first graph data arrives (the auto-open is what activates it). Merges
-// additively: new entities/links accumulate across turns and are never reset on a
-// new send. Dedupes nodes by id and links by from→to.
+// additively: new entities/links accumulate across turns. Dedupes nodes by id
+// and links by from→to. Also exposes load/save/edit actions so the graph can be
+// persisted per conversation (see GraphPersistenceBridge).
 export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
   const bus = useAgentEvents();
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [links, setLinks] = useState<GraphLink[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Bumped on any meaningful change so the persistence bridge can react.
+  const [revision, setRevision] = useState(0);
+  const bump = useCallback(() => setRevision((r) => r + 1), []);
 
   // Id sets for O(1) dedupe without scanning the arrays on every merge.
   const nodeIds = useRef(new Set<string>());
   const linkKeys = useRef(new Set<string>());
+  // Latest live positions reported by the ForceGraph (id → x/y/fx/fy).
+  const positionsRef = useRef(new Map<string, NodePosition>());
 
   const select = useCallback((id: string | null) => setSelectedId(id), []);
 
+  // --- Bus subscription: additive merge -------------------------------------
   useEffect(() => {
     function handle(event: AgentEvent) {
       if (event.type !== "tool_result") return;
@@ -110,15 +160,144 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
       if (freshLinks.length > 0) {
         setLinks((prev) => [...prev, ...freshLinks]);
       }
+
+      if (freshNodes.length > 0 || freshLinks.length > 0) bump();
     }
 
     const unsubscribe = bus.subscribe(handle);
     return unsubscribe;
-  }, [bus]);
+  }, [bus, bump]);
+
+  // --- Persistence helpers --------------------------------------------------
+  const reportPositions = useCallback(
+    (positions: Map<string, NodePosition>) => {
+      positionsRef.current = positions;
+    },
+    []
+  );
+
+  const getSnapshot = useCallback((): GraphSnapshot => {
+    // Merge the latest live positions over each node so a save captures the
+    // current layout (and any drag-pinned fx/fy), not just seed coordinates.
+    const snapNodes = nodes.map((n) => {
+      const pos = positionsRef.current.get(n.id);
+      return pos ? { ...n, ...pos } : { ...n };
+    });
+    // Normalise link endpoints to ids — the sim may have replaced them with
+    // node object refs, which we don't want to serialise.
+    const snapLinks = links.map((l) => ({
+      source: typeof l.source === "string" ? l.source : l.source.id,
+      target: typeof l.target === "string" ? l.target : l.target.id,
+      label: l.label,
+    }));
+    return { nodes: snapNodes, links: snapLinks };
+  }, [nodes, links]);
+
+  const loadGraph = useCallback((snapshot: GraphSnapshot) => {
+    nodeIds.current = new Set(snapshot.nodes.map((n) => n.id));
+    linkKeys.current = new Set(snapshot.links.map(linkKey));
+    positionsRef.current = new Map(
+      snapshot.nodes.map((n) => [
+        n.id,
+        { x: n.x, y: n.y, fx: n.fx ?? null, fy: n.fy ?? null },
+      ])
+    );
+    setNodes(snapshot.nodes.map((n) => ({ ...n })));
+    setLinks(snapshot.links.map((l) => ({ ...l })));
+    setSelectedId(null);
+    // No bump — loading shouldn't trigger a save-back of what we just loaded.
+  }, []);
+
+  const clearGraph = useCallback(() => {
+    nodeIds.current = new Set();
+    linkKeys.current = new Set();
+    positionsRef.current = new Map();
+    setNodes([]);
+    setLinks([]);
+    setSelectedId(null);
+  }, []);
+
+  // --- Editing --------------------------------------------------------------
+  const removeNode = useCallback(
+    (id: string) => {
+      nodeIds.current.delete(id);
+      positionsRef.current.delete(id);
+      setNodes((prev) => prev.filter((n) => n.id !== id));
+      setLinks((prev) => {
+        const kept = prev.filter((l) => {
+          const from = typeof l.source === "string" ? l.source : l.source.id;
+          const to = typeof l.target === "string" ? l.target : l.target.id;
+          if (from === id || to === id) {
+            linkKeys.current.delete(`${from}→${to}`);
+            return false;
+          }
+          return true;
+        });
+        return kept;
+      });
+      setSelectedId((sel) => (sel === id ? null : sel));
+      bump();
+    },
+    [bump]
+  );
+
+  const pinNode = useCallback(
+    (id: string, x: number, y: number) => {
+      const pos = positionsRef.current.get(id) ?? {};
+      positionsRef.current.set(id, { ...pos, x, y, fx: x, fy: y });
+      setNodes((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, x, y, fx: x, fy: y } : n))
+      );
+      bump();
+    },
+    [bump]
+  );
+
+  const unpinNode = useCallback(
+    (id: string) => {
+      const pos = positionsRef.current.get(id) ?? {};
+      positionsRef.current.set(id, { ...pos, fx: null, fy: null });
+      setNodes((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, fx: null, fy: null } : n))
+      );
+      bump();
+    },
+    [bump]
+  );
+
+  const markDirty = useCallback(() => bump(), [bump]);
 
   const value = useMemo<KnowledgeGraphState>(
-    () => ({ nodes, links, selectedId, select }),
-    [nodes, links, selectedId, select]
+    () => ({
+      nodes,
+      links,
+      selectedId,
+      select,
+      revision,
+      reportPositions,
+      getSnapshot,
+      loadGraph,
+      clearGraph,
+      removeNode,
+      pinNode,
+      unpinNode,
+      markDirty,
+    }),
+    [
+      nodes,
+      links,
+      selectedId,
+      select,
+      revision,
+      reportPositions,
+      getSnapshot,
+      loadGraph,
+      clearGraph,
+      removeNode,
+      pinNode,
+      unpinNode,
+      markDirty,
+    ]
   );
 
   return (

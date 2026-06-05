@@ -7,13 +7,20 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
   const {
     sessionId,
     sessions,
+    messages,
     startNewConversation,
     loadSession,
     renameSession,
     deleteSession,
   } = useSessionContext();
 
-  const titled = sessions.filter((s) => s.title);
+  // Show titled sessions, plus the active one even before it's been auto-titled
+  // — so a brand-new conversation appears the moment the first question is sent.
+  // Its provisional label is the first user message; the real title replaces it
+  // once the turn finishes (post-[DONE] refresh).
+  const visible = sessions.filter((s) => s.title || s.id === sessionId);
+  const provisionalTitle =
+    messages.find((m) => m.role === "user")?.text ?? "New conversation";
 
   return (
     <div className="flex h-full flex-col bg-surface-raised text-content-muted">
@@ -49,16 +56,16 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
         Recent
       </div>
       <ul className="mt-1 flex-1 space-y-0.5 overflow-y-auto px-2 pb-4">
-        {titled.length === 0 && (
+        {visible.length === 0 && (
           <li className="px-3 py-2 text-xs text-content-faint">
             No conversations yet
           </li>
         )}
-        {titled.map((s) => (
+        {visible.map((s) => (
           <SessionItem
             key={s.id}
             id={s.id}
-            title={s.title ?? ""}
+            title={s.title ?? provisionalTitle}
             date={s.created_at}
             active={s.id === sessionId}
             onClick={() => loadSession(s.id)}
