@@ -351,7 +351,7 @@ export function ForceGraph({
   const menuPinned = menuNode?.fx != null;
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full overflow-hidden">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}

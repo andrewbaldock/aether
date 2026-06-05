@@ -93,6 +93,10 @@ function ShellInner() {
           collapsedSize={0}
           style={{
             transition: "flex-basis 280ms cubic-bezier(0.4, 0, 0.2, 1)",
+            // react-resizable-panels sets `overflow: auto` inline on the Panel
+            // element; that produced a spurious horizontal scrollbar across the
+            // graph column. The widget manages its own width, so clip the x-axis.
+            overflowX: "hidden",
           }}
           onResize={(size) => {
             if (size.asPercentage && size.asPercentage > 0) {

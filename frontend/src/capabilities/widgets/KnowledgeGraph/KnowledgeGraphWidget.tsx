@@ -44,7 +44,7 @@ export function KnowledgeGraphWidget(_props: { widget: Widget }) {
   }
 
   return (
-    <div className="flex h-full flex-col bg-surface">
+    <div className="flex h-full flex-col overflow-hidden bg-surface">
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-3 py-2">
         {LEGEND_TYPES.map((t) => (
