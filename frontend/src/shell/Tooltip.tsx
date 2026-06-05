@@ -33,9 +33,29 @@ export function Tooltip({
   children,
   className,
 }: TooltipProps) {
+  // After a click, the trigger keeps mouse :hover and gains :focus, so the
+  // group-focus-within bubble lingers even once the cursor leaves. Blur the
+  // focused trigger so the bubble follows the cursor — visible on hover, gone on
+  // de-hover. Capture phase so we run regardless of inner stopPropagation.
+  function blurTrigger(e: React.MouseEvent<HTMLDivElement>) {
+    const target = e.target as HTMLElement;
+    const focusable = target.closest<HTMLElement>(
+      "button, select, a, input, [tabindex]",
+    );
+    focusable?.blur();
+  }
+  // The bubble is positioned against this wrapper, so the wrapper needs a
+  // positioning context. Default to `relative`, but if the caller supplies their
+  // own position utility (e.g. `absolute bottom-2 right-2` to pin the trigger in a
+  // corner) don't also emit `relative` — both land in the same cascade layer and
+  // `relative` would silently win, dropping the trigger back into normal flow.
+  const hasPosition = className
+    ? /\b(absolute|fixed|relative|sticky)\b/.test(className)
+    : false;
   return (
     <div
-      className={`group/tooltip relative flex${className ? ` ${className}` : ""}`}
+      onClickCapture={blurTrigger}
+      className={`group/tooltip flex${hasPosition ? "" : " relative"}${className ? ` ${className}` : ""}`}
     >
       {children}
       <span

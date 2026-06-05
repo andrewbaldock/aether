@@ -27,7 +27,6 @@ import {
 // model suggestion degrades gracefully.
 import { DynamicIcon, type IconName, iconNames } from "lucide-react/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Tooltip } from "../../../shell/Tooltip";
 import { TYPE_COLOR } from "./colors";
 import type { GraphLink, GraphNode } from "./types";
 import type { NodePosition } from "./useKnowledgeGraphState";
@@ -197,11 +196,53 @@ export function ForceGraph({
     return typeof p === "string" ? nodeById.get(p) : p;
   }
 
+  // Fit the whole graph into the viewport and centre it: measure the node
+  // bounding box, scale to fit with a margin (clamped to the zoom extent), then
+  // translate so the bbox centre lands at the viewBox centre.
   function resetView() {
     const svgEl = svgRef.current;
     const zoomBehavior = zoomRef.current;
     if (!svgEl || !zoomBehavior) return;
-    select(svgEl).call(zoomBehavior.transform, zoomIdentity);
+
+    const nodes = renderNodes;
+    if (nodes.length === 0) {
+      select(svgEl).call(zoomBehavior.transform, zoomIdentity);
+      return;
+    }
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const n of nodes) {
+      const x = n.x ?? VIEW_W / 2;
+      const y = n.y ?? VIEW_H / 2;
+      minX = Math.min(minX, x - NODE_R);
+      minY = Math.min(minY, y - NODE_R);
+      maxX = Math.max(maxX, x + NODE_R);
+      maxY = Math.max(maxY, y + NODE_R);
+    }
+
+    const PADDING = 40; // viewBox units of breathing room around the graph
+    const bboxW = maxX - minX;
+    const bboxH = maxY - minY;
+    const k = Math.max(
+      0.3,
+      Math.min(
+        3,
+        Math.min(
+          (VIEW_W - PADDING * 2) / bboxW,
+          (VIEW_H - PADDING * 2) / bboxH,
+        ),
+      ),
+    );
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const transform = zoomIdentity
+      .translate(VIEW_W / 2 - k * cx, VIEW_H / 2 - k * cy)
+      .scale(k);
+
+    select(svgEl).call(zoomBehavior.transform, transform);
   }
 
   // Convert a pointer event to graph-space coords, undoing both the SVG viewBox
@@ -474,19 +515,13 @@ export function ForceGraph({
         </div>
       )}
 
-      <Tooltip
-        label="Reset zoom & pan to fit the graph"
-        side="left"
-        className="absolute bottom-2 right-2"
+      <button
+        type="button"
+        onClick={resetView}
+        className="absolute bottom-2 right-2 rounded-md border border-border bg-surface-raised px-2 py-1 text-xs text-content-muted hover:text-content"
       >
-        <button
-          type="button"
-          onClick={resetView}
-          className="rounded-md border border-border bg-surface-raised px-2 py-1 text-xs text-content-muted hover:text-content"
-        >
-          Reset view
-        </button>
-      </Tooltip>
+        Reset view
+      </button>
     </div>
   );
 }
