@@ -204,7 +204,7 @@ export function ChatPanel() {
       <div className="flex-1 overflow-y-auto px-6 py-6">
         {!started && (
           <div className="mx-auto mt-20 flex max-w-md flex-col items-center gap-4 text-center">
-            <Wordmark height={56} />
+            <Wordmark height={72} />
             <div className="flex items-center gap-2.5">
               <Wrench className="h-5 w-5 text-content-muted" aria-hidden />
               <p className="font-display text-lg font-semibold text-content">

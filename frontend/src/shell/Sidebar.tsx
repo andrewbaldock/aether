@@ -14,13 +14,26 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
     deleteSession,
   } = useSessionContext();
 
-  // Show titled sessions, plus the active one even before it's been auto-titled
-  // — so a brand-new conversation appears the moment the first question is sent.
-  // Its provisional label is the first user message; the real title replaces it
-  // once the turn finishes (post-[DONE] refresh).
-  const visible = sessions.filter((s) => s.title || s.id === sessionId);
+  // Every session returned by the API is shown. A brand-new conversation is
+  // persisted (and so appears) the moment its first question is sent — it may be
+  // briefly untitled until the post-[DONE] refresh picks up the auto-title, so we
+  // fall back to a provisional label for the ACTIVE untitled one (the first user
+  // message). Crucially we never *filter out* an untitled session: doing that on
+  // `s.title || s.id === sessionId` made a just-created conversation vanish the
+  // instant you switched away from it (it lost both its title-check and its
+  // active-check), even though its row exists. Untitled non-active rows fall back
+  // to a generic label rather than disappearing.
+  const visible = sessions;
   const provisionalTitle =
     messages.find((m) => m.role === "user")?.text ?? "New conversation";
+
+  function titleFor(s: (typeof sessions)[number]): string {
+    if (s.title) return s.title;
+    // The active untitled session can use its live first message; others (e.g. a
+    // session created moments ago, not yet refreshed with a title) get a generic
+    // label until the next refresh fills it in.
+    return s.id === sessionId ? provisionalTitle : "New conversation";
+  }
 
   return (
     <div className="flex h-full flex-col bg-surface-raised text-content-muted">
@@ -38,7 +51,7 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
             Collapse sidebar
           </span>
         </div>
-        <Wordmark height={48} />
+        <Wordmark height={60} />
         <ThemeToggle />
       </div>
 
@@ -65,7 +78,7 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
           <SessionItem
             key={s.id}
             id={s.id}
-            title={s.title ?? provisionalTitle}
+            title={titleFor(s)}
             date={s.created_at}
             active={s.id === sessionId}
             onClick={() => loadSession(s.id)}

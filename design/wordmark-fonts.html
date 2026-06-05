@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aether — Wordmark Font Explorations</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- A broad spread of modern display / futuristic / ethereal faces -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Audiowide&family=Monoton&family=Michroma&family=Exo+2:ital,wght@0,400;0,700;1,600&family=Rajdhani:wght@500;600;700&family=Chakra+Petch:wght@500;700&family=Syncopate:wght@700&family=Saira:wght@300;500;700&family=Saira+Condensed:wght@500;700&family=Quantico:wght@700&family=Electrolize&family=Megrim&family=Major+Mono+Display&family=Tektur:wght@500;700&family=Unica+One&family=Iceland&family=Zen+Dots&family=Doto:wght@500;800&family=Bruno+Ace&family=Bruno+Ace+SC&family=Stalinist+One&family=Nova+Square&family=Goldman:wght@400;700&family=Aldrich&family=Wallpoet&family=Tomorrow:wght@400;600;700&family=Space+Grotesk:wght@500;700&family=Sora:wght@400;700&family=Anta&family=Kanit:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Batch 2 — more display / futuristic / techno / neon faces -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Russo+One&family=Teko:wght@500;600;700&family=Oxanium:wght@500;700&family=Jura:wght@500;700&family=Play:wght@400;700&family=Khand:wght@500;700&family=Sarpanch:wght@600;800&family=Gemunu+Libre:wght@500;700&family=Geo&family=Krona+One&family=Black+Ops+One&family=Faster+One&family=Bungee&family=Bungee+Shade&family=Bungee+Inline&family=Wavefont&family=Codystar&family=Gugi&family=Kelly+Slab&family=Astloch:wght@700&family=Pirata+One&family=Gruppo&family=Spartan:wght@500;700&family=Lexend:wght@400;700&family=Lexend+Mega:wght@500;700&family=Lexend+Zetta:wght@500;700&family=Sora+Condensed&family=Manrope:wght@500;700&family=Outfit:wght@400;700&family=Urbanist:wght@500;700&family=Familjen+Grotesk:wght@500;700&family=Hanken+Grotesk:wght@500;700&family=Schibsted+Grotesk:wght@500;700&family=Onest:wght@500;700&family=Geist:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Batch 3 — mono / techy / distinctive display + clean modern -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=JetBrains+Mono:wght@500;700&family=IBM+Plex+Mono:wght@500;700&family=Fira+Code:wght@500;700&family=Red+Hat+Mono:wght@500;700&family=Martian+Mono:wght@500;700&family=Spline+Sans+Mono:wght@500;700&family=DM+Mono:wght@500&family=Azeret+Mono:wght@500;700&family=Syne:wght@600;800&family=Syne+Mono&family=Unbounded:wght@500;800&family=Climate+Crisis&family=Big+Shoulders+Display:wght@500;700&family=Big+Shoulders+Inline+Display:wght@500;700&family=Big+Shoulders+Stencil+Display:wght@500;700&family=Stardos+Stencil:wght@700&family=Sancreek&family=Rationale&family=Smooch+Sans:wght@500;700&family=Six+Caps&family=Fjalla+One&family=Anton&family=Archivo+Black&family=Archivo:wght@500;700&family=Chivo:wght@500;700&family=Red+Hat+Display:wght@500;700&family=DM+Sans:wght@500;700&family=Epilogue:wght@500;700&family=Hubot+Sans:wght@500;700&family=Mona+Sans:wght@500;700&family=Albert+Sans:wght@500;700&family=Spline+Sans:wght@500;700&family=Bricolage+Grotesque:wght@500;700&family=Instrument+Sans:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Batch 5 — serif / blackletter / script / decorative (user picks) -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Arbutus+Slab&family=Grenze:wght@400;700&family=Grenze+Gotisch:wght@500;700&family=Kings&family=Yellowtail&family=Fondamento&family=Eagle+Lake&family=Oldenburg&family=Caudex:wght@400;700&family=Sail&family=Federo&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Batch 4 — extra distinctive / quirky / futuristic -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Offside&family=Wendy+One&family=Paytone+One&family=Changa:wght@500;700&family=Saira+Stencil+One&family=Tourney:wght@500;800&family=Sixtyfour&family=Workbench&family=Nabla&family=Bonbon&family=Silkscreen:wght@400;700&family=VT323&family=Press+Start+2P&family=DotGothic16&family=Pixelify+Sans:wght@500;700&family=Handjet:wght@500;700&family=Jersey+25&family=Jersey+10&family=Micro+5&family=Edu+NSW+ACT+Cursive:wght@700&family=Federant&family=Frijole&family=Bahianita&family=Rubik+Glitch&family=Rubik+Iso&family=Rubik+Wet+Paint&family=Rubik+Burned&family=Rubik+Maze&family=Rubik+Puddles&family=Rubik+Vinyl&family=Rubik+Microbe&family=Rubik+Distressed&family=Rubik+Marker+Hatch&family=Moirai+One&family=Bytesized&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --pink: #ff2e9a;
+        --mid: #b54bd0;
+        --cyan: #16c2ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        padding: 40px 48px 80px;
+        transition: background 0.25s, color 0.25s;
+      }
+      body[data-theme="dark"] {
+        background: radial-gradient(120% 120% at 30% 10%, #15131f 0%, #0a0a0f 60%, #050507 100%);
+        color: #e6e6ef;
+      }
+      body[data-theme="light"] {
+        background: radial-gradient(120% 120% at 30% 10%, #ffffff 0%, #f1f1f5 70%, #e7e7ee 100%);
+        color: #2a2a33;
+      }
+      body[data-theme="art"] {
+        background: radial-gradient(120% 120% at 25% 10%, #2a0a3d 0%, #140a28 55%, #0a0512 100%);
+        color: #f0e6ff;
+      }
+
+      header { max-width: 1100px; margin: 0 auto 28px; }
+      h1 { font-weight: 600; letter-spacing: -0.02em; margin: 0 0 4px; font-size: 26px; }
+      .sub { opacity: 0.6; margin-bottom: 22px; font-size: 14px; line-height: 1.5; }
+
+      .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      .controls .group { display: flex; gap: 8px; }
+      .controls button {
+        font: inherit; font-size: 13px; cursor: pointer;
+        padding: 7px 16px; border-radius: 999px;
+        border: 1px solid currentColor; background: transparent; color: inherit; opacity: 0.5;
+      }
+      .controls button.active { opacity: 1; font-weight: 600; }
+      .spacer { flex: 1; }
+
+      .grid {
+        max-width: 1100px; margin: 0 auto;
+        display: grid; grid-template-columns: 1fr; gap: 16px;
+      }
+      .card {
+        border-radius: 16px;
+        padding: 26px 30px 18px;
+        transition: background 0.25s, border-color 0.25s;
+        position: relative;
+        overflow: hidden;
+      }
+      body[data-theme="dark"] .card {
+        background: radial-gradient(90% 120% at 50% 30%, #14121d 0%, #0b0b11 70%, #08080c 100%);
+        border: 1px solid #1c1c28;
+      }
+      body[data-theme="light"] .card {
+        background: #ffffff; border: 1px solid #e2e2ea;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      }
+      body[data-theme="art"] .card {
+        background: radial-gradient(90% 120% at 50% 30%, #221038 0%, #160a28 70%, #0e0620 100%);
+        border: 1px solid #3a1f55;
+      }
+
+      .cardhead {
+        display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+      }
+      .fontname {
+        font-size: 11px; opacity: 0.5; text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+      .like {
+        margin-left: auto;
+        display: inline-flex; align-items: center; gap: 7px;
+        font-size: 12px; cursor: pointer; user-select: none;
+        opacity: 0.55; transition: opacity 0.15s;
+      }
+      .like:hover { opacity: 0.9; }
+      .like input { width: 16px; height: 16px; accent-color: var(--pink); cursor: pointer; }
+      /* liked cards get a subtle pink rim */
+      .card.liked { border-color: var(--pink) !important; }
+      .card.liked .like { opacity: 1; color: var(--pink); }
+      /* "show only liked" mode hides the rest */
+      body.liked-only .card:not(.liked) { display: none; }
+
+      /* Two columns: hero (left) + sidebar size (right), hugging their content */
+      .sizes {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 48px;
+      }
+      .sizecol { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+      .sizecol.left { flex: 0 1 auto; min-width: 0; }
+      .sizecol.right { flex: 0 0 auto; }
+      .sizelabel {
+        font-size: 10px; opacity: 0.4; text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+      .divider { width: 1px; align-self: stretch; }
+      body[data-theme="dark"] .divider { background: #1c1c28; }
+      body[data-theme="light"] .divider { background: #e2e2ea; }
+      body[data-theme="art"] .divider { background: #3a1f55; }
+
+      .mark {
+        line-height: 1.15;
+        font-weight: 700;
+        background-image: linear-gradient(105deg, var(--pink) 0%, var(--mid) 50%, var(--cyan) 100%);
+        background-size: 100% 100%;
+        background-repeat: no-repeat;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        color: transparent;
+        white-space: nowrap;
+        display: block;
+        width: fit-content;     /* hug the text so the gradient maps to the glyphs */
+        max-width: 100%;
+        padding-bottom: 6px;    /* descenders / glow room */
+      }
+      .mark.hero    { font-size: 72px; }   /* chat-panel empty-state hero */
+      .mark.sidebar { font-size: 40px; }   /* sidebar size */
+
+      /* ---- motion treatments (toggle on) ---- */
+      body.motion .mark {
+        background-size: 220% 100%;
+        animation: drift 6s ease-in-out infinite alternate;
+      }
+      @keyframes drift {
+        0%   { background-position: 0% 50%; }
+        100% { background-position: 100% 50%; }
+      }
+      /* a soft shimmer sweep across the letters */
+      body.motion .card::after {
+        content: "";
+        position: absolute; inset: 0;
+        background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.10) 50%, transparent 60%);
+        transform: translateX(-100%);
+        animation: sweep 5.5s ease-in-out infinite;
+        pointer-events: none;
+      }
+      @keyframes sweep {
+        0%, 60% { transform: translateX(-100%); }
+        100%    { transform: translateX(100%); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        body.motion .mark { animation: none; }
+        body.motion .card::after { animation: none; }
+      }
+    </style>
+  </head>
+  <body data-theme="dark">
+    <header>
+      <h1>Aether — Wordmark Font Explorations</h1>
+      <div class="sub">
+        "Aether" in the pink→cyan gradient (no blur — solid, crisp). Modern / futuristic /
+        ethereal Google faces that suit the concept. Flip the theme to see how each survives on
+        light &amp; art. Toggle <b>Motion</b> for a slow gradient drift + shimmer sweep.
+      </div>
+      <div class="controls">
+        <div class="group">
+          <button data-theme-set="dark" class="active">Dark</button>
+          <button data-theme-set="light">Light</button>
+          <button data-theme-set="art">Art</button>
+        </div>
+        <div class="spacer"></div>
+        <div class="group">
+          <button id="likedBtn">Show only liked</button>
+          <button id="motionBtn">Motion: off</button>
+          <button id="caseBtn">Case: Aether</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="grid" id="grid"></div>
+
+    <script>
+      // Curated modern faces, grouped loosely by feel. Each: [family, note].
+      const FONTS = [
+        // — geometric / sci-fi —
+        ["Orbitron", "geometric sci-fi, the genre standard"],
+        ["Michroma", "wide techno, even rhythm"],
+        ["Audiowide", "rounded retro-futuristic"],
+        ["Syncopate", "ultra-wide fashion/tech"],
+        ["Quantico", "military-tech, squared"],
+        ["Nova Square", "blocky squared geometric"],
+        ["Zen Dots", "rounded chunky futuristic"],
+        ["Bruno Ace", "sharp angular display"],
+        ["Bruno Ace SC", "small-caps angular variant"],
+        ["Anta", "clean wide geometric, very current"],
+        ["Tektur", "condensed techy, variable"],
+        // — neon / outline / tube —
+        ["Monoton", "double-tube neon (current pick)"],
+        ["Wallpoet", "stencil tube, arcade"],
+        ["Megrim", "thin geometric line, ethereal"],
+        ["Goldman", "bold neon-sign slab"],
+        // — mono / dot / digital —
+        ["Major Mono Display", "lowercase mono, delicate"],
+        ["Doto", "dot-matrix, variable weight"],
+        ["Electrolize", "thin digital readout"],
+        ["Iceland", "LCD / panel display"],
+        ["Unica One", "condensed uppercase display"],
+        ["Stalinist One", "ultra-heavy slab, brutal"],
+        // — clean modern sans (softer, brandable) —
+        ["Space Grotesk", "modern grotesk, the app's UI face"],
+        ["Sora", "geometric humanist, friendly"],
+        ["Exo 2", "rounded techy sans, versatile"],
+        ["Rajdhani", "condensed sci-fi sans"],
+        ["Chakra Petch", "industrial squared sans"],
+        ["Saira", "tall modern sans"],
+        ["Saira Condensed", "narrow modern sans"],
+        ["Tomorrow", "geometric editorial sans"],
+        ["Aldrich", "engineered monoline sans"],
+        ["Kanit", "loud condensed display sans"],
+
+        // ───────────────────────── batch 2 ─────────────────────────
+        // — more geometric / techno / sci-fi —
+        ["Russo One", "heavy rounded techno"],
+        ["Teko", "tall condensed display"],
+        ["Oxanium", "rounded gaming/tech, variable"],
+        ["Jura", "humanist techy sans"],
+        ["Play", "clean rounded techno"],
+        ["Khand", "condensed Indian-tech sans"],
+        ["Sarpanch", "squared heavy display"],
+        ["Gemunu Libre", "light geometric, airy"],
+        ["Geo", "rounded retro geometric"],
+        ["Krona One", "wide industrial display"],
+        ["Black Ops One", "stencil military"],
+        ["Faster One", "extreme italic speed display"],
+        // — chunky / arcade / signage —
+        ["Bungee", "vertical-stack signage"],
+        ["Bungee Shade", "3D-shadow signage"],
+        ["Bungee Inline", "inline-outline signage"],
+        ["Wavefont", "waveform bars, very motiony"],
+        ["Codystar", "dotted marquee bulbs"],
+        ["Gugi", "blocky Korean-tech display"],
+        ["Kelly Slab", "slab industrial"],
+        ["Astloch", "blackletter (wildcard)"],
+        ["Pirata One", "blackletter (wildcard)"],
+        ["Gruppo", "ultra-thin geometric, ethereal"],
+        // — clean modern sans (brandable) —
+        ["Spartan", "geometric all-caps grotesk"],
+        ["Lexend", "readable modern sans"],
+        ["Lexend Mega", "wide tracked sans"],
+        ["Lexend Zetta", "extra-wide tracked sans"],
+        ["Manrope", "balanced modern sans"],
+        ["Outfit", "geometric clean sans"],
+        ["Urbanist", "low-contrast geometric sans"],
+        ["Familjen Grotesk", "warm grotesk"],
+        ["Hanken Grotesk", "neutral modern grotesk"],
+        ["Schibsted Grotesk", "editorial grotesk"],
+        ["Onest", "clean contemporary sans"],
+        ["Geist", "Vercel's geometric sans"],
+
+        // ───────────────────────── batch 3 ─────────────────────────
+        // — mono / code faces —
+        ["Space Mono", "retro-future monospace"],
+        ["JetBrains Mono", "dev mono, technical"],
+        ["IBM Plex Mono", "corporate mono"],
+        ["Fira Code", "ligature mono"],
+        ["Red Hat Mono", "clean mono"],
+        ["Martian Mono", "wide squared mono"],
+        ["Spline Sans Mono", "rounded mono"],
+        ["DM Mono", "geometric mono"],
+        ["Azeret Mono", "quirky mono"],
+        ["Syne Mono", "arty mono"],
+        // — bold / arty display —
+        ["Syne", "arty extended display"],
+        ["Unbounded", "huge rounded display, current"],
+        ["Climate Crisis", "variable melting display"],
+        ["Big Shoulders Display", "tall industrial"],
+        ["Big Shoulders Inline Display", "inline industrial"],
+        ["Big Shoulders Stencil Display", "stencil industrial"],
+        ["Stardos Stencil", "spray stencil"],
+        ["Sancreek", "decorative western (wildcard)"],
+        ["Rationale", "thin geometric, calm"],
+        ["Smooch Sans", "tall light condensed"],
+        ["Six Caps", "ultra-condensed caps"],
+        ["Fjalla One", "condensed display"],
+        ["Anton", "heavy condensed staple"],
+        ["Archivo Black", "fat grotesk"],
+        // — refined modern sans —
+        ["Archivo", "grotesk workhorse"],
+        ["Chivo", "neutral grotesk"],
+        ["Red Hat Display", "branding sans"],
+        ["DM Sans", "low-contrast geometric"],
+        ["Epilogue", "variable modern sans"],
+        ["Hubot Sans", "GitHub's expressive sans"],
+        ["Mona Sans", "GitHub's workhorse sans"],
+        ["Albert Sans", "geometric grotesk"],
+        ["Spline Sans", "soft modern sans"],
+        ["Bricolage Grotesque", "characterful grotesk"],
+        ["Instrument Sans", "compact modern sans"],
+
+        // ───────────────────────── batch 4 ─────────────────────────
+        // — quirky / experimental display —
+        ["Offside", "tilted geometric"],
+        ["Wendy One", "rounded chunky"],
+        ["Paytone One", "bold rounded poster"],
+        ["Changa", "geometric Arabic-Latin"],
+        ["Saira Stencil One", "stencil tech"],
+        ["Tourney", "variable squarish display, motiony"],
+        ["Sixtyfour", "variable 8-bit 3D, very current"],
+        ["Workbench", "variable engineering display"],
+        ["Nabla", "variable color-font chrome"],
+        ["Bonbon", "wild handwritten (wildcard)"],
+        // — pixel / dot / LCD / retro-game —
+        ["Silkscreen", "crisp pixel font"],
+        ["VT323", "CRT terminal mono"],
+        ["Press Start 2P", "8-bit arcade"],
+        ["DotGothic16", "dot-matrix gothic"],
+        ["Pixelify Sans", "soft pixel sans"],
+        ["Handjet", "variable dot/segment, very motiony"],
+        ["Jersey 25", "dotted jersey display"],
+        ["Jersey 10", "fine pixel jersey"],
+        ["Micro 5", "5px micro pixel"],
+        ["Bytesized", "thin pixel outline"],
+        ["Moirai One", "outline glitch display"],
+        // — glitch / textured Rubik family —
+        ["Rubik Glitch", "datamosh glitch"],
+        ["Rubik Iso", "isometric 3D"],
+        ["Rubik Wet Paint", "dripping paint"],
+        ["Rubik Burned", "scorched edges"],
+        ["Rubik Maze", "maze-fill"],
+        ["Rubik Puddles", "melting puddles"],
+        ["Rubik Vinyl", "cut-vinyl"],
+        ["Rubik Microbe", "organic blobs"],
+        ["Rubik Distressed", "rough distressed"],
+        ["Rubik Marker Hatch", "sketch hatch"],
+        // — misc wildcards —
+        ["Federant", "ornate display (wildcard)"],
+        ["Frijole", "shadowed western (wildcard)"],
+        ["Bahianita", "decorative festive (wildcard)"],
+
+        // ──────────────── batch 5 — serif / blackletter / script (user picks) ────────────────
+        ["Arbutus Slab", "soft slab serif"],
+        ["Grenze", "contrast transitional serif"],
+        ["Grenze Gotisch", "modern blackletter serif"],
+        ["Kings", "elegant calligraphic script"],
+        ["Yellowtail", "flowing brush script"],
+        ["Fondamento", "calligraphic italic serif"],
+        ["Eagle Lake", "ornate handwritten serif"],
+        ["Oldenburg", "quirky engraved display"],
+        ["Caudex", "classical book serif"],
+        ["Sail", "thin decorative swash"],
+        ["Federo", "humanist art-nouveau sans"],
+      ];
+
+      const grid = document.getElementById("grid");
+      let word = "Aether";
+
+      // ── liked set, persisted to localStorage ──
+      const LIKE_KEY = "aether-liked-fonts";
+      const liked = new Set(
+        JSON.parse(localStorage.getItem(LIKE_KEY) || "[]"),
+      );
+      function saveLiked() {
+        localStorage.setItem(LIKE_KEY, JSON.stringify([...liked]));
+      }
+
+      function makeMark(family, sizeClass) {
+        const m = document.createElement("div");
+        m.className = "mark " + sizeClass;
+        m.style.fontFamily = `'${family}', ui-sans-serif, system-ui, sans-serif`;
+        m.textContent = word;
+        return m;
+      }
+
+      function makeCol(label, mark, side) {
+        const col = document.createElement("div");
+        col.className = "sizecol " + side;
+        const lbl = document.createElement("div");
+        lbl.className = "sizelabel";
+        lbl.textContent = label;
+        col.append(lbl, mark);
+        return col;
+      }
+
+      function render() {
+        grid.innerHTML = "";
+        for (const [family, note] of FONTS) {
+          const card = document.createElement("div");
+          card.className = "card";
+          if (liked.has(family)) card.classList.add("liked");
+
+          // header row: font name + like checkbox
+          const head = document.createElement("div");
+          head.className = "cardhead";
+
+          const name = document.createElement("div");
+          name.className = "fontname";
+          name.textContent = family + " — " + note;
+
+          const likeLabel = document.createElement("label");
+          likeLabel.className = "like";
+          const box = document.createElement("input");
+          box.type = "checkbox";
+          box.checked = liked.has(family);
+          const likeText = document.createElement("span");
+          likeText.textContent = "Like";
+          box.addEventListener("change", () => {
+            if (box.checked) liked.add(family);
+            else liked.delete(family);
+            card.classList.toggle("liked", box.checked);
+            saveLiked();
+          });
+          likeLabel.append(box, likeText);
+          head.append(name, likeLabel);
+
+          const sizes = document.createElement("div");
+          sizes.className = "sizes";
+          const divider = document.createElement("div");
+          divider.className = "divider";
+          sizes.append(
+            makeCol("Hero — 72px", makeMark(family, "hero"), "left"),
+            divider,
+            makeCol("Sidebar — 40px", makeMark(family, "sidebar"), "right"),
+          );
+
+          card.append(head, sizes);
+          grid.append(card);
+        }
+      }
+      render();
+
+      // theme toggle
+      for (const btn of document.querySelectorAll("[data-theme-set]")) {
+        btn.addEventListener("click", () => {
+          document.body.dataset.theme = btn.dataset.themeSet;
+          for (const b of document.querySelectorAll("[data-theme-set]"))
+            b.classList.toggle("active", b === btn);
+        });
+      }
+
+      // motion toggle
+      const motionBtn = document.getElementById("motionBtn");
+      motionBtn.addEventListener("click", () => {
+        const on = document.body.classList.toggle("motion");
+        motionBtn.textContent = "Motion: " + (on ? "on" : "off");
+        motionBtn.classList.toggle("active", on);
+      });
+
+      // show-only-liked filter (pure CSS via body class — no re-render)
+      const likedBtn = document.getElementById("likedBtn");
+      likedBtn.addEventListener("click", () => {
+        const on = document.body.classList.toggle("liked-only");
+        likedBtn.textContent = on ? "Show all" : "Show only liked";
+        likedBtn.classList.toggle("active", on);
+      });
+
+      // case toggle: Aether / AETHER / aether
+      const caseBtn = document.getElementById("caseBtn");
+      const cases = ["Aether", "AETHER", "aether"];
+      let ci = 0;
+      caseBtn.addEventListener("click", () => {
+        ci = (ci + 1) % cases.length;
+        word = cases[ci];
+        caseBtn.textContent = "Case: " + word;
+        render();
+      });
+    </script>
+  </body>
+</html>
