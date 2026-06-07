@@ -48,7 +48,9 @@ export async function apiFetch<T>(
     const body = await res.text().catch(() => "");
     throw new ApiError(path, res.status, body);
   }
-  // Some endpoints (e.g. DELETE) may return no body.
+  // Every backend endpoint currently returns a JSON body (writes reply `{ ok: true }`),
+  // but tolerate an empty body defensively so a future 204/no-content response can't
+  // throw on JSON.parse("").
   const text = await res.text();
   return (text ? JSON.parse(text) : undefined) as T;
 }

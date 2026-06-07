@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { apiFetch } from "../lib/queryClient";
 
 export interface Session {
@@ -33,8 +34,12 @@ export function useSessionList(userId: string): UseSessionListResult {
 
   // Kept for API compatibility — callers that want an explicit re-sync can call
   // this; mutations generally invalidate sessionsKey(userId) directly instead.
-  const refresh = () =>
-    queryClient.invalidateQueries({ queryKey: sessionsKey(userId) });
+  // Memoized so its identity is honestly stable for consumers that hold it
+  // (e.g. useChat's SSE callbacks) rather than relying on them to ref it.
+  const refresh = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: sessionsKey(userId) }),
+    [queryClient, userId]
+  );
 
   return { sessions: data ?? [], refresh };
 }

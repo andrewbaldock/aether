@@ -3,7 +3,7 @@
 Every dependency in Aether, what it does, and why it was chosen. **Keep this current:** when a
 commit adds, removes, or upgrades a dependency, update this file in the same commit.
 
-Last updated: agent loop + tools.
+Last updated: TanStack Query data layer + knowledge-graph widget.
 
 ---
 
@@ -26,10 +26,15 @@ source. See [ARCHITECTURE.md](./ARCHITECTURE.md#two-runtimes).
 | Package | Version | What it does | Why chosen |
 |---------|---------|--------------|-----------|
 | `react` / `react-dom` | ^19.2.6 | UI library | The view layer; the chat interface and all rendered answers (charts, graphs, 3D) are React components. |
+| `@tanstack/react-query` | ^5.101.0 | Server-state / caching | The data layer for every non-streaming `/api` call. One `QueryClient` + `apiFetch` (`src/lib/queryClient.ts`); reads are queries, writes are mutations that invalidate `sessionsKey(userId)`. Retries ride out Fly cold-start 502s. Replaced a hand-rolled module-level cache. |
+| `@tanstack/react-query-devtools` | ^5.101.0 | Query devtools panel | Inspect cache/query state in dev. Rendered headless via `QueryDevtoolsToggle`. |
 | `tailwindcss` | ^4.3.0 | Utility-first CSS | Styling via composable utility classes in markup — no per-component stylesheets, no leaking. v4 uses a Vite plugin (no PostCSS). |
 | `react-markdown` | ^10.x | Markdown renderer | Renders assistant messages as rich text. Used with `remark-gfm` for tables, strikethrough, task lists. |
 | `remark-gfm` | ^4.x | GitHub Flavored Markdown plugin | Extends `react-markdown` with GFM syntax. |
-| `@supabase/supabase-js` | ^2.106.2 | Supabase client | Installed now, unused until the persistence milestone. |
+| `react-resizable-panels` | ^4.11.2 | Resizable/collapsible panel groups | Powers the three-zone shell (sidebar / chat / capability column). **Unit trap — see [ARCHITECTURE.md](./ARCHITECTURE.md#the-shell--three-zone-layout).** |
+| `d3-force` / `d3-selection` / `d3-zoom` | ^3.x | Force layout + SVG selection + pan/zoom | The knowledge-graph widget: force-directed node layout rendered to SVG with pan/zoom. |
+| `lucide-react` | ^1.17.0 | Icon set | UI glyphs across the shell. |
+| `@supabase/supabase-js` | ^2.106.2 | Supabase client | Persistence — session + message history. |
 
 ### Dev dependencies
 
@@ -42,6 +47,11 @@ source. See [ARCHITECTURE.md](./ARCHITECTURE.md#two-runtimes).
 | `typescript` | ^6.0.3 | Type checker | Strict mode (`verbatimModuleSyntax`, `noUncheckedIndexedAccess`). |
 | `@types/react`, `@types/react-dom` | ^19.2.x | React type defs | Types for React 19. |
 | `@types/node` | ^22.x | Node type defs | Required by `tsconfig.node.json` (which types `vite.config.ts` under Node libs). Without it `bun run build` fails. |
+| `@types/d3-force`, `@types/d3-selection`, `@types/d3-zoom` | ^3.x | d3 type defs | Types for the knowledge-graph widget's d3 modules. |
+| `vitest` | ^4.1.8 | Test runner | Unit/hook tests. Run with `bunx vitest run` (the `test` script is bare `vitest`, i.e. watch mode). Uses the `jsdom` environment. |
+| `@testing-library/react` | ^16.3.2 | React testing utils | `renderHook`/`render` for hook + component tests. |
+| `@testing-library/user-event` | ^14.6.1 | User-interaction simulation | Realistic event firing in tests. |
+| `jsdom` | ^29.x | DOM in Node | The vitest `environment` so React renders without a browser. |
 
 ### TypeScript config layout
 
@@ -96,12 +106,13 @@ Added in later commits — listed so the trajectory is clear. Versions are curre
 
 - **@tanstack/react-router** — type-safe client-side routing (chat view, saved views). Chosen
   over react-router for its type safety and tight integration with TanStack Query.
-- **@tanstack/react-query** (v5) — server-state/caching (M6 persistence)
 - **plotly.js** (v3) + **react-plotly.js** (v2) — chart widgets (~M6)
 - **cytoscape** (v3) — relationship graph view (M8)
 - **@3dverse/livelink-react** (v0.2.x, pre-1.0) — 3D scenes (M7)
-- **vitest** (v4) — testing (M10)
 - **react-error-boundary** (v6) — one bad widget can't crash the UI
-- **Supabase (cloud Postgres)** — managed DB, JSONB for widget specs + saved views (M9)
+
+Already shipped (moved out of this list, now in the tables above): **@tanstack/react-query** +
+devtools (data layer), **vitest** + testing-library + jsdom (tests), **d3-force/selection/zoom**
+(knowledge-graph widget), **react-resizable-panels** (shell), **Supabase** (session persistence).
 
 Deploy targets: Vercel (frontend) + Fly.io (backend), both free tiers. No Docker.
