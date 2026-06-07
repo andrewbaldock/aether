@@ -101,7 +101,7 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
 
       <div className="px-4 pb-3 pt-2 text-center">
         <a
-          href="https://andrewbaldock.com"
+          href={import.meta.env.DEV ? "http://localhost:5173" : "https://andrewbaldock.com"}
           target="_blank"
           rel="noreferrer"
           className="text-xs text-content-faint transition-colors hover:text-content-muted"

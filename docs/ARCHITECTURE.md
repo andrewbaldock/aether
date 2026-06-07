@@ -3,7 +3,7 @@
 How Aether fits together. **Keep this current:** update it in the same commit that changes how
 the pieces connect.
 
-Last updated: persistence (Supabase, session history).
+Last updated: TanStack Query data layer (reads-as-queries, writes-as-mutations).
 
 ---
 
@@ -88,13 +88,20 @@ needed in dev — the proxy makes the API look same-origin.
 ## The backend (`/api/chat`)
 
 The backend is a Hono server (`backend/src/index.ts`) served by **bun's native server**
-(`export default { port, fetch }` — no `@hono/node-server`). Two routes today:
+(`export default { port, fetch }` — no `@hono/node-server`). Routes today:
 
 - `GET /api/health` → `{ ok: true }` — liveness, works before any API key is set.
+- `GET /api/models` → `{ models }` — the selectable model list for the picker.
 - `POST /api/chat` — one chat turn, streamed as SSE.
 - `POST /api/sessions` — create a new session; returns `{ id }`.
 - `GET /api/sessions?userId=...` — list sessions for a user (most-recent-first).
+- `PATCH /api/sessions/:id` — patch a session row (`title`, `graph_mode`, `model`); returns `{ ok: true }`.
+- `DELETE /api/sessions/:id` — delete a session; returns `{ ok: true }`.
 - `GET /api/sessions/:id/messages` — load the full message history for a session.
+- `GET /api/sessions/:id/graph` / `PUT /api/sessions/:id/graph` — load / save the knowledge graph.
+
+Note: writes return a JSON body (`{ ok: true }`), not an empty 204 — the frontend's `apiFetch`
+tolerates an empty body defensively but no endpoint currently sends one.
 
 ```
 request   {
@@ -130,6 +137,30 @@ an `executeTool` dispatcher) and passed to `createClaudeClient` at construction 
 On the frontend, the stream reader lives in `frontend/src/shell/useChat.ts`; message state is
 lifted into `SessionContext` so both `ChatPanel` and `Sidebar` share it. `ChatPanel.tsx` is just
 the view.
+
+---
+
+## The data layer — TanStack Query (`frontend/src/lib/queryClient.ts`)
+
+Every **non-streaming** `/api` call goes through one `QueryClient` and one `apiFetch`. (Chat is
+the exception — it's SSE, read directly in `useChat.ts`.) The shape:
+
+- **One `apiFetch`** — the only place `fetch` is called. Throws a typed `ApiError` on non-ok,
+  distinguishes network failures, and centralizes retry/backoff. Retries network + 5xx (so a Fly
+  cold-start 502 resolves on its own) but never 4xx; backoff caps at 8s.
+- **Reads are queries.** `useSessionList` (`sessionsKey(userId)`), `useHealth`, graph load.
+  `sessionsKey(userId)` is the exported cache-key factory so any hook can target the same cache.
+- **Writes are mutations** that **optimistically update then invalidate** `sessionsKey(userId)`.
+  `useUpdateSession` applies the patch to the cached row in `onMutate` (so model/graph-mode
+  toggles flip instantly instead of lagging a PATCH round-trip), rolls back in `onError`, and
+  re-syncs in `onSettled`. Its `patch` is typed `Partial<Session>` so a snake_case key typo fails
+  to compile.
+- **Self-diagnostics.** The query/mutation caches' `onError` turn a raw `HTTP 502` into a
+  plain-English, environment-aware reason (dev vs. prod, where `/api` points). A startup banner
+  logs the mode + API target on every reload.
+
+This replaced a hand-rolled module-level cache + in-flight-promise singleton in the old model
+picker — TanStack's request dedup (`staleTime`) does that job natively.
 
 ---
 
