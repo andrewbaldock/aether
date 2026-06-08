@@ -3,6 +3,7 @@ import {
   forceCollide,
   forceLink,
   forceManyBody,
+  forceRadial,
   forceSimulation,
   type Simulation,
 } from "d3-force";
@@ -104,6 +105,20 @@ export function ForceGraph({
   // (re)heat the sim. Keeps existing nodes' positions; seeds new ones near centre.
   // Restored nodes arrive with saved x/y (and maybe fx/fy) — honour those.
   useEffect(() => {
+    // Compute centroid of existing positioned nodes so new arrivals spawn near
+    // the current cluster rather than the static viewport centre.
+    const positioned = simNodes.current.filter(
+      (n) => n.x != null && n.y != null
+    );
+    const cx =
+      positioned.length > 0
+        ? positioned.reduce((s, n) => s + (n.x ?? 0), 0) / positioned.length
+        : VIEW_W / 2;
+    const cy =
+      positioned.length > 0
+        ? positioned.reduce((s, n) => s + (n.y ?? 0), 0) / positioned.length
+        : VIEW_H / 2;
+
     const byId = new Map(simNodes.current.map((n) => [n.id, n]));
     simNodes.current = nodes.map((n) => {
       const existing = byId.get(n.id);
@@ -112,14 +127,40 @@ export function ForceGraph({
         // pin/unpin from the provider takes effect).
         return Object.assign(existing, n);
       }
-      // Use a saved position if present (restore), else seed near centre.
+      // Use a saved position if present (restore), else seed near cluster centroid.
       return {
         ...n,
-        x: n.x ?? VIEW_W / 2 + (Math.random() - 0.5) * 40,
-        y: n.y ?? VIEW_H / 2 + (Math.random() - 0.5) * 40,
+        x: n.x ?? cx + (Math.random() - 0.5) * 40,
+        y: n.y ?? cy + (Math.random() - 0.5) * 40,
       };
     });
     simLinks.current = links.map((l) => ({ ...l }));
+
+    // Radial force that pulls orphan nodes (no edges) toward the graph centroid.
+    // Recomputed each reconcile so the target tracks the evolving cluster.
+    function updateOrphanForce(sim: Simulation<GraphNode, GraphLink>) {
+      const linkedIds = new Set<string>();
+      for (const l of simLinks.current) {
+        linkedIds.add(typeof l.source === "string" ? l.source : l.source.id);
+        linkedIds.add(typeof l.target === "string" ? l.target : l.target.id);
+      }
+      const lx =
+        simNodes.current.length > 0
+          ? simNodes.current.reduce((s, n) => s + (n.x ?? 0), 0) /
+            simNodes.current.length
+          : VIEW_W / 2;
+      const ly =
+        simNodes.current.length > 0
+          ? simNodes.current.reduce((s, n) => s + (n.y ?? 0), 0) /
+            simNodes.current.length
+          : VIEW_H / 2;
+      sim.force(
+        "orphan",
+        forceRadial<GraphNode>(0, lx, ly).strength((n) =>
+          linkedIds.has(n.id) ? 0 : 0.08
+        )
+      );
+    }
 
     let sim = simRef.current;
     if (!sim) {
@@ -145,6 +186,7 @@ export function ForceGraph({
       >;
       linkForce.links(simLinks.current);
     }
+    updateOrphanForce(sim);
     sim.alpha(0.8).restart();
   }, [nodes, links, reportPositions]);
 

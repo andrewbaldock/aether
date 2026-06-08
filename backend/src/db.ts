@@ -69,6 +69,16 @@ export async function createSession(
   return { id: data.id };
 }
 
+export async function getSession(sessionId: string): Promise<Session | null> {
+  const { data, error } = await getDb()
+    .from("sessions")
+    .select("*")
+    .eq("id", sessionId)
+    .single();
+  if (error) throw new Error(`getSession: ${error.message}`);
+  return data ?? null;
+}
+
 export async function listSessions(userId: string): Promise<Session[]> {
   const { data, error } = await getDb()
     .from("sessions")
@@ -172,6 +182,59 @@ export async function updateSessionGraphData(
     .update({ graph_data: graphData, updated_at: new Date().toISOString() })
     .eq("id", sessionId);
   if (error) throw new Error(`updateSessionGraphData: ${error.message}`);
+}
+
+export async function forkSession(
+  sourceId: string,
+  newUserId: string
+): Promise<{ id: string }> {
+  const db = getDb();
+  // Read source session and its messages in parallel.
+  const [sessionResult, messagesResult] = await Promise.all([
+    db.from("sessions").select("*").eq("id", sourceId).single(),
+    db
+      .from("messages")
+      .select("*")
+      .eq("session_id", sourceId)
+      .order("created_at", { ascending: true }),
+  ]);
+  if (sessionResult.error)
+    throw new Error(`forkSession (read): ${sessionResult.error.message}`);
+  if (messagesResult.error)
+    throw new Error(`forkSession (messages): ${messagesResult.error.message}`);
+
+  const source = sessionResult.data as Session;
+
+  // Create the new session owned by newUserId, copying metadata.
+  const { data: newSession, error: createError } = await db
+    .from("sessions")
+    .insert({
+      user_id: newUserId,
+      title: source.title,
+      graph_mode: source.graph_mode,
+      graph_data: source.graph_data,
+      model: source.model,
+    })
+    .select("id")
+    .single();
+  if (createError)
+    throw new Error(`forkSession (create): ${createError.message}`);
+
+  // Copy messages into the new session (preserve role + content; new ids/timestamps).
+  const msgs = (messagesResult.data ?? []) as DbMessage[];
+  if (msgs.length > 0) {
+    const { error: msgError } = await db.from("messages").insert(
+      msgs.map((m) => ({
+        session_id: newSession.id,
+        role: m.role,
+        content: m.content,
+      }))
+    );
+    if (msgError)
+      throw new Error(`forkSession (copy messages): ${msgError.message}`);
+  }
+
+  return { id: newSession.id };
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {

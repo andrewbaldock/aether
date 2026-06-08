@@ -3,8 +3,10 @@ import { streamSSE } from "hono/streaming";
 import {
   createSession,
   deleteSession,
+  forkSession,
   type GraphSnapshot,
   getMessages,
+  getSession,
   getSessionGraph,
   listSessions,
   saveMessage,
@@ -61,6 +63,39 @@ app.get("/api/sessions", async (c) => {
   } catch (err) {
     console.error("GET /api/sessions failed:", err);
     return c.json({ error: "Failed to list sessions" }, 500);
+  }
+});
+
+app.post("/api/sessions/:id/fork", async (c) => {
+  const sourceId = c.req.param("id");
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Request body must be JSON" }, 400);
+  }
+  const userId = (body as { userId?: unknown }).userId;
+  if (typeof userId !== "string" || !userId) {
+    return c.json({ error: "Expected { userId: string }" }, 400);
+  }
+  try {
+    const fork = await forkSession(sourceId, userId);
+    return c.json(fork);
+  } catch (err) {
+    console.error("POST /api/sessions/:id/fork failed:", err);
+    return c.json({ error: "Failed to fork session" }, 500);
+  }
+});
+
+app.get("/api/sessions/:id", async (c) => {
+  const id = c.req.param("id");
+  try {
+    const session = await getSession(id);
+    if (!session) return c.json({ error: "Session not found" }, 404);
+    return c.json(session);
+  } catch (err) {
+    console.error("GET /api/sessions/:id failed:", err);
+    return c.json({ error: "Failed to load session" }, 500);
   }
 });
 
