@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import type OpenAI from "openai";
 
 export type ToolDefinition = Anthropic.Messages.Tool;
 
@@ -148,6 +149,24 @@ export function buildTools(opts: { graphMode: boolean }): ToolDefinition[] {
   return opts.graphMode
     ? [...BASE_TOOLS, BUILD_KNOWLEDGE_GRAPH_TOOL]
     : BASE_TOOLS;
+}
+
+// Translate our tool definitions (Anthropic's {name, description, input_schema})
+// into OpenAI's function-tool envelope. The JSON Schema body is identical between
+// the two formats — only the wrapper differs — so input_schema passes through as
+// `parameters` untouched. Used by the OpenAI-compatible client (Gemini / DeepSeek
+// / Mistral) so all providers share one tool vocabulary and one executeTool().
+export function toOpenAITools(
+  tools: ToolDefinition[]
+): OpenAI.Chat.Completions.ChatCompletionTool[] {
+  return tools.map((t) => ({
+    type: "function",
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.input_schema as Record<string, unknown>,
+    },
+  }));
 }
 
 export function executeTool(name: string, input: unknown): string {

@@ -2,11 +2,25 @@ import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "../lib/queryClient";
 import { Tooltip } from "./Tooltip";
 
+// Mirrors the backend ModelOption (src/models.ts). `provider` tags which service
+// owns the model so the picker can group them; the wire contract is unchanged —
+// we still send/persist a single provider-qualified model id.
+export type Provider = "claude" | "google" | "deepseek" | "mistral";
+
 export interface ModelOption {
   id: string;
+  provider: Provider;
   label: string;
   blurb: string;
 }
+
+// Human-readable group headers, and the order groups appear in. Anthropic first.
+const PROVIDER_LABELS: Record<Provider, string> = {
+  claude: "Anthropic",
+  google: "Google",
+  deepseek: "DeepSeek",
+  mistral: "Mistral",
+};
 
 // The allowlist never changes within a session, so a long staleTime keeps it
 // cached app-wide; TanStack dedups the fetch across every mounted picker.
@@ -42,19 +56,38 @@ export function ModelPicker({ value, onChange, disabled }: ModelPickerProps) {
   // default), so the control always reflects what a turn would actually use.
   const selected = value ?? models[0]?.id;
 
+  // Group models under their provider for <optgroup> headers, in PROVIDER_LABELS
+  // order. Within a group the backend's allowlist order is preserved. Only render
+  // groups that actually have models, so an absent provider leaves no empty header.
+  const providerOrder = Object.keys(PROVIDER_LABELS) as Provider[];
+  const groups = providerOrder
+    .map((provider) => ({
+      provider,
+      items: models.filter((m) => m.provider === provider),
+    }))
+    .filter((g) => g.items.length > 0);
+
   return (
-    <Tooltip label="Choose which Claude model answers" side="top">
+    <Tooltip label="Choose which model answers" side="top" className="min-w-0">
       <select
         value={selected}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        aria-label="Claude model"
-        className="rounded-lg border border-transparent bg-transparent py-1.5 pl-1.5 pr-1 text-xs text-content-muted hover:bg-border-strong hover:text-content focus:outline-none disabled:opacity-50 max-md:py-2.5 max-md:text-sm"
+        aria-label="Model"
+        // field-sizing:content makes the select size to its CURRENT value, not its
+        // widest <option> (the browser default — which is what left the big gap
+        // before the chevron). max-w-full keeps a long label from overflowing the
+        // footer. Unsupported browsers fall back to the default widest-option width.
+        className="w-auto max-w-full [field-sizing:content] rounded-lg border border-transparent bg-transparent py-1.5 pl-1.5 pr-1 text-xs text-content-muted hover:bg-border-strong hover:text-content focus:outline-none disabled:opacity-50 max-md:py-2.5 max-md:text-sm"
       >
-        {models.map((m) => (
-          <option key={m.id} value={m.id} className="text-content">
-            {m.label}
-          </option>
+        {groups.map((g) => (
+          <optgroup key={g.provider} label={PROVIDER_LABELS[g.provider]}>
+            {g.items.map((m) => (
+              <option key={m.id} value={m.id} className="text-content">
+                {m.label}
+              </option>
+            ))}
+          </optgroup>
         ))}
       </select>
     </Tooltip>

@@ -1,12 +1,18 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { DEFAULT_MODEL } from "./models";
+import OpenAI from "openai";
+import { DEFAULT_MODEL, type Provider, providerForModel } from "./models";
 import { buildSystemPrompt } from "./prompt";
-import { buildTools, executeTool, type ToolDefinition } from "./tools";
+import {
+  buildTools,
+  executeTool,
+  type ToolDefinition,
+  toOpenAITools,
+} from "./tools";
 
 // The LLM connector — a Platform seam. The route calls `createClient().complete()`
-// and never names a provider. Swapping Claude for Gemini/Ollama later means adding
-// a branch here, not touching the route. (Per LLM_PROVIDER; Claude is the only one
-// implemented for now.)
+// and never names a provider. The factory picks the client from the chosen model's
+// provider (see ./models): Claude → the Anthropic SDK; Google / DeepSeek / Mistral
+// → one shared OpenAI-compatible client (they all speak /chat/completions).
 
 // One message in the conversation, as the connector sees it. This is the wire
 // shape the frontend sends — independent of any provider's SDK types.
@@ -262,15 +268,251 @@ function createClaudeClient(
   };
 }
 
-// Factory keyed off LLM_PROVIDER. Defaults to Claude. Throws on an unknown
-// provider rather than silently doing the wrong thing. `graphMode` gates the
-// Knowledge Graph tool + its prompt guidance — called per request, so each turn
-// gets exactly the right tool surface.
+// Per-provider connection details for the OpenAI-compatible providers. They all
+// expose an OpenAI-shaped /chat/completions endpoint, so one client implementation
+// covers all three — only the base URL and key differ. Keys are read lazily (see
+// below), so a missing key only fails a turn that actually uses that provider.
+const OPENAI_COMPAT: Record<
+  Exclude<Provider, "claude">,
+  { baseURL: string; apiKeyEnv: string; label: string }
+> = {
+  google: {
+    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    apiKeyEnv: "GOOGLE_AI_API_KEY",
+    label: "Google AI",
+  },
+  deepseek: {
+    baseURL: "https://api.deepseek.com/v1",
+    apiKeyEnv: "DEEPSEEK_API_KEY",
+    label: "DeepSeek",
+  },
+  mistral: {
+    baseURL: "https://api.mistral.ai/v1",
+    apiKeyEnv: "MISTRAL_API_KEY",
+    label: "Mistral",
+  },
+};
+
+// A client for any OpenAI-compatible provider (Google / DeepSeek / Mistral). Same
+// LlmClient contract and same agent loop as the Claude client — the only real
+// difference is the wire format: a head `system` message instead of a top-level
+// param, OpenAI's `function` tool envelope, and streamed `tool_calls` deltas
+// (arguments accumulated by index, mirroring the Claude path's inputChunks buffer).
+// No prompt caching — that's Anthropic-specific; these providers either cache
+// server-side (DeepSeek) or don't take the markers.
+function createOpenAICompatClient(
+  provider: Exclude<Provider, "claude">,
+  tools: ToolDefinition[],
+  systemPrompt: string,
+  selectedModel: string
+): LlmClient {
+  const cfg = OPENAI_COMPAT[provider];
+
+  // Lazy SDK init, same as the Claude client: the server (and /api/health) can run
+  // without this provider's key set — only a chat turn using it needs the key.
+  let openai: OpenAI | undefined;
+  function getClient(): OpenAI {
+    if (!openai) {
+      const apiKey = process.env[cfg.apiKeyEnv];
+      if (!apiKey) {
+        throw new Error(
+          `${cfg.apiKeyEnv} is not set (add it to backend/.env to use ${cfg.label} models)`
+        );
+      }
+      openai = new OpenAI({ apiKey, baseURL: cfg.baseURL });
+    }
+    return openai;
+  }
+
+  const maxTokens = Number(process.env.LLM_MAX_TOKENS) || 4096;
+  const openaiTools = tools.length > 0 ? toOpenAITools(tools) : undefined;
+
+  // Prepend the system prompt as the head message — OpenAI's equivalent of
+  // Anthropic's top-level `system` param.
+  function toApiMessages(
+    messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
+  ): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+    return [{ role: "system", content: systemPrompt }, ...messages];
+  }
+
+  return {
+    async complete(messages) {
+      const response = await getClient().chat.completions.create({
+        model: selectedModel,
+        max_tokens: maxTokens,
+        messages: toApiMessages(
+          messages.map((m) => ({ role: m.role, content: m.content }))
+        ),
+        ...(openaiTools ? { tools: openaiTools } : {}),
+      });
+      const text = response.choices[0]?.message?.content ?? "";
+      if (!text) throw new Error("Model returned no text content");
+      return text;
+    },
+
+    async stream(
+      messages,
+      onToken,
+      onDone,
+      onToolStart,
+      onToolResult,
+      onLoopStart
+    ) {
+      // The agent loop — identical control flow to the Claude client, parsing
+      // OpenAI chunk deltas instead of Anthropic stream events.
+      const history: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
+        messages.map((m) => ({ role: m.role, content: m.content }));
+
+      let iteration = 0;
+
+      while (true) {
+        iteration++;
+        if (iteration > 1) await onLoopStart?.(iteration);
+
+        // Per-turn accumulators. Tool calls arrive as deltas keyed by index; we
+        // collect id/name/argument-fragments until the chunk stream ends, then
+        // parse the assembled JSON (partial JSON mid-stream is unparseable). We
+        // also capture Gemini's per-tool-call `thought_signature` (carried in a
+        // non-standard `extra_content.google` field) so it can be echoed back in
+        // the assistant message — Gemini needs it for multi-turn continuity.
+        const pendingTools = new Map<
+          number,
+          {
+            id: string;
+            name: string;
+            argChunks: string[];
+            thoughtSignature?: string;
+          }
+        >();
+        let assistantText = "";
+        let finishReason: string | null = null;
+
+        const stream = await getClient().chat.completions.create({
+          model: selectedModel,
+          max_tokens: maxTokens,
+          stream: true,
+          messages: toApiMessages(history),
+          ...(openaiTools ? { tools: openaiTools } : {}),
+        });
+
+        for await (const chunk of stream) {
+          const choice = chunk.choices[0];
+          if (!choice) continue;
+          const delta = choice.delta;
+
+          if (delta?.content) {
+            await onToken(delta.content);
+            assistantText += delta.content;
+          }
+
+          // Tool-call fragments. The first delta for an index carries id + name;
+          // subsequent ones carry argument string fragments to concatenate.
+          for (const tc of delta?.tool_calls ?? []) {
+            const sig = (
+              tc as {
+                extra_content?: { google?: { thought_signature?: string } };
+              }
+            ).extra_content?.google?.thought_signature;
+            const existing = pendingTools.get(tc.index);
+            if (existing) {
+              if (tc.function?.arguments)
+                existing.argChunks.push(tc.function.arguments);
+              if (sig) existing.thoughtSignature = sig;
+            } else {
+              pendingTools.set(tc.index, {
+                id: tc.id ?? "",
+                name: tc.function?.name ?? "",
+                argChunks: tc.function?.arguments
+                  ? [tc.function.arguments]
+                  : [],
+                thoughtSignature: sig,
+              });
+            }
+          }
+
+          if (choice.finish_reason) finishReason = choice.finish_reason;
+        }
+
+        // Output budget exhausted — mirrors the Claude client's max_tokens guard.
+        // Any pending tool JSON is partial; fail loudly rather than parse garbage.
+        if (finishReason === "length") {
+          throw new Error(
+            "The model hit its output limit before finishing (finish_reason=length). " +
+              "Raise LLM_MAX_TOKENS or ask for a smaller result."
+          );
+        }
+
+        // Gemini surfaces a failed tool call as this finish_reason rather than an
+        // error — make it visible instead of returning a confusing empty turn.
+        if (finishReason === "MALFORMED_FUNCTION_CALL") {
+          throw new Error(
+            "The model produced a malformed tool call (finish_reason=MALFORMED_FUNCTION_CALL)."
+          );
+        }
+
+        // Loop when there are tool calls to run — keyed on the presence of pending
+        // tool calls, NOT on finish_reason. Gemini's OpenAI-compatible endpoint has
+        // a known bug where it reports finish_reason "stop" (not "tool_calls") even
+        // while emitting a tool call in streaming mode; trusting finish_reason would
+        // drop the call and end the turn empty. (OpenAI/DeepSeek/Mistral report
+        // "tool_calls" correctly; checking pendingTools works for all of them.)
+        if (pendingTools.size === 0) {
+          await onDone();
+          return;
+        }
+
+        // Push the assistant message carrying the tool_calls, then one `tool`
+        // message per result (OpenAI uses N separate tool messages, vs Anthropic's
+        // single user message with N tool_result blocks). Re-attach Gemini's
+        // thought_signature on each call so multi-turn continuity is preserved.
+        const sortedTools = [...pendingTools.entries()]
+          .sort(([a], [b]) => a - b)
+          .map(([, t]) => t);
+
+        history.push({
+          role: "assistant",
+          content: assistantText || null,
+          tool_calls: sortedTools.map((t) => ({
+            id: t.id,
+            type: "function",
+            function: { name: t.name, arguments: t.argChunks.join("") || "{}" },
+            ...(t.thoughtSignature
+              ? {
+                  extra_content: {
+                    google: { thought_signature: t.thoughtSignature },
+                  },
+                }
+              : {}),
+          })),
+        });
+
+        for (const tool of sortedTools) {
+          const input = JSON.parse(tool.argChunks.join("") || "{}") as unknown;
+          await onToolStart?.(tool.name, input);
+          const result = executeTool(tool.name, input);
+          await onToolResult?.(tool.name, result);
+          history.push({
+            role: "tool",
+            tool_call_id: tool.id,
+            content: result,
+          });
+        }
+        // Continue the loop — call the API again with the updated history.
+      }
+    },
+  };
+}
+
+// Factory: picks the client from the chosen model's provider. Defaults to Claude
+// (DEFAULT_MODEL's provider) when no model is named. Throws on an unknown provider
+// rather than silently doing the wrong thing. `graphMode` gates the Knowledge
+// Graph tool + its prompt guidance — called per request, so each turn gets exactly
+// the right tool surface.
 export function createClient(opts: {
   graphMode: boolean;
   model?: string;
 }): LlmClient {
-  const provider = process.env.LLM_PROVIDER ?? "claude";
+  const provider = providerForModel(opts.model);
   switch (provider) {
     case "claude":
       return createClaudeClient(
@@ -278,9 +520,21 @@ export function createClient(opts: {
         buildSystemPrompt(opts),
         opts.model
       );
+    case "google":
+    case "deepseek":
+    case "mistral":
+      return createOpenAICompatClient(
+        provider,
+        buildTools(opts),
+        buildSystemPrompt(opts),
+        // provider is non-undefined here, so the model resolved in the allowlist;
+        // fall back to DEFAULT_MODEL only to satisfy the type (won't happen for
+        // these cases, since DEFAULT_MODEL is a Claude model).
+        opts.model ?? DEFAULT_MODEL
+      );
     default:
       throw new Error(
-        `Unknown LLM_PROVIDER: "${provider}" (expected "claude")`
+        `No provider for model "${opts.model ?? DEFAULT_MODEL}" (not in the allowlist)`
       );
   }
 }
