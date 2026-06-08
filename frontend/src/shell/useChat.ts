@@ -76,6 +76,11 @@ export function useChat({
     abortRef.current?.abort();
     abortRef.current = null;
     epochRef.current++;
+    // Bumping the epoch above invalidates the in-flight sendMessage's `finally`
+    // guard, so it won't clear isLoading itself — clear it here. Callers that
+    // immediately start a new turn (conversation switch, superseding send) set it
+    // true again right after; a standalone user "stop" relies on this to reset.
+    if (wasInFlight) setIsLoading(false);
     // A turn that's torn down (conversation switch, or a new send superseding
     // this one) emits no done/error over the wire — the fetch just rejects with
     // AbortError. Without a terminal signal, bus listeners that track per-turn

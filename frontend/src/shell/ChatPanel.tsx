@@ -383,19 +383,39 @@ export function ChatPanel() {
               onChange={selectModel}
               disabled={isLoading}
             />
-            {/* Send */}
+            {/* Send / Stop — while a turn is streaming the button becomes a stop
+                control: the spinner is the resting state, and hovering reveals a
+                stop icon that aborts the stream on click. */}
             <div className="group relative flex">
               <button
-                type="submit"
-                onClick={(e) => e.currentTarget.blur()}
-                aria-label="Send message"
+                // While loading this is an abort control, not a submit — `button`
+                // type so it never re-submits the form, and it stays enabled.
+                type={isLoading ? "button" : "submit"}
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  if (isLoading) abortStream();
+                }}
+                aria-label={isLoading ? "Stop generating" : "Send message"}
                 className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-r from-[#fd40a4] to-[#c35ed1] text-2xl leading-none text-white hover:brightness-110 disabled:opacity-40 max-md:h-11 max-md:w-11"
-                disabled={draft.trim().length === 0 || isLoading}
+                // Only disabled when there's nothing to send. While loading the
+                // button is active so it can stop the stream.
+                disabled={!isLoading && draft.trim().length === 0}
               >
-                <span className={isLoading ? "animate-spin" : ""}>𑁍</span>
+                {isLoading ? (
+                  <>
+                    {/* Resting: spinner. Hidden on hover so the stop icon shows. */}
+                    <span className="animate-spin group-hover:hidden">𑁍</span>
+                    {/* Hover: a stop square. Smaller than the send glyph. */}
+                    <span className="hidden text-base leading-none group-hover:inline">
+                      ◼
+                    </span>
+                  </>
+                ) : (
+                  <span>𑁍</span>
+                )}
               </button>
               <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 whitespace-nowrap rounded-md bg-surface-overlay px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-                Send message
+                {isLoading ? "Stop generating" : "Send message"}
               </span>
             </div>
           </div>
