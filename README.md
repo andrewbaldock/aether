@@ -1,5 +1,7 @@
 # Aether
 
+![Aether wordmark](design/aether-wordmark.jpg)
+
 > Ask questions. Get answers as 3D scenes, graphs, and charts.
 
 A conversational explorer. The chat is the interface; answers are rendered in whatever form fits
