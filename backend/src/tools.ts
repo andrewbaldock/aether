@@ -90,7 +90,7 @@ export const ICON_VOCABULARY = [
 export const BUILD_KNOWLEDGE_GRAPH_TOOL: ToolDefinition = {
   name: "build_knowledge_graph",
   description:
-    "Extract the key entities and relationships from the conversation so far and emit them as a knowledge graph. Call this whenever new entities or links emerge. Only send NEW or CHANGED entities/relationships each call — the frontend merges additively, never resets. Use `remove` to delete nodes and their links. Use `merge` to collapse duplicates: links re-point from the absorbed node to the survivor before it's removed.",
+    "Extract the key entities and relationships from the conversation so far and emit them as a knowledge graph. Call this whenever new entities or links emerge. Only send NEW or CHANGED entities/relationships each call — the frontend merges additively, never resets. AVOID DUPLICATES: an entity already in the graph must keep the EXACT same id you first gave it — never coin a second slug for the same thing. Before adding an entity, assume it may already exist and reuse its id. If two nodes for the same real-world thing do slip in, use `merge` to collapse them. Use `remove` to delete nodes and their links.",
   input_schema: {
     type: "object",
     properties: {
@@ -101,7 +101,8 @@ export const BUILD_KNOWLEDGE_GRAPH_TOOL: ToolDefinition = {
           properties: {
             id: {
               type: "string",
-              description: "stable slug, e.g. 'marie-curie'",
+              description:
+                "A stable, canonical slug from the entity's COMMON name: lowercase ASCII, hyphen-separated, no articles/titles/honorifics. Use the shortest name people normally use — 'marie-curie' (not 'marie-sklodowska-curie'), 'louvre' (not 'the-louvre-museum'), 'us-army'. Reuse the EXACT same id every time you reference this entity again; never invent a new slug for an entity already in the graph.",
             },
             label: { type: "string", description: "display name" },
             type: {

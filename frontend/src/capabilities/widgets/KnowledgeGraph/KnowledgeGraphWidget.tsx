@@ -1,5 +1,5 @@
-import { useAgentEvents } from "../../../shell/AgentEventContext";
 import { ThinkingGlyph } from "../../../brand/ThinkingGlyph";
+import { useAgentEvents } from "../../../shell/AgentEventContext";
 import type { Widget } from "../../registry";
 import { ForceGraph } from "./ForceGraph";
 import { GraphLoading } from "./GraphLoading";
