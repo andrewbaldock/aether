@@ -99,7 +99,22 @@ export function parsePayload(raw: string): GraphPayload | null {
       typeof (r as Record<string, unknown>).to === "string"
   );
 
-  return { entities: validEntities, relationships: validRelationships };
+  const remove = Array.isArray((data as Record<string, unknown>).remove)
+    ? ((data as Record<string, unknown>).remove as unknown[]).filter(
+        (r): r is string => typeof r === "string"
+      )
+    : [];
+  const merge = Array.isArray((data as Record<string, unknown>).merge)
+    ? ((data as Record<string, unknown>).merge as unknown[]).filter(
+        (m): m is { from: string; into: string } =>
+          m != null &&
+          typeof m === "object" &&
+          typeof (m as Record<string, unknown>).from === "string" &&
+          typeof (m as Record<string, unknown>).into === "string"
+      )
+    : [];
+
+  return { entities: validEntities, relationships: validRelationships, remove, merge };
 }
 
 // Key a link by its endpoints — endpoints can be strings (fresh) or node refs
@@ -217,7 +232,63 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
         setLinks((prev) => [...prev, ...freshLinks]);
       }
 
-      if (freshNodes.length > 0 || freshLinks.length > 0) bump();
+      // Merges — re-point links from absorbed node to survivor, queue absorbed for removal.
+      const toRemove = new Set<string>(payload.remove ?? []);
+      const merges = payload.merge ?? [];
+      if (merges.length > 0) {
+        const mergeMap = new Map(merges.map((m) => [m.from, m.into]));
+        for (const from of mergeMap.keys()) toRemove.add(from);
+        setLinks((prev) => {
+          const next: GraphLink[] = [];
+          for (const l of prev) {
+            const src = typeof l.source === "string" ? l.source : l.source.id;
+            const tgt = typeof l.target === "string" ? l.target : l.target.id;
+            const newSrc = mergeMap.get(src) ?? src;
+            const newTgt = mergeMap.get(tgt) ?? tgt;
+            if (newSrc === newTgt) {
+              linkKeys.current.delete(`${src}→${tgt}`);
+              continue; // became self-loop after remap — drop it
+            }
+            const oldKey = `${src}→${tgt}`;
+            const newKey = `${newSrc}→${newTgt}`;
+            linkKeys.current.delete(oldKey);
+            if (linkKeys.current.has(newKey)) continue; // already exists — dedupe
+            linkKeys.current.add(newKey);
+            next.push({ ...l, source: newSrc, target: newTgt });
+          }
+          return next;
+        });
+      }
+
+      // Removals — drop nodes and any remaining links touching them.
+      if (toRemove.size > 0) {
+        for (const id of toRemove) {
+          nodeIds.current.delete(id);
+          positionsRef.current.delete(id);
+        }
+        setNodes((prev) => prev.filter((n) => !toRemove.has(n.id)));
+        setLinks((prev) =>
+          prev.filter((l) => {
+            const from =
+              typeof l.source === "string" ? l.source : l.source.id;
+            const to =
+              typeof l.target === "string" ? l.target : l.target.id;
+            if (toRemove.has(from) || toRemove.has(to)) {
+              linkKeys.current.delete(`${from}→${to}`);
+              return false;
+            }
+            return true;
+          })
+        );
+      }
+
+      if (
+        freshNodes.length > 0 ||
+        freshLinks.length > 0 ||
+        toRemove.size > 0 ||
+        merges.length > 0
+      )
+        bump();
     }
 
     const unsubscribe = bus.subscribe(handle);

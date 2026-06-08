@@ -27,6 +27,8 @@ export interface RawRelationship {
 export interface GraphPayload {
   entities: RawEntity[];
   relationships: RawRelationship[];
+  remove?: string[];
+  merge?: Array<{ from: string; into: string }>;
 }
 
 // A node in the live simulation. d3-force mutates x/y/vx/vy in place; fx/fy pin a

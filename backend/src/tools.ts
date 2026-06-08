@@ -90,7 +90,7 @@ export const ICON_VOCABULARY = [
 export const BUILD_KNOWLEDGE_GRAPH_TOOL: ToolDefinition = {
   name: "build_knowledge_graph",
   description:
-    "Extract the key entities and relationships from the conversation so far and emit them as a knowledge graph. Call this whenever new entities or links emerge. Only send NEW or CHANGED entities/relationships each call — the frontend merges additively, never resets.",
+    "Extract the key entities and relationships from the conversation so far and emit them as a knowledge graph. Call this whenever new entities or links emerge. Only send NEW or CHANGED entities/relationships each call — the frontend merges additively, never resets. Use `remove` to delete nodes and their links. Use `merge` to collapse duplicates: links re-point from the absorbed node to the survivor before it's removed.",
   input_schema: {
     type: "object",
     properties: {
@@ -137,6 +137,31 @@ export const BUILD_KNOWLEDGE_GRAPH_TOOL: ToolDefinition = {
           },
           required: ["from", "to"],
         },
+      },
+      remove: {
+        type: "array",
+        items: { type: "string" },
+        description: "ids of entities to remove from the graph (and their links)",
+      },
+      merge: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            from: {
+              type: "string",
+              description: "id of the node to absorb (will be removed)",
+            },
+            into: {
+              type: "string",
+              description:
+                "id of the node to keep (all links re-pointed here)",
+            },
+          },
+          required: ["from", "into"],
+        },
+        description:
+          "collapse duplicate nodes — re-points all links from `from` to `into`, then removes `from`",
       },
     },
     required: ["entities", "relationships"],
