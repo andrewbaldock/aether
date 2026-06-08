@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Wordmark } from "../brand/Wordmark";
 import { useCapabilities } from "../capabilities/useCapabilities";
 import { CapabilityColumn } from "./CapabilityColumn";
@@ -17,7 +17,18 @@ import { Sidebar, SidebarToggleIcon } from "./Sidebar";
 export function MobileShell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { messages } = useSessionContext();
-  const { isOpen: capabilityOpen, closeAll } = useCapabilities();
+  const { isOpen: capabilityOpen, activeId } = useCapabilities();
+
+  // Mobile shows one surface at a time. The capability widget lives in a
+  // full-screen overlay that "back" should HIDE (not destroy — the widgets
+  // survive in the store). Re-surface it whenever a widget is opened or its
+  // active tab changes (toggling graph mode, the eyeball, the help icon), which
+  // mirrors how opening a widget reveals the column on desktop.
+  const [showOverlay, setShowOverlay] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: activeId is the trigger; we re-show whenever the active widget changes.
+  useEffect(() => {
+    if (capabilityOpen) setShowOverlay(true);
+  }, [activeId, capabilityOpen]);
 
   // Match the desktop sidebar's compact-wordmark rule: full "Aether" once a
   // conversation has started, just the "A" on the empty hero state.
@@ -67,14 +78,15 @@ export function MobileShell() {
         <Sidebar onToggle={() => setDrawerOpen(false)} />
       </div>
 
-      {/* Capability widget as a full-screen overlay. Shown whenever a widget is
-          open; the back button closes all widgets and returns to chat. */}
-      {capabilityOpen && (
+      {/* Capability widget as a full-screen overlay. Shown while a widget is
+          open AND not hidden; "back" hides it (widgets survive) and returns to
+          chat. Opening/activating any widget re-surfaces it (see the effect). */}
+      {capabilityOpen && showOverlay && (
         <div className="absolute inset-0 z-40 flex flex-col bg-surface">
           <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface-raised px-2 py-2">
             <button
               type="button"
-              onClick={() => closeAll()}
+              onClick={() => setShowOverlay(false)}
               aria-label="Back to chat"
               className="flex h-11 items-center gap-1.5 rounded-md px-3 text-sm text-content-muted hover:bg-elevated hover:text-content"
             >

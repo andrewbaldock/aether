@@ -9,12 +9,22 @@ import { useAgentDiagramState } from "./useAgentDiagramState";
 // to the AgentEventBus (the same events useChat reads off the SSE stream) and
 // lights up each node as the turn runs: request → Claude → tokens → stop_reason
 // → tool → loop-back → done. The `widget` prop is unused; all state is live.
-export function AgentDiagramWidget(_props: { widget: Widget }) {
+//
+// The legend and step console default on (the standalone tab), but the Welcome
+// explainer turns them off — there the diagram is a framed illustration.
+export function AgentDiagramWidget({
+  showLegend = true,
+  showConsole = true,
+}: {
+  widget: Widget;
+  showLegend?: boolean;
+  showConsole?: boolean;
+}) {
   const { nodeStatuses, loopCount, activeToolName, log } =
     useAgentDiagramState();
 
   // A role is "active" when any node of that role is currently lit. The legend
-  // dims all pills and highlights these.
+  // highlights these with a glow.
   const activeRoles = new Set<Role>();
   for (const node of NODES) {
     const status = nodeStatuses[node.id];
@@ -23,7 +33,7 @@ export function AgentDiagramWidget(_props: { widget: Widget }) {
 
   return (
     <div className="flex h-full flex-col bg-surface">
-      <Legend activeRoles={activeRoles} />
+      {showLegend && <Legend activeRoles={activeRoles} />}
       <div className="min-h-0 flex-1 p-3">
         <DiagramSvg
           nodeStatuses={nodeStatuses}
@@ -31,7 +41,7 @@ export function AgentDiagramWidget(_props: { widget: Widget }) {
           activeToolName={activeToolName}
         />
       </div>
-      <StepConsole log={log} />
+      {showConsole && <StepConsole log={log} />}
     </div>
   );
 }
