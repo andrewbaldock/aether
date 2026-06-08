@@ -11,7 +11,9 @@ import { useAgentEvents } from "./AgentEventContext";
 import { HelpButton } from "./HelpButton";
 import { ModelPicker } from "./ModelPicker";
 import { useSessionContext } from "./SessionContext";
+import { ToolInfoSheet } from "./ToolInfoSheet";
 import { useChat } from "./useChat";
+import { useIsMobile } from "./useIsMobile";
 
 // Seed for a brand-new conversation's graph mode (until its session row exists).
 // Defaults to true — "Aether opens this way by default."
@@ -74,20 +76,26 @@ export function ChatPanel() {
   useEffect(() => {
     registerAbort(abortStream);
   }, [registerAbort, abortStream]);
-  const { open, activate } = useCapabilities();
+  const { open, ensure, activate } = useCapabilities();
+  const isMobile = useIsMobile();
   const updateSession = useUpdateSession(userId);
   const bus = useAgentEvents();
   const [draft, setDraft] = useState("");
+  // Mobile-only: the Knowledge Graph info+toggle sheet (no hover tooltips on touch).
+  const [kgSheetOpen, setKgSheetOpen] = useState(false);
   const started = messages.length > 0;
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // When graph mode is on, make sure the Knowledge Graph tab exists so it's ready
-  // before the first graph data arrives.
+  // before the first graph data arrives. Use `ensure` (mount-only, no activate):
+  // activating here would force the mobile full-screen overlay open over an empty
+  // graph on load. The overlay surfaces only on real intent — toggling graph mode
+  // (below) or graph data arriving (the bus subscription).
   useEffect(() => {
-    if (graphMode) open(KNOWLEDGE_GRAPH_WIDGET);
-  }, [graphMode, open]);
+    if (graphMode) ensure(KNOWLEDGE_GRAPH_WIDGET);
+  }, [graphMode, ensure]);
 
   // Surface the KG tab at the right moments so its "mapping…" loading state and
   // the resulting graph are actually on-screen:
@@ -187,9 +195,20 @@ export function ChatPanel() {
 
   return (
     <div className="relative flex h-full flex-col bg-surface">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
+      <div
+        ref={scrollRef}
+        className={`flex-1 overflow-y-auto px-6 py-6${
+          // Empty state on mobile: centre the hero in the scroll region so the
+          // wordmark + tagline + the (static) form just beneath read as one
+          // centred cluster, rather than split top-and-bottom or jammed at the
+          // very bottom behind the URL bar.
+          started
+            ? ""
+            : " max-md:flex max-md:flex-col max-md:items-center max-md:justify-center"
+        }`}
+      >
         {!started && (
-          <div className="mx-auto mt-20 flex max-w-md flex-col items-center gap-4 text-center">
+          <div className="mx-auto mt-20 flex w-full max-w-md flex-col items-center gap-4 text-center max-md:mt-0 max-md:gap-3">
             <Wordmark height={72} />
             <div className="flex items-center gap-2.5">
               <Wrench className="h-5 w-5 text-content-muted" aria-hidden />
@@ -198,7 +217,7 @@ export function ChatPanel() {
               </p>
               <Network className="h-5 w-5 text-content-muted" aria-hidden />
             </div>
-            <p className="text-sm text-content-muted">
+            <p className="text-sm text-content-muted max-md:px-2">
               {graphMode
                 ? "Knowledge Graph is on — just start talking and I'll map the people, places, and ideas as a live diagram beside us."
                 : "Ask me anything. Flip on Knowledge Graph (the node icon below) and I'll map the conversation as a live diagram beside us."}
@@ -328,8 +347,14 @@ export function ChatPanel() {
         onSubmit={handleSubmit}
         className={
           started
-            ? "p-4 transition-all duration-600 ease-in-out"
-            : "absolute inset-x-0 top-1/2 -translate-y-1/2 px-6 transition-all duration-600 ease-in-out"
+            ? // On mobile the form sits at the bottom edge; clear the iOS home
+              // indicator with a safe-area bottom inset (no-op on desktop/no inset).
+              "p-4 max-md:px-5 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-600 ease-in-out"
+            : // Desktop empty state floats the input vertically centred. On mobile
+              // that absolute centring collides with the hero copy on a short
+              // screen, so keep the form in normal flow (static) — the hero +
+              // input + tool row stack and the scroll area centres them.
+              "absolute inset-x-0 top-1/2 -translate-y-1/2 px-6 max-md:static max-md:inset-auto max-md:translate-y-0 max-md:px-5 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-600 ease-in-out"
         }
       >
         <div className="mx-auto max-w-2xl">
@@ -339,12 +364,17 @@ export function ChatPanel() {
           <textarea
             ref={textareaRef}
             value={draft}
-            autoFocus
+            // Don't autofocus on mobile: it slams the keyboard open the moment
+            // the app loads (and was part of the on-load zoom). Desktop keeps it.
+            autoFocus={!isMobile}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a message… (Shift+Enter for newline)"
             rows={1}
-            className={`w-full resize-none bg-transparent px-4 pt-3 pb-10 text-sm text-content placeholder:text-content-subtle focus:outline-none transition-opacity${isLoading ? " opacity-50" : ""}${started ? "" : " min-h-24"}`}
+            // text-base (16px) on mobile: iOS Safari auto-zooms the page when a
+            // focused input has font-size < 16px, and with autoFocus that fires
+            // on load — leaving the whole UI zoomed in. 16px disables that zoom.
+            className={`w-full resize-none bg-transparent px-4 pt-3 pb-10 text-sm max-md:text-base text-content placeholder:text-content-subtle focus:outline-none transition-opacity${isLoading ? " opacity-50" : ""}${started ? "" : " min-h-24"}`}
           />
           <div className="absolute bottom-2 right-2 flex items-center gap-2">
             {/* Model picker — which Claude answers this conversation. */}
@@ -377,7 +407,13 @@ export function ChatPanel() {
         <div className="mt-2 flex items-center gap-2">
           <ToolChip
             active={graphMode}
-            onClick={toggleGraphMode}
+            // Desktop: tap toggles instantly (the hover tooltip explains it).
+            // Mobile: no hover, so tap opens an info+toggle sheet instead of
+            // silently flipping an unlabelled icon.
+            onClick={() => {
+              if (isMobile) setKgSheetOpen(true);
+              else toggleGraphMode();
+            }}
             label="Knowledge Graph"
             icon={<GraphIcon />}
             tooltip={
@@ -400,6 +436,24 @@ export function ChatPanel() {
           {/* Help anchored to the right of the tool row, beneath the box. */}
           <HelpButton className="ml-auto" />
         </div>
+
+        {/* Mobile-only: the Knowledge Graph info + toggle sheet. */}
+        <ToolInfoSheet
+          open={kgSheetOpen}
+          onClose={() => setKgSheetOpen(false)}
+          title="Knowledge Graph"
+          icon={<GraphIcon />}
+          enabled={graphMode}
+          onToggle={toggleGraphMode}
+        >
+          {graphMode
+            ? "It's on — as we talk I extract the people, places, and ideas and render them as a live graph you can open from the tool row."
+            : "Turn it on to map this conversation as a live graph — people, places, and ideas, drawn as we talk."}
+          <span className="mt-2 block text-content-subtle">
+            Just one plugin in Aether's capability column — the same seam can
+            render charts, tables, or live 3D scenes. Anything.
+          </span>
+        </ToolInfoSheet>
         </div>
       </form>
     </div>
@@ -440,7 +494,9 @@ function ToolChip({
         }
       >
         {icon}
-        <span>{label}</span>
+        {/* Icon-only on mobile: keeps the tool row compact as more tools land.
+            aria-label on the button carries the name for assistive tech. */}
+        <span className="max-md:hidden">{label}</span>
       </button>
       <span className="pointer-events-none absolute bottom-full left-0 mb-1.5 w-64 rounded-md bg-surface-overlay px-2.5 py-1.5 text-xs leading-snug text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
         {tooltip}

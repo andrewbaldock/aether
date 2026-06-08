@@ -1,19 +1,10 @@
 import { useAgentEvents } from "../../../shell/AgentEventContext";
 import type { Widget } from "../../registry";
-import { TYPE_COLOR, TYPE_LABEL } from "./colors";
 import { ForceGraph } from "./ForceGraph";
 import { GraphLoading } from "./GraphLoading";
 import { NodeDetail } from "./NodeDetail";
-import type { EntityType, GraphNode } from "./types";
+import type { GraphNode } from "./types";
 import { useKnowledgeGraphState } from "./useKnowledgeGraphState";
-
-const LEGEND_TYPES: EntityType[] = [
-  "person",
-  "place",
-  "concept",
-  "org",
-  "event",
-];
 
 // "Knowledge Graph" — a live, animated force-directed graph built from the
 // build_knowledge_graph tool calls Claude makes while graph mode is on. It
@@ -45,19 +36,6 @@ export function KnowledgeGraphWidget(_props: { widget: Widget }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-surface">
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-3 py-2">
-        {LEGEND_TYPES.map((t) => (
-          <span key={t} className="flex items-center gap-1.5 text-xs">
-            <span
-              className="inline-block h-2.5 w-2.5 rounded-full"
-              style={{ backgroundColor: TYPE_COLOR[t] }}
-            />
-            <span className="text-content-muted">{TYPE_LABEL[t]}</span>
-          </span>
-        ))}
-      </div>
-
       {/* Graph / empty state */}
       <div className="min-h-0 flex-1">
         {nodes.length === 0 ? (
