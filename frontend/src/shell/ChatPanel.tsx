@@ -97,6 +97,20 @@ export function ChatPanel() {
     if (graphMode) ensure(KNOWLEDGE_GRAPH_WIDGET);
   }, [graphMode, ensure]);
 
+  // When the active session changes (e.g. bookmark load or sidebar click) and the
+  // session has graph mode on, surface the KG panel immediately so the graph is
+  // visible without requiring a new message turn.
+  const prevSessionIdRef = useRef<string | null>(sessionId);
+  useEffect(() => {
+    const prev = prevSessionIdRef.current;
+    prevSessionIdRef.current = sessionId;
+    if (!sessionId || sessionId === prev) return;
+    if (graphMode) {
+      open(KNOWLEDGE_GRAPH_WIDGET);
+      activate(KNOWLEDGE_GRAPH_WIDGET.id);
+    }
+  }, [sessionId, graphMode, open, activate]);
+
   // Surface the KG tab at the right moments so its "mapping…" loading state and
   // the resulting graph are actually on-screen:
   //   • request_start while graph mode is on — activate the tab as the turn

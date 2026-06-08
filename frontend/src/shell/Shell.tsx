@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import { useCapabilities } from "../capabilities/useCapabilities";
 import { GraphPersistenceBridge } from "../capabilities/widgets/KnowledgeGraph/GraphPersistenceBridge";
+import { parseRoute } from "../hooks/useRoute";
 import { CapabilityColumn } from "./CapabilityColumn";
 import { ChatPanel } from "./ChatPanel";
 import { MobileShell } from "./MobileShell";
+import { useSessionContext } from "./SessionContext";
 import { SessionProvider } from "./SessionContext";
 import { Sidebar, SidebarToggleIcon } from "./Sidebar";
 import { useIsMobile } from "./useIsMobile";
@@ -22,6 +24,19 @@ function readCapabilitySize(): number {
   return saved > 0 ? saved : CAPABILITY_DEFAULT_SIZE;
 }
 
+// Hydrates the active session from the URL on first mount. Must live inside
+// SessionProvider so it can call loadSession.
+function RouteBootstrap() {
+  const { loadSession } = useSessionContext();
+  useEffect(() => {
+    const route = parseRoute(location.pathname);
+    if (route.type === "conversation") loadSession(route.sessionId);
+    // Mount-only — subsequent navigation is driven by user actions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+}
+
 // The three-zone shell. SessionProvider wraps everything so Sidebar and
 // ChatPanel share the same session + message state.
 export function Shell() {
@@ -30,6 +45,7 @@ export function Shell() {
       {/* Loads/saves the per-session knowledge graph. Inside SessionProvider so
           it can read sessionId; the graph state itself lives at the app root. */}
       <GraphPersistenceBridge />
+      <RouteBootstrap />
       <ShellInner />
     </SessionProvider>
   );

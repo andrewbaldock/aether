@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { navigate } from "../hooks/useRoute";
 import { useSession } from "../hooks/useSession";
 import {
   type SessionActions,
@@ -42,8 +43,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   // sessionId from useSession is the single source of truth — it drives both
   // session creation/persistence and sidebar highlighting.
+  const onNewSession = useCallback(
+    (newId: string) => {
+      refreshSessions();
+      navigate(`/c/${newId}`);
+    },
+    [refreshSessions]
+  );
+
   const { sessionId, getOrCreateSession, setSession, resetSession } =
-    useSession(userId, refreshSessions);
+    useSession(userId, onNewSession);
 
   // useChat owns the AbortController; it registers its abort here on mount so
   // switchSession/startNewConversation can cancel an in-flight stream.
@@ -65,6 +74,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     abortStreamRef.current();
     resetSession();
     setMessages([]);
+    navigate("/");
   }, [resetSession]);
 
   const actions = useSessionActions({
