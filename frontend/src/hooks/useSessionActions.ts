@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { navigate } from "./useRoute";
 import { apiFetch } from "../lib/queryClient";
 import type { Message } from "../shell/useChat";
+import { navigate } from "./useRoute";
 import { type Session, sessionsKey } from "./useSessionList";
 
 interface UseSessionActionsArgs {
@@ -54,7 +54,8 @@ export function useSessionActions({
         [dbMessages, session] = await Promise.all([
           queryClient.fetchQuery({
             queryKey: ["messages", id],
-            queryFn: () => apiFetch<DbMessage[]>(`/api/sessions/${id}/messages`),
+            queryFn: () =>
+              apiFetch<DbMessage[]>(`/api/sessions/${id}/messages`),
           }),
           apiFetch<Session>(`/api/sessions/${id}`),
         ]);
@@ -68,11 +69,14 @@ export function useSessionActions({
       if (session.user_id !== userId) {
         let forkId: string;
         try {
-          const fork = await apiFetch<{ id: string }>(`/api/sessions/${id}/fork`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId }),
-          });
+          const fork = await apiFetch<{ id: string }>(
+            `/api/sessions/${id}/fork`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ userId }),
+            }
+          );
           forkId = fork.id;
         } catch {
           navigate("/");

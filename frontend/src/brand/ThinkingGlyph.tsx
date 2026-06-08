@@ -120,7 +120,7 @@ export function ThinkingGlyph({
           {/* pulsing graph nodes behind the letter */}
           {NODES.map(([cx, cy], i) => (
             <circle
-              key={i}
+              key={`${cx}-${cy}`}
               cx={cx}
               cy={cy}
               r={2}

@@ -18,9 +18,9 @@ export function WelcomeWidget(_props: { widget: Widget }) {
           Aether is a conversational explorer: you chat with an AI agent, and it
           reaches for <span className="text-content">tools</span> to show its
           work beside you — mapping a live{" "}
-          <span className="text-content">knowledge graph</span>, and soon charts,
-          tables, and more. Below is the agent loop itself, live. Ask a question
-          and watch it light up.
+          <span className="text-content">knowledge graph</span>, and soon
+          charts, tables, and more. Below is the agent loop itself, live. Ask a
+          question and watch it light up.
         </p>
 
         {/* The two seams that make Aether a platform, not a single app. */}
@@ -79,7 +79,9 @@ function PlugPoint({
         <span className="text-neon-pink">{icon}</span>
         <span className="text-sm font-semibold">{title}</span>
       </div>
-      <p className="mt-1.5 text-xs leading-relaxed text-content-muted">{body}</p>
+      <p className="mt-1.5 text-xs leading-relaxed text-content-muted">
+        {body}
+      </p>
     </div>
   );
 }

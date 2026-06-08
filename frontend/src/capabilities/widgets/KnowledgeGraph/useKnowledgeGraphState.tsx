@@ -12,6 +12,7 @@ import {
   type AgentEvent,
   useAgentEvents,
 } from "../../../shell/AgentEventContext";
+import { canonicalKey, findDuplicateId, remapLinkEndpoints } from "./dedup";
 import type { EntityType, GraphLink, GraphNode, GraphPayload } from "./types";
 
 // Position fields a ForceGraph reports back so saves capture the live layout
@@ -114,7 +115,12 @@ export function parsePayload(raw: string): GraphPayload | null {
       )
     : [];
 
-  return { entities: validEntities, relationships: validRelationships, remove, merge };
+  return {
+    entities: validEntities,
+    relationships: validRelationships,
+    remove,
+    merge,
+  };
 }
 
 // Key a link by its endpoints — endpoints can be strings (fresh) or node refs
@@ -148,6 +154,15 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
   // Id sets for O(1) dedupe without scanning the arrays on every merge.
   const nodeIds = useRef(new Set<string>());
   const linkKeys = useRef(new Set<string>());
+  // canonicalKey → surviving node id. Lets an incoming entity whose slug drifted
+  // (e.g. `marie-sklodowska-curie` vs the existing `marie-curie`) be recognised as
+  // the same node and folded in rather than added as a twin. Kept in lockstep with
+  // nodeIds on every mutation (add / load / clear / merge / remove).
+  const canonicalKeys = useRef(new Map<string, string>());
+  // A live mirror of `nodes` for the fuzzy-dedup fallback, which needs to scan the
+  // current node list synchronously while processing a payload (state updates are
+  // async). Updated wherever setNodes is called.
+  const nodesRef = useRef<GraphNode[]>([]);
   // Latest live positions reported by the ForceGraph (id → x/y/fx/fy).
   const positionsRef = useRef(new Map<string, NodePosition>());
 
@@ -210,23 +225,46 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
       const payload = parsePayload(event.result);
       if (!payload) return;
 
-      // New nodes — preserve any existing node's simulation position by id.
-      const freshNodes = payload.entities.filter(
-        (e) => !nodeIds.current.has(e.id)
-      );
+      // New nodes — but first fold slug-drift duplicates. For each incoming
+      // entity: if its exact id is already known, it's a plain repeat (skip). Else
+      // check whether it's the SAME entity under a different slug/name — an exact
+      // canonical-key hit or a fuzzy same-type match against the nodes already on
+      // screen. If so, record an alias (incoming id → surviving id) and don't add a
+      // node; its relationships get rewired to the survivor below. Otherwise it's
+      // genuinely new: add it and register both dedupe indexes.
+      const aliasMap = new Map<string, string>();
+      const freshNodes: GraphNode[] = [];
+      for (const e of payload.entities) {
+        if (nodeIds.current.has(e.id)) continue; // exact id already present
+        const survivor = findDuplicateId(e, canonicalKeys.current, nodesRef.current);
+        if (survivor && survivor !== e.id) {
+          aliasMap.set(e.id, survivor); // drift duplicate — fold into survivor
+          continue;
+        }
+        nodeIds.current.add(e.id);
+        canonicalKeys.current.set(canonicalKey(e), e.id);
+        const node: GraphNode = { ...e };
+        freshNodes.push(node);
+        nodesRef.current.push(node); // keep the fuzzy-scan mirror current within this payload
+      }
       if (freshNodes.length > 0) {
-        for (const e of freshNodes) nodeIds.current.add(e.id);
-        setNodes((prev) => [...prev, ...freshNodes.map((e) => ({ ...e }))]);
+        setNodes((prev) => [...prev, ...freshNodes]);
       }
 
-      // New links — dedupe by from→to key; skip self-loops.
+      // New links — rewrite endpoints through the alias map first (so a link from a
+      // folded id attaches to the survivor), then dedupe by from→to key and skip
+      // self-loops.
       const freshLinks: GraphLink[] = [];
       for (const r of payload.relationships) {
-        if (r.from === r.to) continue;
-        const key = `${r.from}→${r.to}`;
+        const { source: from, target: to } = remapLinkEndpoints(
+          { source: r.from, target: r.to },
+          aliasMap
+        );
+        if (from === to) continue;
+        const key = `${from}→${to}`;
         if (linkKeys.current.has(key)) continue;
         linkKeys.current.add(key);
-        freshLinks.push({ source: r.from, target: r.to, label: r.label });
+        freshLinks.push({ source: from, target: to, label: r.label });
       }
       if (freshLinks.length > 0) {
         setLinks((prev) => [...prev, ...freshLinks]);
@@ -243,8 +281,10 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
           for (const l of prev) {
             const src = typeof l.source === "string" ? l.source : l.source.id;
             const tgt = typeof l.target === "string" ? l.target : l.target.id;
-            const newSrc = mergeMap.get(src) ?? src;
-            const newTgt = mergeMap.get(tgt) ?? tgt;
+            const { source: newSrc, target: newTgt } = remapLinkEndpoints(
+              l,
+              mergeMap
+            );
             if (newSrc === newTgt) {
               linkKeys.current.delete(`${src}→${tgt}`);
               continue; // became self-loop after remap — drop it
@@ -260,19 +300,23 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
         });
       }
 
-      // Removals — drop nodes and any remaining links touching them.
+      // Removals — drop nodes and any remaining links touching them. Covers both
+      // explicit `remove` ids and the absorbed side of each merge.
       if (toRemove.size > 0) {
         for (const id of toRemove) {
           nodeIds.current.delete(id);
           positionsRef.current.delete(id);
         }
+        // Drop removed nodes from the canonical index and the fuzzy-scan mirror.
+        for (const n of nodesRef.current) {
+          if (toRemove.has(n.id)) canonicalKeys.current.delete(canonicalKey(n));
+        }
+        nodesRef.current = nodesRef.current.filter((n) => !toRemove.has(n.id));
         setNodes((prev) => prev.filter((n) => !toRemove.has(n.id)));
         setLinks((prev) =>
           prev.filter((l) => {
-            const from =
-              typeof l.source === "string" ? l.source : l.source.id;
-            const to =
-              typeof l.target === "string" ? l.target : l.target.id;
+            const from = typeof l.source === "string" ? l.source : l.source.id;
+            const to = typeof l.target === "string" ? l.target : l.target.id;
             if (toRemove.has(from) || toRemove.has(to)) {
               linkKeys.current.delete(`${from}→${to}`);
               return false;
@@ -343,15 +387,24 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
   }, [nodes, links]);
 
   const loadGraph = useCallback((snapshot: GraphSnapshot) => {
-    nodeIds.current = new Set(snapshot.nodes.map((n) => n.id));
+    const loadedNodes = snapshot.nodes.map((n) => ({ ...n }));
+    nodeIds.current = new Set(loadedNodes.map((n) => n.id));
     linkKeys.current = new Set(snapshot.links.map(linkKey));
+    // Rebuild the canonical index so future incoming entities can fold into the
+    // restored nodes. We don't retroactively merge any pre-existing duplicates in
+    // the snapshot — loading shouldn't reshape a user's saved layout — so this is
+    // a plain last-wins index over whatever was persisted.
+    canonicalKeys.current = new Map(
+      loadedNodes.map((n) => [canonicalKey(n), n.id])
+    );
+    nodesRef.current = loadedNodes;
     positionsRef.current = new Map(
-      snapshot.nodes.map((n) => [
+      loadedNodes.map((n) => [
         n.id,
         { x: n.x, y: n.y, fx: n.fx ?? null, fy: n.fy ?? null },
       ])
     );
-    setNodes(snapshot.nodes.map((n) => ({ ...n })));
+    setNodes(loadedNodes);
     setLinks(snapshot.links.map((l) => ({ ...l })));
     setSelectedId(null);
     // No bump — loading shouldn't trigger a save-back of what we just loaded.
@@ -360,6 +413,8 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
   const clearGraph = useCallback(() => {
     nodeIds.current = new Set();
     linkKeys.current = new Set();
+    canonicalKeys.current = new Map();
+    nodesRef.current = [];
     positionsRef.current = new Map();
     setNodes([]);
     setLinks([]);
@@ -371,6 +426,11 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
     (id: string) => {
       nodeIds.current.delete(id);
       positionsRef.current.delete(id);
+      // Drop it from the canonical index + fuzzy-scan mirror so a later mention of
+      // the same entity is treated as new rather than folded into a ghost.
+      const removed = nodesRef.current.find((n) => n.id === id);
+      if (removed) canonicalKeys.current.delete(canonicalKey(removed));
+      nodesRef.current = nodesRef.current.filter((n) => n.id !== id);
       setNodes((prev) => prev.filter((n) => n.id !== id));
       setLinks((prev) => {
         const kept = prev.filter((l) => {

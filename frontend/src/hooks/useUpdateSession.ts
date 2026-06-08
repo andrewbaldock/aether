@@ -35,8 +35,7 @@ export function useUpdateSession(userId: string) {
       return { previous };
     },
     onError: (_err, _vars, context) => {
-      if (context?.previous)
-        queryClient.setQueryData(key, context.previous);
+      if (context?.previous) queryClient.setQueryData(key, context.previous);
     },
     // Re-sync with the server whether it succeeded or failed.
     onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
