@@ -3,7 +3,17 @@ import { Wordmark } from "../brand/Wordmark";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { useSessionContext } from "./SessionContext";
 
-export function Sidebar({ onToggle }: { onToggle: () => void }) {
+export function Sidebar({
+  onToggle,
+  onNavigate,
+}: {
+  onToggle: () => void;
+  // Called only when the user navigates to a conversation (select an existing
+  // session or start a new one). Mobile uses this to dismiss the drawer; the
+  // kebab/rename/delete controls intentionally don't trigger it. Optional, so
+  // the desktop Sidebar can omit it.
+  onNavigate?: () => void;
+}) {
   const {
     sessionId,
     sessions,
@@ -69,7 +79,10 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
       <nav className="px-2">
         <button
           type="button"
-          onClick={() => startNewConversation()}
+          onClick={() => {
+            startNewConversation();
+            onNavigate?.();
+          }}
           className="w-full rounded-md px-3 py-2 text-left text-sm text-content-muted hover:bg-elevated"
         >
           + New conversation
@@ -92,7 +105,10 @@ export function Sidebar({ onToggle }: { onToggle: () => void }) {
             title={titleFor(s)}
             date={s.created_at}
             active={s.id === sessionId}
-            onClick={() => loadSession(s.id)}
+            onClick={() => {
+              loadSession(s.id);
+              onNavigate?.();
+            }}
             onRename={(t) => renameSession(s.id, t)}
             onDelete={() => deleteSession(s.id)}
           />

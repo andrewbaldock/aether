@@ -13,6 +13,7 @@ import { KnowledgeGraphProvider } from "./capabilities/widgets/KnowledgeGraph/us
 import { AgentEventProvider } from "./shell/AgentEventContext";
 import { BackendStatusBanner } from "./shell/BackendStatusBanner";
 import { Shell } from "./shell/Shell";
+import { useIsMobile } from "./shell/useIsMobile";
 import { ThemeProvider } from "./theme/useTheme";
 
 // Set once a visitor has seen the welcome panel, so it auto-opens only on the
@@ -23,12 +24,18 @@ const WELCOMED_KEY = "aether-welcomed";
 // Lives inside CapabilityProvider so it can drive the capability store.
 function FirstArrivalWelcome() {
   const { open, activate } = useCapabilities();
+  const isMobile = useIsMobile();
   useEffect(() => {
+    // On mobile the capability widget is a full-screen overlay, so auto-opening
+    // Welcome would hijack the whole first screen instead of showing the chat.
+    // Skip it there — Welcome stays reachable via the (?) icon. Don't set the
+    // flag yet, so a later desktop visit still gets the auto-welcome once.
+    if (isMobile) return;
     if (localStorage.getItem(WELCOMED_KEY)) return;
     localStorage.setItem(WELCOMED_KEY, "true");
     open(WELCOME_WIDGET);
     activate(WELCOME_WIDGET.id);
-  }, [open, activate]);
+  }, [open, activate, isMobile]);
   return null;
 }
 

@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "../brand/Wordmark";
 import { useCapabilities } from "../capabilities/useCapabilities";
+import { useKnowledgeGraphState } from "../capabilities/widgets/KnowledgeGraph/useKnowledgeGraphState";
 import { CapabilityColumn } from "./CapabilityColumn";
 import { ChatPanel } from "./ChatPanel";
 import { useSessionContext } from "./SessionContext";
@@ -17,27 +18,54 @@ import { Sidebar, SidebarToggleIcon } from "./Sidebar";
 export function MobileShell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { messages } = useSessionContext();
-  const { isOpen: capabilityOpen, activeId } = useCapabilities();
+  const { isOpen: capabilityOpen, openTick } = useCapabilities();
 
-  // Mobile shows one surface at a time. The capability widget lives in a
-  // full-screen overlay that "back" should HIDE (not destroy — the widgets
-  // survive in the store). Re-surface it whenever a widget is opened or its
-  // active tab changes (toggling graph mode, the eyeball, the help icon), which
-  // mirrors how opening a widget reveals the column on desktop.
+  // Mobile shows one surface at a time. The phone ALWAYS opens to the chatbox —
+  // the capability widget lives in a full-screen overlay that NEVER appears on
+  // load. It surfaces only on a real signal, decided WITHOUT racing mount timing:
+  //   • an explicit open/activate gesture (help "?", the "Graph" button, the
+  //     graph-mode toggle, a future tool) — tracked by the store's `openTick`,
+  //     which bumps on `open`/`activate` but NOT on the background `ensure(KG)`
+  //     that merely mounts an empty KG tab when graph mode is on; and
+  //   • a graph actually arriving (KG node count crosses 0 → >0), so the user
+  //     watches their first graph build even if it wasn't an explicit tap.
+  // "← Chat" hides the overlay (widgets survive); "Graph"/"?" bring it back.
+  //
+  // `hasGraph` also gates the "View graph" top-bar button. The overlay render is
+  // NOT gated on hasGraph (Welcome must show with no graph).
+  const { nodes } = useKnowledgeGraphState();
+  const hasGraph = nodes.length > 0;
   const [showOverlay, setShowOverlay] = useState(false);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: activeId is the trigger; we re-show whenever the active widget changes.
+
+  // Explicit open/activate gesture → surface. Skip tick 0 (the initial render);
+  // only an actual bump past mount counts.
+  const prevTick = useRef(openTick);
   useEffect(() => {
-    if (capabilityOpen) setShowOverlay(true);
-  }, [activeId, capabilityOpen]);
+    if (openTick !== prevTick.current) {
+      prevTick.current = openTick;
+      setShowOverlay(true);
+    }
+  }, [openTick]);
+
+  // First time a real graph lands, auto-surface once.
+  const sawGraph = useRef(false);
+  useEffect(() => {
+    if (hasGraph && !sawGraph.current) {
+      sawGraph.current = true;
+      setShowOverlay(true);
+    }
+  }, [hasGraph]);
 
   // Match the desktop sidebar's compact-wordmark rule: full "Aether" once a
   // conversation has started, just the "A" on the empty hero state.
   const started = messages.length > 0;
 
   return (
-    <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-surface">
-      {/* Top bar: hamburger + wordmark. Kept slim so the chat dominates. */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface-raised px-2 py-2">
+    <div className="relative flex h-[100dvh] w-screen flex-col overflow-hidden bg-surface">
+      {/* Top bar: hamburger + wordmark. Kept slim so the chat dominates.
+          dvh root (above) tracks the iOS URL bar/keyboard; the safe-area top
+          padding clears the notch. */}
+      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface-raised px-2 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
@@ -47,6 +75,20 @@ export function MobileShell() {
           <SidebarToggleIcon />
         </button>
         <Wordmark height={24} compact={!started} />
+        {/* Once a graph (or any widget) exists, give a way back INTO it from chat.
+            Hidden until then, so the empty-state chat stays clean. Pairs with the
+            overlay's "← Chat" for the back-and-forth. */}
+        {hasGraph && capabilityOpen && (
+          <button
+            type="button"
+            onClick={() => setShowOverlay(true)}
+            aria-label="View graph"
+            className="ml-auto flex h-11 items-center gap-1.5 rounded-md px-3 text-sm text-content-muted hover:bg-elevated hover:text-content"
+          >
+            <GraphTabIcon />
+            Graph
+          </button>
+        )}
       </div>
 
       {/* Chat fills the remaining height. min-h-0 lets its internal scroll
@@ -68,22 +110,22 @@ export function MobileShell() {
         className={`absolute inset-y-0 left-0 z-30 w-[280px] max-w-[85vw] transform transition-transform duration-200 ease-out ${
           drawerOpen ? "translate-x-0" : "-translate-x-full"
         }`}
-        // Any tap that ends up changing the session (list item or "New
-        // conversation") should dismiss the drawer. Buttons inside Sidebar do
-        // the actual work; we just close on the bubbled click.
-        onClick={(e) => {
-          if ((e.target as HTMLElement).closest("button")) setDrawerOpen(false);
-        }}
       >
-        <Sidebar onToggle={() => setDrawerOpen(false)} />
+        {/* Only navigation intent (select a session / new conversation) dismisses
+            the drawer — Sidebar calls onNavigate for exactly those. The kebab,
+            rename, and delete controls leave the drawer open. */}
+        <Sidebar
+          onToggle={() => setDrawerOpen(false)}
+          onNavigate={() => setDrawerOpen(false)}
+        />
       </div>
 
-      {/* Capability widget as a full-screen overlay. Shown while a widget is
-          open AND not hidden; "back" hides it (widgets survive) and returns to
-          chat. Opening/activating any widget re-surfaces it (see the effect). */}
+      {/* Capability widget as a full-screen overlay. Only ever shown once a graph
+          exists AND the user hasn't hidden it; "← Chat" hides it (widgets survive)
+          and "Graph" in the chat top bar brings it back. */}
       {capabilityOpen && showOverlay && (
         <div className="absolute inset-0 z-40 flex flex-col bg-surface">
-          <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface-raised px-2 py-2">
+          <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface-raised px-2 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
             <button
               type="button"
               onClick={() => setShowOverlay(false)}
@@ -117,6 +159,29 @@ function BackIcon() {
       aria-hidden="true"
     >
       <path d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}
+
+// Node-link glyph for the "View graph" button — mirrors the Knowledge Graph
+// tool chip's icon so the two read as the same capability.
+function GraphTabIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="6" cy="6" r="2.5" />
+      <circle cx="18" cy="9" r="2.5" />
+      <circle cx="9" cy="18" r="2.5" />
+      <path d="M8 7.5l8 1M8 16l1-7" />
     </svg>
   );
 }

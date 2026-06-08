@@ -47,9 +47,12 @@ export function CapabilityColumn() {
           ))}
         </div>
 
+        {/* Expand-to-full-page is meaningless on mobile: the capability widget
+            is already a full-screen overlay in MobileShell. Hide it < md. */}
         <Tooltip
           label={isFullscreen ? "Exit full page" : "Expand to full page"}
           side="bottom"
+          className="max-md:hidden"
         >
           <button
             type="button"
