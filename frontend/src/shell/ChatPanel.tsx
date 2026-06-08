@@ -221,7 +221,7 @@ export function ChatPanel() {
       )}
       <div
         ref={scrollRef}
-        className={`flex-1 overflow-y-auto px-6 py-6${
+        className={`flex-1 overflow-y-auto px-6 pb-6${started ? " pt-2.5" : " py-6"}${
           // Empty state on mobile: centre the hero in the scroll region so the
           // wordmark + tagline + the (static) form just beneath read as one
           // centred cluster, rather than split top-and-bottom or jammed at the
@@ -580,7 +580,7 @@ function ConversationTitle({
 
   if (editing) {
     return (
-      <div className="flex items-center justify-center border-b border-border px-4 py-2">
+      <div className="flex items-center justify-center border-b border-border px-4 pb-2 pt-3.5">
         <input
           ref={inputRef}
           value={draft}
@@ -597,7 +597,7 @@ function ConversationTitle({
     <button
       type="button"
       onClick={() => setEditing(true)}
-      className="group flex w-full items-center justify-center gap-1 border-b border-border px-4 py-2 text-sm text-content-muted hover:text-content transition-colors"
+      className="group flex w-full items-center justify-center gap-1 border-b border-border px-4 pb-2 pt-3.5 text-sm text-content-muted hover:text-content transition-colors"
     >
       <span className="max-w-sm truncate">{title ?? "·"}</span>
       <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden />
