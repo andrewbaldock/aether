@@ -1,0 +1,46 @@
+import { useCapabilities } from "../capabilities/useCapabilities";
+import { WELCOME_WIDGET } from "../capabilities/widgets/Welcome";
+import { Tooltip } from "./Tooltip";
+
+// Opens the "Welcome to Aether" explainer. Lives in the sidebar header on
+// desktop and the slim top bar on mobile — the persistent way back to the intro
+// after its one-time first-arrival auto-open.
+export function HelpButton({ className }: { className?: string }) {
+  const { open, activate } = useCapabilities();
+  return (
+    <Tooltip label="What is Aether?" side="bottom" className={className}>
+      <button
+        type="button"
+        onClick={(e) => {
+          open(WELCOME_WIDGET);
+          activate(WELCOME_WIDGET.id);
+          e.currentTarget.blur();
+        }}
+        aria-label="What is Aether?"
+        className="shrink-0 rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-neon-pink"
+      >
+        <HelpIcon />
+      </button>
+    </Tooltip>
+  );
+}
+
+function HelpIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />
+      <path d="M12 17h.01" />
+    </svg>
+  );
+}

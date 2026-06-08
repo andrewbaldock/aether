@@ -5,10 +5,10 @@ import remarkGfm from "remark-gfm";
 import { ThinkingGlyph } from "../brand/ThinkingGlyph";
 import { Wordmark } from "../brand/Wordmark";
 import { useCapabilities } from "../capabilities/useCapabilities";
-import { AGENT_DIAGRAM_WIDGET } from "../capabilities/widgets/AgentDiagram";
 import { KNOWLEDGE_GRAPH_WIDGET } from "../capabilities/widgets/KnowledgeGraph";
 import { useUpdateSession } from "../hooks/useUpdateSession";
 import { useAgentEvents } from "./AgentEventContext";
+import { HelpButton } from "./HelpButton";
 import { ModelPicker } from "./ModelPicker";
 import { useSessionContext } from "./SessionContext";
 import { useChat } from "./useChat";
@@ -150,13 +150,6 @@ export function ChatPanel() {
     if (sessionId) {
       updateSession.mutate({ id: sessionId, patch: { model: nextModel } });
     }
-  }
-
-  // The eyeball: a momentary reveal of the Data Flow tab. Opens the column if
-  // closed and surfaces that tab — no longer a sticky on/off mode.
-  function revealDataFlow() {
-    open(AGENT_DIAGRAM_WIDGET);
-    activate(AGENT_DIAGRAM_WIDGET.id);
   }
 
   // Follow streaming output: re-fire as the last message's text grows (tokens
@@ -339,8 +332,9 @@ export function ChatPanel() {
             : "absolute inset-x-0 top-1/2 -translate-y-1/2 px-6 transition-all duration-600 ease-in-out"
         }
       >
+        <div className="mx-auto max-w-2xl">
         <div
-          className={`relative mx-auto rounded-lg border bg-elevated transition-colors max-w-2xl ${isLoading ? "aether-loading-border" : "border-border-strong focus-within:border-content-subtle"}`}
+          className={`relative rounded-lg border bg-elevated transition-colors ${isLoading ? "aether-loading-border" : "border-border-strong focus-within:border-content-subtle"}`}
         >
           <textarea
             ref={textareaRef}
@@ -359,60 +353,6 @@ export function ChatPanel() {
               onChange={selectModel}
               disabled={isLoading}
             />
-            {/* Knowledge Graph — a per-conversation MODE toggle. */}
-            <div className="group relative flex">
-              <button
-                type="button"
-                onClick={(e) => {
-                  toggleGraphMode();
-                  e.currentTarget.blur();
-                }}
-                aria-label="Knowledge Graph"
-                aria-pressed={graphMode}
-                className={
-                  graphMode
-                    ? "rounded-lg border border-border-strong bg-border-strong p-1.5 text-content max-md:p-2.5"
-                    : "rounded-lg border border-transparent p-1.5 text-content-muted hover:bg-border-strong hover:text-content max-md:p-2.5"
-                }
-              >
-                <GraphIcon />
-              </button>
-              <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 w-64 rounded-md bg-surface-overlay px-2.5 py-1.5 text-xs leading-snug text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-                <span className="font-semibold">
-                  Knowledge Graph · {graphMode ? "On" : "Off"}
-                </span>
-                <br />
-                {graphMode
-                  ? "I'm extracting entities and relationships as we talk and rendering them through the graphing plugin beside us. Click to turn off."
-                  : "Turn on to map this conversation as a live graph. Click to turn on."}
-                <br />
-                <span className="text-white/60">
-                  Just one plugin in Aether's capability column — the same seam
-                  can render charts, tables, or live 3D scenes. Anything.
-                </span>
-              </span>
-            </div>
-            {/* Eyeball — a momentary reveal of the Data Flow tab. */}
-            <div className="group relative flex">
-              <button
-                type="button"
-                onClick={(e) => {
-                  revealDataFlow();
-                  e.currentTarget.blur();
-                }}
-                aria-label="Show data flow"
-                className="rounded-lg border border-transparent p-1.5 text-content-muted hover:bg-border-strong hover:text-content max-md:p-2.5"
-              >
-                <EyeIcon />
-              </button>
-              <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 w-56 rounded-md bg-surface-overlay px-2.5 py-1.5 text-xs leading-snug text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-                <span className="font-semibold">See under the hood</span>
-                <br />
-                Reveals a live diagram of Aether's agent loop — the request,
-                Claude's tokens streaming back, and each tool firing in real
-                time.
-              </span>
-            </div>
             {/* Send */}
             <div className="group relative flex">
               <button
@@ -430,7 +370,81 @@ export function ChatPanel() {
             </div>
           </div>
         </div>
+
+        {/* Tool row — Aether's capabilities, beneath the box so they read as
+            "what I can do" rather than crowding the compose controls. The
+            Knowledge Graph is the first; future tools append as siblings. */}
+        <div className="mt-2 flex items-center gap-2">
+          <ToolChip
+            active={graphMode}
+            onClick={toggleGraphMode}
+            label="Knowledge Graph"
+            icon={<GraphIcon />}
+            tooltip={
+              <>
+                <span className="font-semibold">
+                  Knowledge Graph · {graphMode ? "On" : "Off"}
+                </span>
+                <br />
+                {graphMode
+                  ? "I'm extracting entities and relationships as we talk and rendering them through the graphing plugin beside us. Click to turn off."
+                  : "Turn on to map this conversation as a live graph. Click to turn on."}
+                <br />
+                <span className="text-white/60">
+                  Just one plugin in Aether's capability column — the same seam
+                  can render charts, tables, or live 3D scenes. Anything.
+                </span>
+              </>
+            }
+          />
+          {/* Help anchored to the right of the tool row, beneath the box. */}
+          <HelpButton className="ml-auto" />
+        </div>
+        </div>
       </form>
+    </div>
+  );
+}
+
+// A capability in the tool row beneath the chatbox. Toggle tools (like the
+// Knowledge Graph) use `active` for the on/off pill styling; future momentary
+// tools can leave it false. Carries an icon, a text label, and a rich hover
+// tooltip explaining what the tool does.
+function ToolChip({
+  active,
+  onClick,
+  label,
+  icon,
+  tooltip,
+}: {
+  active?: boolean;
+  onClick: () => void;
+  label: string;
+  icon: React.ReactNode;
+  tooltip: React.ReactNode;
+}) {
+  return (
+    <div className="group relative flex">
+      <button
+        type="button"
+        onClick={(e) => {
+          onClick();
+          e.currentTarget.blur();
+        }}
+        aria-label={label}
+        aria-pressed={active}
+        className={
+          active
+            ? "flex items-center gap-1.5 rounded-lg border border-border-strong bg-border-strong px-2.5 py-1.5 text-xs font-medium text-content max-md:py-2.5"
+            : "flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-content-muted hover:bg-border-strong hover:text-content max-md:py-2.5"
+        }
+      >
+        {icon}
+        <span>{label}</span>
+      </button>
+      <span className="pointer-events-none absolute bottom-full left-0 mb-1.5 w-64 rounded-md bg-surface-overlay px-2.5 py-1.5 text-xs leading-snug text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+        {tooltip}
+      </span>
     </div>
   );
 }
@@ -455,26 +469,6 @@ function GraphIcon() {
       <path d="M8.1 7.3 15.6 8.1" />
       <path d="M7 8.2 8.4 15.7" />
       <path d="M10.9 16.6 16.4 10.7" />
-    </svg>
-  );
-}
-
-// An eye glyph. Marks the momentary "Show data flow" reveal.
-function EyeIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
-      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }

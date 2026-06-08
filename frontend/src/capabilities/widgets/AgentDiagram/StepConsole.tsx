@@ -17,7 +17,7 @@ export function StepConsole({ log }: { log: LogEntry[] }) {
       {/* ~3 lines tall (line-height 1rem × 3) + padding, scrollable past that. */}
       <div className="h-12 overflow-y-auto font-mono text-[11px] leading-4">
         {log.length === 0 ? (
-          <div className="text-content-faint">
+          <div className="text-content-muted">
             console — steps appear here as the loop runs
           </div>
         ) : (

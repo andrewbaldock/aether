@@ -1,8 +1,10 @@
 import {
+  BE,
   DIVIDER_X,
   type DiagramEdge,
   type DiagramNode,
   EDGES,
+  FE,
   LOOP_BOXES,
   NODE_BY_ID,
   NODES,
@@ -26,12 +28,13 @@ export interface DiagramSvgProps {
 // role colours (ROLE_COLOR) and the green loop glow stay fixed — they're status
 // identity, not surfaces.
 const IDLE_FILL = "var(--elevated)"; // was neutral-800
-const IDLE_STROKE = "var(--border-strong)"; // was neutral-700
-const COMPLETE_STROKE = "var(--content-subtle)"; // was zinc-600
+const IDLE_STROKE = "var(--content-subtle)"; // visible chip outline at rest
 
 // Resolve the colour for a node given its status. Active/looping use the role
-// colour; idle/complete are neutral. The role hex is also written to --node-color
-// so the pulse drop-shadow (CSS) glows in the matching hue.
+// colour; idle and complete just read in plain white — the diagram is always
+// legible, and the role colour is reserved for "this is firing right now."
+// The role hex is also written to --node-color so the pulse drop-shadow (CSS)
+// glows in the matching hue while active.
 function nodeColors(node: DiagramNode, status: NodeStatus) {
   const role = ROLE_COLOR[node.role];
   switch (status) {
@@ -43,18 +46,13 @@ function nodeColors(node: DiagramNode, status: NodeStatus) {
         text: "var(--content)",
         glow: role,
       };
-    case "complete":
-      return {
-        fill: "var(--surface)",
-        stroke: COMPLETE_STROKE,
-        text: "var(--content-muted)",
-        glow: role,
-      };
     default:
+      // Idle / complete — fully readable white text on a neutral chip, exactly
+      // like the surrounding copy. No dim "waiting" state.
       return {
         fill: IDLE_FILL,
         stroke: IDLE_STROKE,
-        text: "var(--content-subtle)",
+        text: "var(--content)",
         glow: role,
       };
   }
@@ -126,9 +124,7 @@ function NodeLabel({
           dominantBaseline="central"
           fontSize={9.5}
           fontFamily="ui-monospace, monospace"
-          fill={
-            status === "idle" ? "var(--content-faint)" : "var(--content-subtle)"
-          }
+          fill="var(--content-muted)"
         >
           {node.sub}
         </text>
@@ -151,7 +147,7 @@ function Edge({ edge, status }: { edge: DiagramEdge; status: NodeStatus }) {
       <path
         d={d}
         fill="none"
-        stroke={live ? color : "var(--border-strong)"}
+        stroke={live ? color : "var(--content-subtle)"}
         strokeWidth={live ? 2 : 1.25}
         markerEnd={`url(#arrow-${live ? "live" : "idle"})`}
         className="agent-edge"
@@ -205,7 +201,7 @@ function EdgeLabel({
       fontSize={9}
       fontFamily="ui-monospace, monospace"
       fontWeight={600}
-      fill={live ? color : "var(--content-faint)"}
+      fill={live ? color : "var(--content-muted)"}
     >
       {edge.label}
     </text>
@@ -219,6 +215,9 @@ export function DiagramSvg({
 }: DiagramSvgProps) {
   const agentBox = LOOP_BOXES.find((b) => b.id === "agent_loop");
   const toolNode = NODE_BY_ID.tool_exec;
+  // Structural captions (zone headers, loop labels) — readable, secondary to
+  // the white node labels.
+  const captionFill = "var(--content-muted)";
 
   return (
     <svg
@@ -237,7 +236,7 @@ export function DiagramSvg({
           markerHeight="6"
           orient="auto-start-reverse"
         >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--border-strong)" />
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--content-subtle)" />
         </marker>
         <marker
           id="arrow-live"
@@ -263,35 +262,35 @@ export function DiagramSvg({
         strokeDasharray="2 6"
       />
       <text
-        x={DIVIDER_X / 2}
+        x={FE}
         y={26}
         textAnchor="middle"
         fontSize={15}
         fontWeight={700}
         letterSpacing={1}
-        fill="var(--content-faint)"
+        fill={captionFill}
       >
-        <tspan x={DIVIDER_X / 2} dy="0">
+        <tspan x={FE} dy="0">
           FRONTEND
         </tspan>
-        <tspan x={DIVIDER_X / 2} dy="22">
-          · browser
+        <tspan x={FE} dy="22">
+          browser
         </tspan>
       </text>
       <text
-        x={DIVIDER_X + (VIEW_W - DIVIDER_X) / 2}
+        x={BE}
         y={26}
         textAnchor="middle"
         fontSize={15}
         fontWeight={700}
         letterSpacing={1}
-        fill="var(--content-faint)"
+        fill={captionFill}
       >
-        <tspan x={DIVIDER_X + (VIEW_W - DIVIDER_X) / 2} dy="0">
+        <tspan x={BE} dy="0">
           BACKEND
         </tspan>
-        <tspan x={DIVIDER_X + (VIEW_W - DIVIDER_X) / 2} dy="22">
-          · Bun server
+        <tspan x={BE} dy="22">
+          server
         </tspan>
       </text>
 
@@ -322,7 +321,7 @@ export function DiagramSvg({
               fontSize={9.5}
               fontFamily="ui-monospace, monospace"
               fontWeight={600}
-              fill="var(--content-faint)"
+              fill={captionFill}
             >
               {box.label}
             </text>

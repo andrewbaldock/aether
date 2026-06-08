@@ -1,8 +1,8 @@
 import { ROLE_COLOR, type Role } from "./nodes";
 
 // A small key so the diagram reads on its own — what the colours mean. The pills
-// sit dimmed above the diagram; whichever role is currently lit in the loop
-// highlights, mirroring the active node(s) below.
+// are always fully legible; whichever role is currently lit in the loop gains a
+// glow, mirroring the active node(s) below.
 const ITEMS: { role: Role; label: string }[] = [
   { role: "frontend", label: "Frontend" },
   { role: "backend", label: "Backend" },
@@ -20,9 +20,7 @@ export function Legend({ activeRoles }: { activeRoles: Set<Role> }) {
         return (
           <span
             key={item.role}
-            className={`flex items-center gap-1.5 transition-all duration-200 ${
-              active ? "text-content" : "text-content-faint opacity-40"
-            }`}
+            className="flex items-center gap-1.5 text-content transition-all duration-200"
           >
             <span
               className="inline-block h-2.5 w-2.5 rounded-full transition-all duration-200"

@@ -43,9 +43,10 @@ export const DIVIDER_X = 280;
 const NW = 156; // standard node width
 const NH = 46; // standard node height
 
-// Column centre lines.
-const FE = 150; // frontend column centre x
-const BE = 410; // backend column centre x
+// Column centre lines. Exported so the zone headers (in DiagramSvg) sit over
+// the real columns rather than the midpoint of each half.
+export const FE = 150; // frontend column centre x
+export const BE = 410; // backend column centre x
 
 // Helper: a node centred on column `cx` at vertical `y`. Every node is pushed
 // down by HEADER_H so the larger wrapped headers have clear space above.
