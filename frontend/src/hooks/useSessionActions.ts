@@ -3,7 +3,7 @@ import { useCallback } from "react";
 import { navigate } from "./useRoute";
 import { apiFetch } from "../lib/queryClient";
 import type { Message } from "../shell/useChat";
-import { sessionsKey } from "./useSessionList";
+import { type Session, sessionsKey } from "./useSessionList";
 
 interface UseSessionActionsArgs {
   // The user whose session list should be invalidated after a mutation.
@@ -49,13 +49,39 @@ export function useSessionActions({
       // The query cache's onError logs failures; bail quietly on error so a failed
       // load doesn't switch the view to an empty conversation.
       let dbMessages: DbMessage[];
+      let session: Session;
       try {
-        dbMessages = await queryClient.fetchQuery({
-          queryKey: ["messages", id],
-          queryFn: () => apiFetch<DbMessage[]>(`/api/sessions/${id}/messages`),
-        });
+        [dbMessages, session] = await Promise.all([
+          queryClient.fetchQuery({
+            queryKey: ["messages", id],
+            queryFn: () => apiFetch<DbMessage[]>(`/api/sessions/${id}/messages`),
+          }),
+          apiFetch<Session>(`/api/sessions/${id}`),
+        ]);
       } catch {
         navigate("/");
+        return;
+      }
+      // Foreign session: fork it into a new session owned by this user, then
+      // load the fork. The original is untouched; this user gets their own branch
+      // of the conversation from that point forward.
+      if (session.user_id !== userId) {
+        let forkId: string;
+        try {
+          const fork = await apiFetch<{ id: string }>(`/api/sessions/${id}/fork`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId }),
+          });
+          forkId = fork.id;
+        } catch {
+          navigate("/");
+          return;
+        }
+        invalidateSessions();
+        // Recurse into the fork — it's now owned by this user, so the foreign
+        // branch below won't fire again.
+        await loadSession(forkId);
         return;
       }
       const messages: Message[] = dbMessages.map((m) => ({
@@ -69,7 +95,7 @@ export function useSessionActions({
       // untitled in memory) picks up its persisted auto-title from the DB.
       invalidateSessions();
     },
-    [sessionId, switchSession, queryClient, invalidateSessions]
+    [sessionId, switchSession, queryClient, invalidateSessions, userId]
   );
 
   const renameMutation = useMutation({

@@ -101,7 +101,7 @@ function ShellInner() {
       <Group orientation="horizontal" className="min-w-0 flex-1">
         {!isFullscreen && (
           <>
-            <Panel id="chat" defaultSize={isOpen ? "50%" : "82%"} minSize="30%">
+            <Panel id="chat" defaultSize={isOpen ? "50%" : "82%"} minSize="30%" style={{ overflow: "hidden" }}>
               <ChatPanel />
             </Panel>
             <Separator className={handle} />
