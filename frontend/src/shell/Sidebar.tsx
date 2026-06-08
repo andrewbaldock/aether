@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "../brand/Wordmark";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { useSessionContext } from "./SessionContext";
+import { Tooltip } from "./Tooltip";
 
 export function Sidebar({
   onToggle,
@@ -52,7 +53,7 @@ export function Sidebar({
   return (
     <div className="flex h-full flex-col bg-surface-raised text-content-muted">
       <div className="relative flex items-center justify-between px-4 py-3">
-        <div className="group relative flex">
+        <Tooltip label="Collapse sidebar" side="bottom">
           <button
             type="button"
             onClick={(e) => {
@@ -64,10 +65,7 @@ export function Sidebar({
           >
             <SidebarToggleIcon />
           </button>
-          <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 whitespace-nowrap rounded-md bg-surface-overlay px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-            Collapse sidebar
-          </span>
-        </div>
+        </Tooltip>
         {/* Absolutely centred against the full bar so the differing widths of the
             toggle (left) and theme toggle (right) don't push it off-centre. */}
         <div className="pointer-events-none absolute left-1/2 -translate-x-1/2">
@@ -117,7 +115,11 @@ export function Sidebar({
 
       <div className="px-4 pb-3 pt-2 text-center">
         <a
-          href={import.meta.env.DEV ? "http://localhost:5173" : "https://andrewbaldock.com"}
+          href={
+            import.meta.env.DEV
+              ? "http://localhost:5173"
+              : "https://andrewbaldock.com"
+          }
           target="_blank"
           rel="noreferrer"
           className="text-xs text-content-faint transition-colors hover:text-content-muted"
