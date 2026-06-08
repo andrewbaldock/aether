@@ -65,7 +65,7 @@ export function MobileShell() {
       {/* Top bar: hamburger + wordmark. Kept slim so the chat dominates.
           dvh root (above) tracks the iOS URL bar/keyboard; the safe-area top
           padding clears the notch. */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface-raised px-2 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+      <div className="relative flex shrink-0 items-center gap-2 border-b border-border bg-surface-raised px-2 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
@@ -74,7 +74,9 @@ export function MobileShell() {
         >
           <SidebarToggleIcon />
         </button>
-        <Wordmark height={24} compact={!started} />
+        <div className="pointer-events-none absolute left-1/2 -translate-x-1/2">
+          <Wordmark height={24} compact={!started} />
+        </div>
         {/* Once a graph (or any widget) exists, give a way back INTO it from chat.
             Hidden until then, so the empty-state chat stays clean. Pairs with the
             overlay's "← Chat" for the back-and-forth. */}
