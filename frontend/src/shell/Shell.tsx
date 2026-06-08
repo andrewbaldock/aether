@@ -4,8 +4,10 @@ import { useCapabilities } from "../capabilities/useCapabilities";
 import { GraphPersistenceBridge } from "../capabilities/widgets/KnowledgeGraph/GraphPersistenceBridge";
 import { CapabilityColumn } from "./CapabilityColumn";
 import { ChatPanel } from "./ChatPanel";
+import { MobileShell } from "./MobileShell";
 import { SessionProvider } from "./SessionContext";
 import { Sidebar, SidebarToggleIcon } from "./Sidebar";
+import { useIsMobile } from "./useIsMobile";
 
 const handle =
   "w-1 bg-border transition-colors hover:bg-border-strong data-[separator-state=hover]:bg-border-strong data-[separator-state=drag]:bg-content-subtle";
@@ -34,6 +36,7 @@ export function Shell() {
 }
 
 function ShellInner() {
+  const isMobile = useIsMobile();
   const { isOpen, isFullscreen } = useCapabilities();
 
   const capabilityRef = usePanelRef();
@@ -65,6 +68,11 @@ function ShellInner() {
   }, [isOpen, capabilityRef]);
 
   const savedCapabilitySize = readCapabilitySize();
+
+  // Mobile gets a single-column, view-switched layout. Branch here — after all
+  // hooks have run, so hook order stays stable across the breakpoint — rather
+  // than retrofitting the resizable desktop grid onto a phone.
+  if (isMobile) return <MobileShell />;
 
   return (
     <div className="relative flex h-screen w-screen overflow-hidden bg-surface">

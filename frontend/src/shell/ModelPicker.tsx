@@ -49,7 +49,7 @@ export function ModelPicker({ value, onChange, disabled }: ModelPickerProps) {
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         aria-label="Claude model"
-        className="rounded-lg border border-transparent bg-transparent py-1.5 pl-1.5 pr-1 text-xs text-content-muted hover:bg-border-strong hover:text-content focus:outline-none disabled:opacity-50"
+        className="rounded-lg border border-transparent bg-transparent py-1.5 pl-1.5 pr-1 text-xs text-content-muted hover:bg-border-strong hover:text-content focus:outline-none disabled:opacity-50 max-md:py-2.5 max-md:text-sm"
       >
         {models.map((m) => (
           <option key={m.id} value={m.id} className="text-content">

@@ -371,8 +371,8 @@ export function ChatPanel() {
                 aria-pressed={graphMode}
                 className={
                   graphMode
-                    ? "rounded-lg border border-border-strong bg-border-strong p-1.5 text-content"
-                    : "rounded-lg border border-transparent p-1.5 text-content-muted hover:bg-border-strong hover:text-content"
+                    ? "rounded-lg border border-border-strong bg-border-strong p-1.5 text-content max-md:p-2.5"
+                    : "rounded-lg border border-transparent p-1.5 text-content-muted hover:bg-border-strong hover:text-content max-md:p-2.5"
                 }
               >
                 <GraphIcon />
@@ -401,7 +401,7 @@ export function ChatPanel() {
                   e.currentTarget.blur();
                 }}
                 aria-label="Show data flow"
-                className="rounded-lg border border-transparent p-1.5 text-content-muted hover:bg-border-strong hover:text-content"
+                className="rounded-lg border border-transparent p-1.5 text-content-muted hover:bg-border-strong hover:text-content max-md:p-2.5"
               >
                 <EyeIcon />
               </button>
@@ -419,7 +419,7 @@ export function ChatPanel() {
                 type="submit"
                 onClick={(e) => e.currentTarget.blur()}
                 aria-label="Send message"
-                className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-r from-[#fd40a4] to-[#c35ed1] text-2xl leading-none text-white hover:brightness-110 disabled:opacity-40"
+                className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-r from-[#fd40a4] to-[#c35ed1] text-2xl leading-none text-white hover:brightness-110 disabled:opacity-40 max-md:h-11 max-md:w-11"
                 disabled={draft.trim().length === 0 || isLoading}
               >
                 <span className={isLoading ? "animate-spin" : ""}>𑁍</span>
