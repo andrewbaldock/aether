@@ -12,6 +12,7 @@ import { HelpButton } from "./HelpButton";
 import { ModelPicker } from "./ModelPicker";
 import { useSessionContext } from "./SessionContext";
 import { ToolInfoSheet } from "./ToolInfoSheet";
+import { Tooltip } from "./Tooltip";
 import { useChat } from "./useChat";
 import { useIsMobile } from "./useIsMobile";
 
@@ -51,7 +52,8 @@ export function ChatPanel() {
   const currentSession = sessions.find((s) => s.id === sessionId);
   const displayTitle =
     currentSession?.title ??
-    (messages.find((m) => m.role === "user")?.text?.slice(0, 60) ?? null);
+    messages.find((m) => m.role === "user")?.text?.slice(0, 60) ??
+    null;
   const graphMode = currentSession ? currentSession.graph_mode : lastGraphMode;
   // Current graph mode read inside the bus subscription (avoids re-subscribing
   // every time it flips).
@@ -382,122 +384,123 @@ export function ChatPanel() {
         }
       >
         <div className="mx-auto max-w-2xl">
-        <div
-          className={`relative rounded-lg border bg-elevated transition-colors ${isLoading ? "aether-loading-border" : "border-border-strong focus-within:border-content-subtle"}`}
-        >
-          <textarea
-            ref={textareaRef}
-            value={draft}
-            // Don't autofocus on mobile: it slams the keyboard open the moment
-            // the app loads (and was part of the on-load zoom). Desktop keeps it.
-            autoFocus={!isMobile}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message… (Shift+Enter for newline)"
-            rows={1}
-            // text-base (16px) on mobile: iOS Safari auto-zooms the page when a
-            // focused input has font-size < 16px, and with autoFocus that fires
-            // on load — leaving the whole UI zoomed in. 16px disables that zoom.
-            className={`w-full resize-none bg-transparent px-4 pt-3 pb-10 text-sm max-md:text-base text-content placeholder:text-content-subtle focus:outline-none transition-opacity${isLoading ? " opacity-50" : ""}${started ? "" : " min-h-24"}`}
-          />
-          <div className="absolute bottom-2 right-2 flex items-center gap-2">
-            {/* Model picker — which Claude answers this conversation. */}
-            <ModelPicker
-              value={model}
-              onChange={selectModel}
-              disabled={isLoading}
+          <div
+            className={`relative rounded-lg border bg-elevated transition-colors ${isLoading ? "aether-loading-border" : "border-border-strong focus-within:border-content-subtle"}`}
+          >
+            <textarea
+              ref={textareaRef}
+              value={draft}
+              // Don't autofocus on mobile: it slams the keyboard open the moment
+              // the app loads (and was part of the on-load zoom). Desktop keeps it.
+              autoFocus={!isMobile}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a message… (Shift+Enter for newline)"
+              rows={1}
+              // text-base (16px) on mobile: iOS Safari auto-zooms the page when a
+              // focused input has font-size < 16px, and with autoFocus that fires
+              // on load — leaving the whole UI zoomed in. 16px disables that zoom.
+              className={`w-full resize-none bg-transparent px-4 pt-3 pb-10 text-sm max-md:text-base text-content placeholder:text-content-subtle focus:outline-none transition-opacity${isLoading ? " opacity-50" : ""}${started ? "" : " min-h-24"}`}
             />
-            {/* Send / Stop — while a turn is streaming the button becomes a stop
+            <div className="absolute bottom-2 right-2 flex items-center gap-2">
+              {/* Model picker — which Claude answers this conversation. */}
+              <ModelPicker
+                value={model}
+                onChange={selectModel}
+                disabled={isLoading}
+              />
+              {/* Send / Stop — while a turn is streaming the button becomes a stop
                 control: the spinner is the resting state, and hovering reveals a
                 stop icon that aborts the stream on click. */}
-            <div className="group relative flex">
-              <button
-                // While loading this is an abort control, not a submit — `button`
-                // type so it never re-submits the form, and it stays enabled.
-                type={isLoading ? "button" : "submit"}
-                onClick={(e) => {
-                  e.currentTarget.blur();
-                  if (isLoading) abortStream();
-                }}
-                aria-label={isLoading ? "Stop generating" : "Send message"}
-                className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-r from-[#fd40a4] to-[#c35ed1] text-2xl leading-none text-white hover:brightness-110 disabled:opacity-40 max-md:h-11 max-md:w-11"
-                // Only disabled when there's nothing to send. While loading the
-                // button is active so it can stop the stream.
-                disabled={!isLoading && draft.trim().length === 0}
+              <Tooltip
+                label={isLoading ? "Stop generating" : "Send message"}
+                side="top"
+                className="group"
               >
-                {isLoading ? (
-                  <>
-                    {/* Resting: spinner. Hidden on hover so the stop icon shows. */}
-                    <span className="animate-spin group-hover:hidden">𑁍</span>
-                    {/* Hover: a stop square. Smaller than the send glyph. */}
-                    <span className="hidden text-base leading-none group-hover:inline">
-                      ◼
-                    </span>
-                  </>
-                ) : (
-                  <span>𑁍</span>
-                )}
-              </button>
-              <span className="pointer-events-none absolute bottom-full right-0 mb-1.5 whitespace-nowrap rounded-md bg-surface-overlay px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-                {isLoading ? "Stop generating" : "Send message"}
-              </span>
+                <button
+                  // While loading this is an abort control, not a submit — `button`
+                  // type so it never re-submits the form, and it stays enabled.
+                  type={isLoading ? "button" : "submit"}
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    if (isLoading) abortStream();
+                  }}
+                  aria-label={isLoading ? "Stop generating" : "Send message"}
+                  className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-r from-[#fd40a4] to-[#c35ed1] text-2xl leading-none text-white hover:brightness-110 disabled:opacity-40 max-md:h-11 max-md:w-11"
+                  // Only disabled when there's nothing to send. While loading the
+                  // button is active so it can stop the stream.
+                  disabled={!isLoading && draft.trim().length === 0}
+                >
+                  {isLoading ? (
+                    <>
+                      {/* Resting: spinner. Hidden on hover so the stop icon shows. */}
+                      <span className="animate-spin group-hover:hidden">𑁍</span>
+                      {/* Hover: a stop square. Smaller than the send glyph. */}
+                      <span className="hidden text-base leading-none group-hover:inline">
+                        ◼
+                      </span>
+                    </>
+                  ) : (
+                    <span>𑁍</span>
+                  )}
+                </button>
+              </Tooltip>
             </div>
           </div>
-        </div>
 
-        {/* Tool row — Aether's capabilities, beneath the box so they read as
+          {/* Tool row — Aether's capabilities, beneath the box so they read as
             "what I can do" rather than crowding the compose controls. The
             Knowledge Graph is the first; future tools append as siblings. */}
-        <div className="mt-2 flex items-center gap-2">
-          <ToolChip
-            active={graphMode}
-            // Desktop: tap toggles instantly (the hover tooltip explains it).
-            // Mobile: no hover, so tap opens an info+toggle sheet instead of
-            // silently flipping an unlabelled icon.
-            onClick={() => {
-              if (isMobile) setKgSheetOpen(true);
-              else toggleGraphMode();
-            }}
-            label="Knowledge Graph"
-            icon={<GraphIcon />}
-            tooltip={
-              <>
-                <span className="font-semibold">
-                  Knowledge Graph · {graphMode ? "On" : "Off"}
-                </span>
-                <br />
-                {graphMode
-                  ? "I'm extracting entities and relationships as we talk and rendering them through the graphing plugin beside us. Click to turn off."
-                  : "Turn on to map this conversation as a live graph. Click to turn on."}
-                <br />
-                <span className="text-white/60">
-                  Just one plugin in Aether's capability column — the same seam
-                  can render charts, tables, or live 3D scenes. Anything.
-                </span>
-              </>
-            }
-          />
-          {/* Help anchored to the right of the tool row, beneath the box. */}
-          <HelpButton className="ml-auto" />
-        </div>
+          <div className="mt-2 flex items-center gap-2">
+            <ToolChip
+              active={graphMode}
+              // Desktop: tap toggles instantly (the hover tooltip explains it).
+              // Mobile: no hover, so tap opens an info+toggle sheet instead of
+              // silently flipping an unlabelled icon.
+              onClick={() => {
+                if (isMobile) setKgSheetOpen(true);
+                else toggleGraphMode();
+              }}
+              label="Knowledge Graph"
+              icon={<GraphIcon />}
+              tooltip={
+                <>
+                  <span className="font-semibold">
+                    Knowledge Graph · {graphMode ? "On" : "Off"}
+                  </span>
+                  <br />
+                  {graphMode
+                    ? "I'm extracting entities and relationships as we talk and rendering them through the graphing plugin beside us. Click to turn off."
+                    : "Turn on to map this conversation as a live graph. Click to turn on."}
+                  <br />
+                  <span className="text-white/60">
+                    Just one plugin in Aether's capability column — the same
+                    seam can render charts, tables, or live 3D scenes. Anything.
+                  </span>
+                </>
+              }
+            />
+            {/* Help anchored to the right of the tool row, beneath the box. */}
+            <HelpButton className="ml-auto" />
+          </div>
 
-        {/* Mobile-only: the Knowledge Graph info + toggle sheet. */}
-        <ToolInfoSheet
-          open={kgSheetOpen}
-          onClose={() => setKgSheetOpen(false)}
-          title="Knowledge Graph"
-          icon={<GraphIcon />}
-          enabled={graphMode}
-          onToggle={toggleGraphMode}
-        >
-          {graphMode
-            ? "It's on — as we talk I extract the people, places, and ideas and render them as a live graph you can open from the tool row."
-            : "Turn it on to map this conversation as a live graph — people, places, and ideas, drawn as we talk."}
-          <span className="mt-2 block text-content-subtle">
-            Just one plugin in Aether's capability column — the same seam can
-            render charts, tables, or live 3D scenes. Anything.
-          </span>
-        </ToolInfoSheet>
+          {/* Mobile-only: the Knowledge Graph info + toggle sheet. */}
+          <ToolInfoSheet
+            open={kgSheetOpen}
+            onClose={() => setKgSheetOpen(false)}
+            title="Knowledge Graph"
+            icon={<GraphIcon />}
+            enabled={graphMode}
+            onToggle={toggleGraphMode}
+          >
+            {graphMode
+              ? "It's on — as we talk I extract the people, places, and ideas and render them as a live graph you can open from the tool row."
+              : "Turn it on to map this conversation as a live graph — people, places, and ideas, drawn as we talk."}
+            <span className="mt-2 block text-content-subtle">
+              Just one plugin in Aether's capability column — the same seam can
+              render charts, tables, or live 3D scenes. Anything.
+            </span>
+          </ToolInfoSheet>
         </div>
       </form>
     </div>
@@ -522,7 +525,11 @@ function ToolChip({
   tooltip: React.ReactNode;
 }) {
   return (
-    <div className="group relative flex">
+    <Tooltip
+      label={tooltip}
+      side="top"
+      contentClassName="max-w-xs whitespace-normal break-words px-2.5 py-1.5 leading-snug"
+    >
       <button
         type="button"
         onClick={(e) => {
@@ -542,10 +549,7 @@ function ToolChip({
             aria-label on the button carries the name for assistive tech. */}
         <span className="max-md:hidden">{label}</span>
       </button>
-      <span className="pointer-events-none absolute bottom-full left-0 mb-1.5 w-64 rounded-md bg-surface-overlay px-2.5 py-1.5 text-xs leading-snug text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-        {tooltip}
-      </span>
-    </div>
+    </Tooltip>
   );
 }
 
@@ -600,7 +604,10 @@ function ConversationTitle({
       className="group flex w-full items-center justify-center gap-1 border-b border-border px-4 pb-2 pt-3.5 text-sm text-content-muted hover:text-content transition-colors"
     >
       <span className="max-w-sm truncate">{title ?? "·"}</span>
-      <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden />
+      <ChevronDown
+        className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+        aria-hidden
+      />
     </button>
   );
 }

@@ -1,3 +1,4 @@
+import * as RadixTooltip from "@radix-ui/react-tooltip";
 import { useEffect } from "react";
 import {
   CapabilityProvider,
@@ -8,8 +9,8 @@ import "./capabilities/widgets/PlaceholderWidget";
 import "./capabilities/widgets/AgentDiagram";
 import "./capabilities/widgets/KnowledgeGraph";
 import "./capabilities/widgets/Welcome";
-import { WELCOME_WIDGET } from "./capabilities/widgets/Welcome";
 import { KnowledgeGraphProvider } from "./capabilities/widgets/KnowledgeGraph/useKnowledgeGraphState";
+import { WELCOME_WIDGET } from "./capabilities/widgets/Welcome";
 import { AgentEventProvider } from "./shell/AgentEventContext";
 import { BackendStatusBanner } from "./shell/BackendStatusBanner";
 import { Shell } from "./shell/Shell";
@@ -42,18 +43,23 @@ function FirstArrivalWelcome() {
 export default function App() {
   return (
     <ThemeProvider>
-      <BackendStatusBanner />
-      <AgentEventProvider>
-        {/* Subscribes to the bus at the root so the graph never misses a
+      {/* One shared tooltip provider for the whole app, so Radix can coordinate
+          hover timing (skip the open-delay when moving between adjacent
+          tooltips). */}
+      <RadixTooltip.Provider delayDuration={300} skipDelayDuration={150}>
+        <BackendStatusBanner />
+        <AgentEventProvider>
+          {/* Subscribes to the bus at the root so the graph never misses a
             build_knowledge_graph payload — the widget can mount after the first
             one arrives. */}
-        <KnowledgeGraphProvider>
-          <CapabilityProvider>
-            <FirstArrivalWelcome />
-            <Shell />
-          </CapabilityProvider>
-        </KnowledgeGraphProvider>
-      </AgentEventProvider>
+          <KnowledgeGraphProvider>
+            <CapabilityProvider>
+              <FirstArrivalWelcome />
+              <Shell />
+            </CapabilityProvider>
+          </KnowledgeGraphProvider>
+        </AgentEventProvider>
+      </RadixTooltip.Provider>
     </ThemeProvider>
   );
 }

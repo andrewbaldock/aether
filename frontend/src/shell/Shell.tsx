@@ -6,9 +6,9 @@ import { parseRoute } from "../hooks/useRoute";
 import { CapabilityColumn } from "./CapabilityColumn";
 import { ChatPanel } from "./ChatPanel";
 import { MobileShell } from "./MobileShell";
-import { useSessionContext } from "./SessionContext";
-import { SessionProvider } from "./SessionContext";
+import { SessionProvider, useSessionContext } from "./SessionContext";
 import { Sidebar, SidebarToggleIcon } from "./Sidebar";
+import { Tooltip } from "./Tooltip";
 import { useIsMobile } from "./useIsMobile";
 
 const handle =
@@ -28,11 +28,10 @@ function readCapabilitySize(): number {
 // SessionProvider so it can call loadSession.
 function RouteBootstrap() {
   const { loadSession } = useSessionContext();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only — subsequent navigation is driven by user actions
   useEffect(() => {
     const route = parseRoute(location.pathname);
     if (route.type === "conversation") loadSession(route.sessionId);
-    // Mount-only — subsequent navigation is driven by user actions.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return null;
 }
@@ -101,7 +100,12 @@ function ShellInner() {
       <Group orientation="horizontal" className="min-w-0 flex-1">
         {!isFullscreen && (
           <>
-            <Panel id="chat" defaultSize={isOpen ? "50%" : "82%"} minSize="30%" style={{ overflow: "hidden" }}>
+            <Panel
+              id="chat"
+              defaultSize={isOpen ? "50%" : "82%"}
+              minSize="30%"
+              style={{ overflow: "hidden" }}
+            >
               <ChatPanel />
             </Panel>
             <Separator className={handle} />
@@ -136,7 +140,11 @@ function ShellInner() {
       </Group>
 
       {sidebarCollapsed && (
-        <div className="group absolute left-2 top-3 z-10 flex">
+        <Tooltip
+          label="Open sidebar"
+          side="right"
+          className="absolute left-2 top-3 z-10"
+        >
           <button
             type="button"
             onClick={(e) => {
@@ -148,10 +156,7 @@ function ShellInner() {
           >
             <SidebarToggleIcon />
           </button>
-          <span className="pointer-events-none absolute left-full ml-1.5 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-surface-overlay px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-            Open sidebar
-          </span>
-        </div>
+        </Tooltip>
       )}
     </div>
   );
