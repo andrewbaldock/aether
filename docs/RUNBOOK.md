@@ -20,17 +20,21 @@ A single reference for dev, build, deploy, and management across both projects. 
 | Location | Command | Port |
 |---|---|---|
 | `frontend/` | `bun dev` | 5174 |
-| `backend/` | `bun run dev` | 8080 |
+| `backend/` | `bun run dev` | 8000 |
 
-Both run concurrently in separate terminals.
+Both run concurrently in separate terminals. The frontend's Vite dev server proxies
+`/api` → `http://localhost:8000` (`frontend/vite.config.ts`), so the backend must be
+on 8000 in dev. Override with `PORT` only if you also update the proxy target.
 
 ### Build & Typecheck
 
 **Frontend:**
 ```bash
-bun run build        # runs: tsc -b && vite build
+bun run build        # runs: vitest run && tsc -b && vite build
 bun run typecheck    # runs: tsc -b --noEmit
 ```
+
+`build` runs the tests first, so a failing test blocks the build.
 
 ⚠️ **Always run `bun run build` before push.** The `typecheck` and `build` commands use different TS configs; a green typecheck can still fail the build.
 
@@ -72,10 +76,18 @@ Fly.io hosts the Aether **backend API** as a Docker container. It handles comput
 | Region | `sjc` (San Jose) |
 | Scaling | Scales to zero when idle; cold start ~5–10s |
 
-**Secrets** (never in repo — live on Fly):
+**Secrets** (never in repo — live on Fly). Set the LLM provider keys (see *Manage
+LLM Providers* above) plus the Supabase keys here. Setting a secret triggers an
+automatic rolling redeploy.
 ```bash
-fly secrets set ANTHROPIC_API_KEY="sk-ant-..." --app aether-ab-api
-fly secrets list --app aether-ab-api
+# set one or many at once (one redeploy); values are write-only after
+fly secrets set ANTHROPIC_API_KEY="sk-ant-..." \
+  GOOGLE_AI_API_KEY="AQ..." \
+  DEEPSEEK_API_KEY="sk-..." \
+  MISTRAL_API_KEY="..." \
+  --app aether-ab-api
+
+fly secrets list --app aether-ab-api   # names + digests only, never values
 ```
 
 **Logs:**
@@ -128,6 +140,37 @@ on the model to re-emit it. Run once:
 ```sql
 alter table sessions add column if not exists graph_data jsonb;
 ```
+
+### Manage LLM Providers
+
+Aether is **multi-provider**. The model picker routes each conversation to a
+provider based on the chosen model (`backend/src/models.ts` tags every model with
+its provider; `backend/src/llm.ts` picks the client). Claude uses the Anthropic
+SDK; Google / DeepSeek / Mistral share one OpenAI-compatible client (the `openai`
+SDK pointed at each provider's base URL). Keys are read **lazily** — a missing key
+only fails a turn that actually uses that provider, so the app runs on Anthropic
+alone.
+
+| Provider | Models in picker | Get a key | Free tier | Notes |
+|---|---|---|---|---|
+| Anthropic | Sonnet 4.6 (default), Opus 4.8, Haiku 4.5 | https://console.anthropic.com | no | required to run |
+| Google | Gemini 3.5 Flash, 3.1 Flash-Lite | https://aistudio.google.com/apikey | yes (1,500 req/day) | OpenAI-compat shim mislabels streamed tool calls as `finish_reason: "stop"` — handled in `llm.ts` |
+| DeepSeek | DeepSeek V4 Flash | https://platform.deepseek.com/api_keys | trial credits, then ~cheap | needs a small balance (a `402 Insufficient Balance` = top up) |
+| Mistral | Mistral Small | https://console.mistral.ai/api-keys | yes (Experiment plan, phone-verified) | "connector access scope" on key creation is irrelevant — pick the default |
+
+**Env vars** (development: `backend/.env`; production: Fly secrets — see below):
+```
+ANTHROPIC_API_KEY=sk-ant-...
+GOOGLE_AI_API_KEY=AQ...
+DEEPSEEK_API_KEY=sk-...
+MISTRAL_API_KEY=...
+```
+
+Optional overrides: `ANTHROPIC_MODEL` (Claude fallback model), `ANTHROPIC_MAX_TOKENS`
+and `LLM_MAX_TOKENS` (output budgets for Claude vs the OpenAI-compat providers).
+See `backend/.env.example` for the annotated list.
+
+**Excluded:** OpenAI (no free API tier) and Groq (not used).
 
 ### Lint & Format
 

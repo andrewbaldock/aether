@@ -14,7 +14,7 @@ interface UseSessionResult {
 
 export function useSession(
   userId: string,
-  onNewSession?: () => void
+  onNewSession?: (id: string) => void
 ): UseSessionResult {
   const queryClient = useQueryClient();
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -49,7 +49,7 @@ export function useSession(
           setSessionId(data.id);
           pendingRef.current = null;
           queryClient.invalidateQueries({ queryKey: sessionsKey(userId) });
-          onNewSessionRef.current?.();
+          onNewSessionRef.current?.(data.id);
           return data.id;
         })
         .catch((err) => {

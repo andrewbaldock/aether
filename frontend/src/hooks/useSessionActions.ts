@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
+import { navigate } from "./useRoute";
 import { apiFetch } from "../lib/queryClient";
 import type { Message } from "../shell/useChat";
 import { sessionsKey } from "./useSessionList";
@@ -54,6 +55,7 @@ export function useSessionActions({
           queryFn: () => apiFetch<DbMessage[]>(`/api/sessions/${id}/messages`),
         });
       } catch {
+        navigate("/");
         return;
       }
       const messages: Message[] = dbMessages.map((m) => ({
@@ -62,6 +64,7 @@ export function useSessionActions({
         text: m.content,
       }));
       switchSession(id, messages);
+      navigate(`/c/${id}`);
       // Re-sync the list on switch so any session created moments ago (and briefly
       // untitled in memory) picks up its persisted auto-title from the DB.
       invalidateSessions();
