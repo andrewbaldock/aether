@@ -23,7 +23,13 @@ graph beside the chat. Emit only the NEW or CHANGED entities/relationships each
 call — the frontend merges additively, so keep each call small (roughly 8–12
 entities max) rather than dumping everything at once; you can call it again as
 more emerge. Prefer real, verifiable entities, and set wikipediaTitle to the
-exact article title whenever one exists.`;
+exact article title whenever one exists.
+
+To clean up the graph: use \`remove\` (array of entity ids) to delete nodes and
+their links. Use \`merge\` to collapse duplicates — pass {from: "absorbed-id",
+into: "survivor-id"} and all links re-point to the survivor before the absorbed
+node is removed. You may combine remove/merge with new entities/relationships in
+a single call.`;
 
 // The system prompt for a turn. Knowledge Graph mode appends graph guidance.
 export function buildSystemPrompt(opts: { graphMode: boolean }): string {

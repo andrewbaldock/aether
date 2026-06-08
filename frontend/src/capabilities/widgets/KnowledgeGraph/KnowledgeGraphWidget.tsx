@@ -1,4 +1,5 @@
 import { useAgentEvents } from "../../../shell/AgentEventContext";
+import { ThinkingGlyph } from "../../../brand/ThinkingGlyph";
 import type { Widget } from "../../registry";
 import { ForceGraph } from "./ForceGraph";
 import { GraphLoading } from "./GraphLoading";
@@ -48,17 +49,27 @@ export function KnowledgeGraphWidget(_props: { widget: Widget }) {
             </div>
           )
         ) : (
-          <ForceGraph
-            nodes={nodes}
-            links={links}
-            selectedId={selectedId}
-            onSelect={select}
-            onReportPositions={reportPositions}
-            onPin={pinNode}
-            onUnpin={unpinNode}
-            onRemove={removeNode}
-            onExplore={exploreNode}
-          />
+          <div className="relative h-full">
+            <ForceGraph
+              nodes={nodes}
+              links={links}
+              selectedId={selectedId}
+              onSelect={select}
+              onReportPositions={reportPositions}
+              onPin={pinNode}
+              onUnpin={unpinNode}
+              onRemove={removeNode}
+              onExplore={exploreNode}
+            />
+            {isAwaitingGraph && (
+              <div className="pointer-events-none absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-surface/80 px-3 py-1.5 backdrop-blur-sm">
+                <ThinkingGlyph height={18} animate />
+                <span className="font-display text-xs font-medium text-content-muted">
+                  Updating…
+                </span>
+              </div>
+            )}
+          </div>
         )}
       </div>
 

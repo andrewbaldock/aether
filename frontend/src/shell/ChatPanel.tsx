@@ -1,4 +1,4 @@
-import { Network, Wrench } from "lucide-react";
+import { ChevronDown, Network, Wrench } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -41,6 +41,7 @@ export function ChatPanel() {
     getOrCreateSession,
     refreshSessions,
     registerAbort,
+    renameSession,
   } = useSessionContext();
 
   // Graph mode is derived from the active session row (single source of truth).
@@ -48,6 +49,9 @@ export function ChatPanel() {
   // conversation inherits the prior choice.
   const [lastGraphMode, setLastGraphMode] = useState(readLastGraphMode);
   const currentSession = sessions.find((s) => s.id === sessionId);
+  const displayTitle =
+    currentSession?.title ??
+    (messages.find((m) => m.role === "user")?.text?.slice(0, 60) ?? null);
   const graphMode = currentSession ? currentSession.graph_mode : lastGraphMode;
   // Current graph mode read inside the bus subscription (avoids re-subscribing
   // every time it flips).
@@ -209,6 +213,12 @@ export function ChatPanel() {
 
   return (
     <div className="relative flex h-full flex-col bg-surface">
+      {started && sessionId && (
+        <ConversationTitle
+          title={displayTitle}
+          onRename={(t) => renameSession(sessionId, t)}
+        />
+      )}
       <div
         ref={scrollRef}
         className={`flex-1 overflow-y-auto px-6 py-6${
@@ -536,6 +546,62 @@ function ToolChip({
         {tooltip}
       </span>
     </div>
+  );
+}
+
+function ConversationTitle({
+  title,
+  onRename,
+}: {
+  title: string | null;
+  onRename: (t: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(title ?? "");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      setDraft(title ?? "");
+      inputRef.current?.select();
+    }
+  }, [editing, title]);
+
+  function commit() {
+    const t = draft.trim();
+    if (t && t !== title) onRename(t);
+    setEditing(false);
+  }
+
+  function handleKey(e: React.KeyboardEvent) {
+    if (e.key === "Enter") commit();
+    if (e.key === "Escape") setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center justify-center border-b border-border px-4 py-2">
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={handleKey}
+          className="w-full max-w-sm rounded-md bg-elevated px-3 py-1 text-sm text-content outline-none ring-1 ring-border-strong text-center"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className="group flex w-full items-center justify-center gap-1 border-b border-border px-4 py-2 text-sm text-content-muted hover:text-content transition-colors"
+    >
+      <span className="max-w-sm truncate">{title ?? "·"}</span>
+      <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden />
+    </button>
   );
 }
 
