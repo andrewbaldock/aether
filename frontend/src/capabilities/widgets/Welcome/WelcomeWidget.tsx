@@ -1,6 +1,17 @@
-import { Network, Wrench } from "lucide-react";
+import { Code, Network, Wrench } from "lucide-react";
 import type { Widget } from "../../registry";
 import { AgentDiagramWidget } from "../AgentDiagram/AgentDiagramWidget";
+
+// Portfolio links shown in the footer/intro. The site + case study follow the same
+// dev/prod split the Sidebar uses (localhost in dev, the live domain in prod); the
+// repo is a static GitHub URL.
+const SITE_URL = import.meta.env.DEV
+  ? "http://localhost:5173"
+  : "https://andrewbaldock.com";
+const CASE_STUDY_URL = import.meta.env.DEV
+  ? "http://localhost:5173/aether"
+  : "https://andrewbaldock.com/aether";
+const REPO_URL = "https://github.com/andrewbaldock/aether";
 
 // "Welcome to Aether" — the first-arrival explainer. It frames the live agent
 // diagram (the same viz the eyeball reveals) with a short pitch and callouts for
@@ -20,7 +31,15 @@ export function WelcomeWidget(_props: { widget: Widget }) {
           work beside you — mapping a live{" "}
           <span className="text-content">knowledge graph</span>, and soon
           charts, tables, and more. Below is the agent loop itself, live. Ask a
-          question and watch it light up.
+          question and watch it light up.{" "}
+          <a
+            href={CASE_STUDY_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="text-neon-cyan hover:underline"
+          >
+            Read the case study →
+          </a>
         </p>
 
         {/* The two seams that make Aether a platform, not a single app. */}
@@ -59,6 +78,34 @@ export function WelcomeWidget(_props: { widget: Widget }) {
         <p className="mt-4 text-xs text-content-subtle">
           You can reopen this anytime from the help (?) icon.
         </p>
+
+        {/* Byline + links back to the maker's portfolio, case study, and source. */}
+        <footer className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-3 text-xs text-content-faint">
+          <span>
+            Built by{" "}
+            <a
+              href={SITE_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="transition-colors hover:text-content-muted"
+            >
+              Andrew Baldock
+            </a>{" "}
+            · 2026
+          </span>
+          <span aria-hidden className="text-content-faint">
+            ·
+          </span>
+          <a
+            href={REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 transition-colors hover:text-content-muted"
+          >
+            <Code className="h-3 w-3" aria-hidden />
+            GitHub
+          </a>
+        </footer>
       </div>
     </div>
   );
