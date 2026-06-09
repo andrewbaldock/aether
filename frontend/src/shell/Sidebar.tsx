@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "../brand/Wordmark";
+import { SITE_URL } from "../lib/links";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { useModelLabel } from "./ModelPicker";
 import { useSessionContext } from "./SessionContext";
@@ -121,11 +122,7 @@ export function Sidebar({
 
       <div className="px-4 pb-3 pt-2 text-center">
         <a
-          href={
-            import.meta.env.DEV
-              ? "http://localhost:5173"
-              : "https://andrewbaldock.com"
-          }
+          href={SITE_URL}
           target="_blank"
           rel="noreferrer"
           className="text-xs text-content-faint transition-colors hover:text-content-muted"
