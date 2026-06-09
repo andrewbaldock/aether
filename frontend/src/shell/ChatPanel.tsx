@@ -6,6 +6,7 @@ import { ThinkingGlyph } from "../brand/ThinkingGlyph";
 import { Wordmark } from "../brand/Wordmark";
 import { useCapabilities } from "../capabilities/useCapabilities";
 import { KNOWLEDGE_GRAPH_WIDGET } from "../capabilities/widgets/KnowledgeGraph";
+import { WELCOME_WIDGET } from "../capabilities/widgets/Welcome";
 import { useUpdateSession } from "../hooks/useUpdateSession";
 import { useAgentEvents } from "./AgentEventContext";
 import { HelpButton } from "./HelpButton";
@@ -82,7 +83,12 @@ export function ChatPanel() {
   useEffect(() => {
     registerAbort(abortStream);
   }, [registerAbort, abortStream]);
-  const { open, ensure, activate } = useCapabilities();
+  const { open, ensure, activate, activeId } = useCapabilities();
+  // Whether the Welcome/help tab is currently on top. Read via a ref inside the
+  // bus subscription so a graph turn doesn't yank the user off the help page they
+  // opened to read — without re-subscribing every time the active tab changes.
+  const helpOnTopRef = useRef(activeId === WELCOME_WIDGET.id);
+  helpOnTopRef.current = activeId === WELCOME_WIDGET.id;
   const isMobile = useIsMobile();
   const updateSession = useUpdateSession(userId);
   const bus = useAgentEvents();
@@ -128,19 +134,32 @@ export function ChatPanel() {
   // useCapabilities) does it from the bus.
   useEffect(() => {
     const unsubscribe = bus.subscribe((event) => {
+      // If the user has the help page open and on top, don't yank them over to
+      // the graph just because a turn started or graph data landed — they opened
+      // the explainer to read it. Mount the tab in the background so it's ready,
+      // but leave their view where it is.
+      const helpOnTop = helpOnTopRef.current;
       if (event.type === "request_start" && graphModeRef.current) {
-        open(KNOWLEDGE_GRAPH_WIDGET);
-        activate(KNOWLEDGE_GRAPH_WIDGET.id);
+        if (helpOnTop) {
+          ensure(KNOWLEDGE_GRAPH_WIDGET);
+        } else {
+          open(KNOWLEDGE_GRAPH_WIDGET);
+          activate(KNOWLEDGE_GRAPH_WIDGET.id);
+        }
       } else if (
         event.type === "tool_result" &&
         event.tool === "build_knowledge_graph"
       ) {
-        open(KNOWLEDGE_GRAPH_WIDGET);
-        activate(KNOWLEDGE_GRAPH_WIDGET.id);
+        if (helpOnTop) {
+          ensure(KNOWLEDGE_GRAPH_WIDGET);
+        } else {
+          open(KNOWLEDGE_GRAPH_WIDGET);
+          activate(KNOWLEDGE_GRAPH_WIDGET.id);
+        }
       }
     });
     return unsubscribe;
-  }, [bus, open, activate]);
+  }, [bus, open, activate, ensure]);
 
   // "Explore further" from a graph node: the widget emits an explore_request on
   // the bus; here we turn it into a real chat turn (only when not mid-stream).

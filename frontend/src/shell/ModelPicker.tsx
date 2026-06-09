@@ -23,8 +23,9 @@ const PROVIDER_LABELS: Record<Provider, string> = {
 };
 
 // The allowlist never changes within a session, so a long staleTime keeps it
-// cached app-wide; TanStack dedups the fetch across every mounted picker.
-function useModels(): ModelOption[] {
+// cached app-wide; TanStack dedups the fetch across every mounted picker (and
+// the sidebar, which reuses this to label sessions by their saved model).
+export function useModels(): ModelOption[] {
   const { data } = useQuery({
     queryKey: ["models"],
     queryFn: () => apiFetch<{ models: ModelOption[] }>("/api/models"),
@@ -32,6 +33,25 @@ function useModels(): ModelOption[] {
     select: (d) => d.models,
   });
   return data ?? [];
+}
+
+// Maps a model id to its short label (e.g. "claude-sonnet-4-6" → "Sonnet 4.6"),
+// using the same cached allowlist the picker renders. Returns a lookup function
+// rather than a single label so the sidebar can label every session in its list
+// from one fetch.
+//
+// A null/undefined id means the conversation never explicitly chose a model, so
+// it ran on the server default — we resolve that to the first allowlist entry's
+// label (the default everywhere) rather than showing nothing. Only an id we
+// can't resolve at all (allowlist not loaded yet) yields null.
+export function useModelLabel(): (
+  id: string | null | undefined
+) => string | null {
+  const models = useModels();
+  return (id) => {
+    if (!id) return models[0]?.label ?? null;
+    return models.find((m) => m.id === id)?.label ?? models[0]?.label ?? null;
+  };
 }
 
 interface ModelPickerProps {
