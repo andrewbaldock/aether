@@ -20,14 +20,6 @@ import { Tooltip } from "./Tooltip";
 import { useChat } from "./useChat";
 import { useIsMobile } from "./useIsMobile";
 
-// Seed for a brand-new conversation's graph mode (until its session row exists).
-// Defaults to true — "Aether opens this way by default."
-const LAST_GRAPH_MODE_KEY = "aether-last-graph-mode";
-
-function readLastGraphMode(): boolean {
-  return localStorage.getItem(LAST_GRAPH_MODE_KEY) !== "false";
-}
-
 // Seed for a new conversation's model (until its session row exists). undefined
 // means "no explicit choice yet" — the backend uses its default.
 const LAST_MODEL_KEY = "aether-last-model";
@@ -59,23 +51,15 @@ export function ChatPanel() {
     renameSession,
   } = useSessionContext();
 
-  // Graph mode is derived from the active session row (single source of truth).
-  // Before a session exists, fall back to the last-used value so a new
-  // conversation inherits the prior choice.
-  const [lastGraphMode, setLastGraphMode] = useState(readLastGraphMode);
+  // Knowledge Graph is always on — no per-session toggle.
+  const graphMode = true;
+
   const currentSession = sessions.find((s) => s.id === sessionId);
   const displayTitle =
     currentSession?.title ??
     messages.find((m) => m.role === "user")?.text?.slice(0, 60) ??
     null;
-  const graphMode = currentSession ? currentSession.graph_mode : lastGraphMode;
-  // Current graph mode read inside the bus subscription (avoids re-subscribing
-  // every time it flips).
-  const graphModeRef = useRef(graphMode);
-  graphModeRef.current = graphMode;
 
-  // Model follows the same pattern as graph mode: the active session row is the
-  // source of truth; before a session exists, fall back to the last-used value.
   const [lastModel, setLastModel] = useState(readLastModel);
   const model = currentSession
     ? (currentSession.model ?? undefined)
@@ -96,7 +80,8 @@ export function ChatPanel() {
   useEffect(() => {
     registerAbort(abortStream);
   }, [registerAbort, abortStream]);
-  const { open, ensure, activate, markUnseen, activeId } = useCapabilities();
+  const { open, ensure, activate, close, markUnseen, activeId, widgets } =
+    useCapabilities();
   // Whether the Welcome/help tab is currently on top. Read via a ref inside the
   // bus subscription so a graph turn doesn't yank the user off the help page they
   // opened to read — without re-subscribing every time the active tab changes.
@@ -108,6 +93,8 @@ export function ChatPanel() {
   const [draft, setDraft] = useState("");
   // Mobile-only: the Knowledge Graph info+toggle sheet (no hover tooltips on touch).
   const [kgSheetOpen, setKgSheetOpen] = useState(false);
+  const [tableSheetOpen, setTableSheetOpen] = useState(false);
+  const [chartSheetOpen, setChartSheetOpen] = useState(false);
   const started = messages.length > 0;
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -119,8 +106,8 @@ export function ChatPanel() {
   // graph on load. The overlay surfaces only on real intent — toggling graph mode
   // (below) or graph data arriving (the bus subscription).
   useEffect(() => {
-    if (graphMode) ensure(KNOWLEDGE_GRAPH_WIDGET);
-  }, [graphMode, ensure]);
+    ensure(KNOWLEDGE_GRAPH_WIDGET);
+  }, [ensure]);
 
   // When the active session changes (e.g. bookmark load or sidebar click) and the
   // session has graph mode on, surface the KG panel immediately so the graph is
@@ -130,11 +117,9 @@ export function ChatPanel() {
     const prev = prevSessionIdRef.current;
     prevSessionIdRef.current = sessionId;
     if (!sessionId || sessionId === prev) return;
-    if (graphMode) {
-      open(KNOWLEDGE_GRAPH_WIDGET);
-      activate(KNOWLEDGE_GRAPH_WIDGET.id);
-    }
-  }, [sessionId, graphMode, open, activate]);
+    open(KNOWLEDGE_GRAPH_WIDGET);
+    activate(KNOWLEDGE_GRAPH_WIDGET.id);
+  }, [sessionId, open, activate]);
 
   // Surface the KG tab at the right moments so its "mapping…" loading state and
   // the resulting graph are actually on-screen:
@@ -152,7 +137,7 @@ export function ChatPanel() {
       // the explainer to read it. Mount the tab in the background so it's ready,
       // but leave their view where it is.
       const helpOnTop = helpOnTopRef.current;
-      if (event.type === "request_start" && graphModeRef.current) {
+      if (event.type === "request_start") {
         if (helpOnTop) {
           ensure(KNOWLEDGE_GRAPH_WIDGET);
         } else {
@@ -211,23 +196,17 @@ export function ChatPanel() {
     return unsubscribe;
   }, [bus, sendMessage, isLoading]);
 
-  // Toggle graph mode. Updates the seed for the next new conversation, and (if a
-  // session exists) persists to the session row, then refreshes so the derived
-  // `graphMode` recomputes from the row.
-  function toggleGraphMode() {
-    const nextValue = !graphMode;
-    localStorage.setItem(LAST_GRAPH_MODE_KEY, String(nextValue));
-    setLastGraphMode(nextValue);
-    if (nextValue) {
-      open(KNOWLEDGE_GRAPH_WIDGET);
-      activate(KNOWLEDGE_GRAPH_WIDGET.id);
-    }
-    if (sessionId) {
-      updateSession.mutate({ id: sessionId, patch: { graph_mode: nextValue } });
+  // Open a capability tab if it's not already in the column; close it if it is.
+  function toggleCapability(widget: Widget) {
+    if (widgets.some((w) => w.id === widget.id)) {
+      close(widget.id);
+    } else {
+      open(widget);
+      activate(widget.id);
     }
   }
 
-  // Pick a model. Mirrors toggleGraphMode: update the seed for the next new
+  // Pick a model: update the seed for the next new
   // conversation, and (if a session exists) persist to the row, then refresh so
   // the derived `model` recomputes from the row.
   function selectModel(nextModel: string) {
@@ -498,58 +477,93 @@ export function ChatPanel() {
             </div>
           </div>
 
-          {/* Tool row — Aether's capabilities, beneath the box so they read as
-            "what I can do" rather than crowding the compose controls. The
-            Knowledge Graph is the first; future tools append as siblings. */}
+          {/* Tool row — each chip opens/closes its capability tab. */}
           <div className="mt-2 flex items-center gap-2">
             <ToolChip
-              active={graphMode}
-              // Desktop: tap toggles instantly (the hover tooltip explains it).
-              // Mobile: no hover, so tap opens an info+toggle sheet instead of
-              // silently flipping an unlabelled icon.
+              active={widgets.some((w) => w.id === KNOWLEDGE_GRAPH_WIDGET.id)}
               onClick={() => {
                 if (isMobile) setKgSheetOpen(true);
-                else toggleGraphMode();
+                else toggleCapability(KNOWLEDGE_GRAPH_WIDGET);
               }}
               label="Knowledge Graph"
               icon={<GraphIcon />}
               tooltip={
                 <>
-                  <span className="font-semibold">
-                    Knowledge Graph · {graphMode ? "On" : "Off"}
-                  </span>
+                  <span className="font-semibold">Knowledge Graph</span>
                   <br />
-                  {graphMode
-                    ? "I'm extracting entities and relationships as we talk and rendering them through the graphing plugin beside us. Click to turn off."
-                    : "Turn on to map this conversation as a live graph. Click to turn on."}
-                  <br />
-                  <span className="text-white/60">
-                    Just one plugin in Aether's capability column — the same
-                    seam can render charts, tables, or live 3D scenes. Anything.
-                  </span>
+                  As we talk I extract the people, places, and ideas and map
+                  them as a live force-directed graph beside the chat. Click a
+                  node to get its Wikipedia summary; drag to rearrange.
                 </>
               }
             />
-            {/* Help anchored to the right of the tool row, beneath the box. */}
+            <ToolChip
+              active={widgets.some((w) => w.id === TABLE_WIDGET.id)}
+              onClick={() => {
+                if (isMobile) setTableSheetOpen(true);
+                else toggleCapability(TABLE_WIDGET);
+              }}
+              label="Table"
+              icon={<TableIcon />}
+              tooltip={
+                <>
+                  <span className="font-semibold">Table</span>
+                  <br />
+                  Ask for a comparison, a ranked list, or any structured data
+                  and I'll render it as a sortable table beside the chat.
+                  Multiple tables stack as the conversation grows.
+                </>
+              }
+            />
+            <ToolChip
+              active={widgets.some((w) => w.id === CHART_WIDGET.id)}
+              onClick={() => {
+                if (isMobile) setChartSheetOpen(true);
+                else toggleCapability(CHART_WIDGET);
+              }}
+              label="Chart"
+              icon={<ChartIcon />}
+              tooltip={
+                <>
+                  <span className="font-semibold">Chart</span>
+                  <br />
+                  Ask for trends, distributions, or comparisons over a dimension
+                  and I'll render a line, bar, area, or pie chart beside the
+                  chat.
+                </>
+              }
+            />
             <HelpButton className="ml-auto" />
           </div>
 
-          {/* Mobile-only: the Knowledge Graph info + toggle sheet. */}
+          {/* Mobile-only info sheets (no toggles — all tools are always on). */}
           <ToolInfoSheet
             open={kgSheetOpen}
             onClose={() => setKgSheetOpen(false)}
             title="Knowledge Graph"
             icon={<GraphIcon />}
-            enabled={graphMode}
-            onToggle={toggleGraphMode}
           >
-            {graphMode
-              ? "It's on — as we talk I extract the people, places, and ideas and render them as a live graph you can open from the tool row."
-              : "Turn it on to map this conversation as a live graph — people, places, and ideas, drawn as we talk."}
-            <span className="mt-2 block text-content-subtle">
-              Just one plugin in Aether's capability column — the same seam can
-              render charts, tables, or live 3D scenes. Anything.
-            </span>
+            As we talk I extract the people, places, and ideas and map them as a
+            live graph you can open from the tool row. Click a node for its
+            Wikipedia summary; drag to rearrange.
+          </ToolInfoSheet>
+          <ToolInfoSheet
+            open={tableSheetOpen}
+            onClose={() => setTableSheetOpen(false)}
+            title="Table"
+            icon={<TableIcon />}
+          >
+            Ask for a comparison, a ranked list, or any structured data and I'll
+            render it as a sortable table beside the chat.
+          </ToolInfoSheet>
+          <ToolInfoSheet
+            open={chartSheetOpen}
+            onClose={() => setChartSheetOpen(false)}
+            title="Chart"
+            icon={<ChartIcon />}
+          >
+            Ask for trends, distributions, or comparisons over a dimension and
+            I'll render a line, bar, area, or pie chart beside the chat.
           </ToolInfoSheet>
         </div>
       </form>
@@ -682,6 +696,49 @@ function GraphIcon() {
       <path d="M8.1 7.3 15.6 8.1" />
       <path d="M7 8.2 8.4 15.7" />
       <path d="M10.9 16.6 16.4 10.7" />
+    </svg>
+  );
+}
+
+// A simple table grid glyph.
+function TableIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M3 9h18" />
+      <path d="M9 9v12" />
+    </svg>
+  );
+}
+
+// A bar-chart glyph.
+function ChartIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 3v18h18" />
+      <path d="M7 16V10" />
+      <path d="M12 16V6" />
+      <path d="M17 16v-4" />
     </svg>
   );
 }
