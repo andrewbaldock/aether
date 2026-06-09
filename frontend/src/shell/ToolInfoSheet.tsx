@@ -20,8 +20,8 @@ export function ToolInfoSheet({
   onClose: () => void;
   title: string;
   icon: ReactNode;
-  enabled: boolean;
-  onToggle: (next: boolean) => void;
+  enabled?: boolean;
+  onToggle?: (next: boolean) => void;
   children: ReactNode;
 }) {
   if (!open) return null;
@@ -49,11 +49,13 @@ export function ToolInfoSheet({
             {icon}
             <span className="text-base font-semibold">{title}</span>
           </div>
-          <Switch
-            checked={enabled}
-            onChange={() => onToggle(!enabled)}
-            label={`Turn ${title} ${enabled ? "off" : "on"}`}
-          />
+          {onToggle !== undefined && enabled !== undefined && (
+            <Switch
+              checked={enabled}
+              onChange={() => onToggle(!enabled)}
+              label={`Turn ${title} ${enabled ? "off" : "on"}`}
+            />
+          )}
         </div>
 
         <div className="mt-3 text-sm leading-relaxed text-content-muted">
