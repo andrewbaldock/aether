@@ -42,6 +42,15 @@ export interface LlmClient {
 // once tool_use / tool_result blocks appear.
 type ApiMessage = Anthropic.Messages.MessageParam;
 
+// Hard ceiling on agent-loop iterations, shared by both clients. The loop stops
+// naturally when the model stops calling tools; this is the backstop for when it
+// doesn't — two tools ping-ponging, or a model that keeps calling one — so a turn
+// can't bill unbounded. On the FINAL allowed iteration we re-call the model with
+// NO tools, forcing a plain text answer that closes the turn cleanly (degrade, not
+// throw). Env-overridable like the token budgets. Kept modest: real turns settle
+// in 1–3 iterations; anything past ~6 is a loop, not progress.
+const MAX_ITERATIONS = Number(process.env.LLM_MAX_ITERATIONS) || 6;
+
 function createClaudeClient(
   tools: ToolDefinition[],
   systemPrompt: string,
@@ -112,7 +121,10 @@ function createClaudeClient(
     return out;
   }
 
-  function apiParams(messages: ApiMessage[]) {
+  // `withoutTools` drops the tool block entirely — used on the final iteration of
+  // the agent loop (the cap) so the model is forced to answer in text instead of
+  // requesting yet another tool call.
+  function apiParams(messages: ApiMessage[], withoutTools = false) {
     return {
       model,
       max_tokens: maxTokens,
@@ -124,7 +136,9 @@ function createClaudeClient(
         },
       ],
       messages: withConversationCache(messages),
-      ...(cachedTools.length > 0 ? { tools: cachedTools } : {}),
+      ...(cachedTools.length > 0 && !withoutTools
+        ? { tools: cachedTools }
+        : {}),
     };
   }
 
@@ -182,6 +196,12 @@ function createClaudeClient(
         iteration++;
         if (iteration > 1) await onLoopStart?.(iteration);
 
+        // On the final allowed iteration, call without tools so the model must
+        // answer in text — the loop closes cleanly instead of requesting another
+        // tool it can't run. (Equality, not >: the previous iteration's tool
+        // results are already in history, so this call produces the final reply.)
+        const atCap = iteration >= MAX_ITERATIONS;
+
         // Per-turn accumulators — reset each iteration.
         const pendingTools = new Map<
           number,
@@ -202,7 +222,7 @@ function createClaudeClient(
         // for await ensures each onToken call is awaited before the next token
         // arrives — writeSSE errors surface instead of being silently dropped.
         for await (const event of getClient().messages.stream(
-          apiParams(history)
+          apiParams(history, atCap)
         )) {
           if (event.type === "message_start") {
             // Input-side usage is final at message_start: prompt tokens plus the
@@ -412,6 +432,10 @@ function createOpenAICompatClient(
         iteration++;
         if (iteration > 1) await onLoopStart?.(iteration);
 
+        // Final allowed iteration: send no tools so the model must answer in text
+        // and the loop closes cleanly (the cap). Mirrors the Claude client.
+        const atCap = iteration >= MAX_ITERATIONS;
+
         // Per-turn accumulators. Tool calls arrive as deltas keyed by index; we
         // collect id/name/argument-fragments until the chunk stream ends, then
         // parse the assembled JSON (partial JSON mid-stream is unparseable). We
@@ -435,7 +459,7 @@ function createOpenAICompatClient(
           max_tokens: maxTokens,
           stream: true,
           messages: toApiMessages(history),
-          ...(openaiTools ? { tools: openaiTools } : {}),
+          ...(openaiTools && !atCap ? { tools: openaiTools } : {}),
         });
 
         for await (const chunk of stream) {
