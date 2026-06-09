@@ -71,7 +71,9 @@ describe("isFuzzyDuplicate — should fold", () => {
     // word. Cross-type collisions are prevented by findDuplicateId's type gate,
     // not here.
     expect(isFuzzyDuplicate("Louvre", "The Louvre Museum")).toBe(true);
-    expect(isFuzzyDuplicate("Marie Curie", "Marie Skłodowska Curie")).toBe(true);
+    expect(isFuzzyDuplicate("Marie Curie", "Marie Skłodowska Curie")).toBe(
+      true
+    );
   });
 
   it("minor spelling drift", () => {

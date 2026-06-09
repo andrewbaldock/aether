@@ -30,7 +30,7 @@ best — table, chart, relationship graph, or 3D scene.
   bun --version   # verify
   ```
 
-That's it. No Node, no Docker, no global tooling.
+Bun replaces Node, Docker & global tooling.
 
 ---
 

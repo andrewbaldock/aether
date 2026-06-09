@@ -129,3 +129,97 @@ describe("knowledge graph dedup (integration)", () => {
     expect(result.current.graph.nodes).toHaveLength(2);
   });
 });
+
+// Regression: every committed link must reference a live node. d3-force throws
+// an uncaught "node not found" — taking down the whole ForceGraph subtree — the
+// instant it sees a link endpoint that isn't in the node set. The reducer must
+// never let such a link reach the graph state.
+describe("knowledge graph link integrity", () => {
+  function allEndpoints(links: GraphLink[]): string[] {
+    return links.flatMap((l) => endpointIds(l));
+  }
+
+  it("drops a relationship referencing an entity that was never declared", () => {
+    const { result } = setup();
+    const { bus } = result.current;
+
+    emitGraph(bus, {
+      entities: [{ id: "gain-medium", label: "Gain Medium", type: "concept" }],
+      // `cosmic-transformation` is never declared as an entity — a dangling
+      // endpoint the model emitted by mistake.
+      relationships: [
+        { from: "gain-medium", to: "cosmic-transformation", label: "enables" },
+      ],
+    });
+
+    const { nodes, links } = result.current.graph;
+    expect(nodes.map((n) => n.id)).toEqual(["gain-medium"]);
+    expect(links).toHaveLength(0);
+    expect(allEndpoints(links)).not.toContain("cosmic-transformation");
+  });
+
+  it("keeps the valid links from a payload that also has a dangling one", () => {
+    const { result } = setup();
+    const { bus } = result.current;
+
+    emitGraph(bus, {
+      entities: [
+        { id: "gain-medium", label: "Gain Medium", type: "concept" },
+        { id: "optical-cavity", label: "Optical Cavity", type: "concept" },
+      ],
+      relationships: [
+        { from: "gain-medium", to: "optical-cavity", label: "sits in" },
+        { from: "gain-medium", to: "ghost-node", label: "dangling" },
+      ],
+    });
+
+    const { links } = result.current.graph;
+    expect(links).toHaveLength(1);
+    const only = links[0];
+    expect(only && endpointIds(only)).toEqual([
+      "gain-medium",
+      "optical-cavity",
+    ]);
+  });
+
+  it("strips a fresh link whose endpoint is removed in the same payload", () => {
+    const { result } = setup();
+    const { bus } = result.current;
+
+    // First establish two nodes and an edge.
+    emitGraph(bus, {
+      entities: [
+        {
+          id: "population-inversion",
+          label: "Population Inversion",
+          type: "concept",
+        },
+        { id: "gain-medium", label: "Gain Medium", type: "concept" },
+      ],
+      relationships: [
+        { from: "population-inversion", to: "gain-medium", label: "occurs in" },
+      ],
+    });
+
+    // Next payload adds a brand-new node + link, but removes that node's other
+    // endpoint in the same payload — the fresh link must not survive.
+    emitGraph(bus, {
+      entities: [
+        { id: "optical-cavity", label: "Optical Cavity", type: "concept" },
+      ],
+      relationships: [
+        { from: "optical-cavity", to: "gain-medium", label: "amplifies" },
+      ],
+      remove: ["gain-medium"],
+    });
+
+    const { nodes, links } = result.current.graph;
+    expect(nodes.map((n) => n.id).sort()).toEqual([
+      "optical-cavity",
+      "population-inversion",
+    ]);
+    // No surviving link references the removed node, and no dangling endpoint.
+    expect(allEndpoints(links)).not.toContain("gain-medium");
+    expect(links).toHaveLength(0);
+  });
+});
