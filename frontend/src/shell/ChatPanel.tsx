@@ -4,8 +4,11 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ThinkingGlyph } from "../brand/ThinkingGlyph";
 import { Wordmark } from "../brand/Wordmark";
+import type { Widget } from "../capabilities/registry";
 import { useCapabilities } from "../capabilities/useCapabilities";
+import { CHART_WIDGET } from "../capabilities/widgets/Chart";
 import { KNOWLEDGE_GRAPH_WIDGET } from "../capabilities/widgets/KnowledgeGraph";
+import { TABLE_WIDGET } from "../capabilities/widgets/Table";
 import { WELCOME_WIDGET } from "../capabilities/widgets/Welcome";
 import { useUpdateSession } from "../hooks/useUpdateSession";
 import { useAgentEvents } from "./AgentEventContext";
@@ -32,6 +35,16 @@ const LAST_MODEL_KEY = "aether-last-model";
 function readLastModel(): string | undefined {
   return localStorage.getItem(LAST_MODEL_KEY) ?? undefined;
 }
+
+// Render tools → the capability widget each one auto-opens. When a tool_result
+// for one of these arrives, its tab is opened and brought to the front so the
+// rendered spec is visible. Add a render tool here and its widget surfaces with
+// no other wiring. (The knowledge graph stays separate — it has extra mode-gated
+// open logic above.)
+const RENDER_TOOL_WIDGETS: Record<string, Widget> = {
+  render_table: TABLE_WIDGET,
+  render_chart: CHART_WIDGET,
+};
 
 export function ChatPanel() {
   const {
@@ -83,7 +96,7 @@ export function ChatPanel() {
   useEffect(() => {
     registerAbort(abortStream);
   }, [registerAbort, abortStream]);
-  const { open, ensure, activate, activeId } = useCapabilities();
+  const { open, ensure, activate, markUnseen, activeId } = useCapabilities();
   // Whether the Welcome/help tab is currently on top. Read via a ref inside the
   // bus subscription so a graph turn doesn't yank the user off the help page they
   // opened to read — without re-subscribing every time the active tab changes.
@@ -151,7 +164,10 @@ export function ChatPanel() {
         event.tool === "build_knowledge_graph"
       ) {
         if (helpOnTop) {
+          // Graph updated while help is on top — flag it unseen instead of
+          // pulling the user off the help page.
           ensure(KNOWLEDGE_GRAPH_WIDGET);
+          markUnseen(KNOWLEDGE_GRAPH_WIDGET.id);
         } else {
           open(KNOWLEDGE_GRAPH_WIDGET);
           activate(KNOWLEDGE_GRAPH_WIDGET.id);
@@ -159,7 +175,30 @@ export function ChatPanel() {
       }
     });
     return unsubscribe;
-  }, [bus, open, activate, ensure]);
+  }, [bus, open, activate, ensure, markUnseen]);
+
+  // Auto-open render-tool widgets (table/chart/timeline) when their spec lands.
+  // Same belt-and-braces as the graph: on a render tool_result, ensure the tab
+  // exists and bring it to the front — unless the help page is on top, in which
+  // case just mount it in the background so we don't yank the user off what they
+  // opened to read.
+  useEffect(() => {
+    const unsubscribe = bus.subscribe((event) => {
+      if (event.type !== "tool_result") return;
+      const widget = RENDER_TOOL_WIDGETS[event.tool];
+      if (!widget) return;
+      if (helpOnTopRef.current) {
+        // User is reading the help page — mount the tab in the background and
+        // flag it as unseen (glowing dot) rather than yanking them off help.
+        ensure(widget);
+        markUnseen(widget.id);
+      } else {
+        open(widget);
+        activate(widget.id);
+      }
+    });
+    return unsubscribe;
+  }, [bus, open, activate, ensure, markUnseen]);
 
   // "Explore further" from a graph node: the widget emits an explore_request on
   // the bus; here we turn it into a real chat turn (only when not mid-stream).

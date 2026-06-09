@@ -142,7 +142,8 @@ export const BUILD_KNOWLEDGE_GRAPH_TOOL: ToolDefinition = {
       remove: {
         type: "array",
         items: { type: "string" },
-        description: "ids of entities to remove from the graph (and their links)",
+        description:
+          "ids of entities to remove from the graph (and their links)",
       },
       merge: {
         type: "array",
@@ -155,8 +156,7 @@ export const BUILD_KNOWLEDGE_GRAPH_TOOL: ToolDefinition = {
             },
             into: {
               type: "string",
-              description:
-                "id of the node to keep (all links re-pointed here)",
+              description: "id of the node to keep (all links re-pointed here)",
             },
           },
           required: ["from", "into"],
@@ -169,12 +169,131 @@ export const BUILD_KNOWLEDGE_GRAPH_TOOL: ToolDefinition = {
   },
 };
 
-// The tool list for a turn. Knowledge Graph mode adds the graph tool; everything
-// else is always present.
+// --- Render tools ----------------------------------------------------------
+// Always-on tools that emit a self-contained render spec the frontend draws as a
+// widget. Each echoes its input straight back (executeTool below), so the wire
+// payload IS the spec — same seam as build_knowledge_graph, but each call carries
+// a complete spec (no additive merge on the frontend). Schemas are kept TERSE:
+// they live in the cached tool prefix, so brevity keeps the cache write small and
+// the model's output compact.
+
+export const RENDER_TABLE_TOOL: ToolDefinition = {
+  name: "render_table",
+  description:
+    "Render data as a sortable table beside the chat. Call when an answer is naturally tabular (comparisons, lists with attributes, structured records). Keep it compact.",
+  input_schema: {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "optional table title" },
+      columns: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            key: { type: "string", description: "row field name" },
+            label: { type: "string", description: "column header" },
+            type: { type: "string", enum: ["text", "number", "date"] },
+          },
+          required: ["key", "label"],
+        },
+      },
+      rows: {
+        type: "array",
+        items: { type: "object" },
+        description: "one object per row, keyed by column key",
+      },
+    },
+    required: ["columns", "rows"],
+  },
+};
+
+export const RENDER_CHART_TOOL: ToolDefinition = {
+  name: "render_chart",
+  description:
+    "Render data as a chart beside the chat. Call when an answer is naturally quantitative (trends, distributions, comparisons over a dimension). Keep series and data compact.",
+  input_schema: {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "optional chart title" },
+      type: { type: "string", enum: ["line", "bar", "area", "pie"] },
+      data: {
+        type: "array",
+        items: { type: "object" },
+        description: "one object per data point, keyed by xKey and series keys",
+      },
+      xKey: {
+        type: "string",
+        description: "field name for the x-axis / category",
+      },
+      series: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            key: { type: "string", description: "data field to plot" },
+            label: { type: "string" },
+            color: { type: "string", description: "optional hex color" },
+          },
+          required: ["key"],
+        },
+      },
+    },
+    required: ["type", "data", "xKey", "series"],
+  },
+};
+
+// NOT YET WIRED: the timeline widget (frontend) isn't built, so this tool is
+// kept defined but deliberately left OUT of RENDER_TOOLS below — advertising it
+// would let the model emit a render_timeline call that nothing renders. Add it
+// back to RENDER_TOOLS when the Timeline widget lands (commit 6).
+export const RENDER_TIMELINE_TOOL: ToolDefinition = {
+  name: "render_timeline",
+  description:
+    "Render events on an interactive timeline beside the chat. Call when an answer is naturally chronological (histories, sequences, schedules). Use ISO dates.",
+  input_schema: {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "optional timeline title" },
+      items: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            content: { type: "string", description: "event label" },
+            start: { type: "string", description: "ISO date/datetime" },
+            end: { type: "string", description: "optional ISO end (a range)" },
+            group: { type: "string", description: "optional group id" },
+          },
+          required: ["id", "content", "start"],
+        },
+      },
+      groups: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            content: { type: "string", description: "group label" },
+          },
+          required: ["id", "content"],
+        },
+        description: "optional swimlane groups items reference by group id",
+      },
+    },
+    required: ["items"],
+  },
+};
+
+// The render tools, always present in every turn's tool list. RENDER_TIMELINE_TOOL
+// is intentionally omitted until its frontend widget exists (see note above).
+const RENDER_TOOLS: ToolDefinition[] = [RENDER_TABLE_TOOL, RENDER_CHART_TOOL];
+
+// The tool list for a turn. Render tools + base are always present; Knowledge
+// Graph mode adds the graph tool.
 export function buildTools(opts: { graphMode: boolean }): ToolDefinition[] {
-  return opts.graphMode
-    ? [...BASE_TOOLS, BUILD_KNOWLEDGE_GRAPH_TOOL]
-    : BASE_TOOLS;
+  const tools = [...BASE_TOOLS, ...RENDER_TOOLS];
+  return opts.graphMode ? [...tools, BUILD_KNOWLEDGE_GRAPH_TOOL] : tools;
 }
 
 // Translate our tool definitions (Anthropic's {name, description, input_schema})
@@ -200,9 +319,12 @@ export function executeTool(name: string, input: unknown): string {
     case "get_current_datetime":
       return new Date().toISOString();
     case "build_knowledge_graph":
+    case "render_table":
+    case "render_chart":
+    case "render_timeline":
       // Echo the structured input straight back. This same string is both the
-      // tool_result the frontend parses into the graph AND the result fed back to
-      // Claude — fine, since it's a faithful record of what was emitted.
+      // tool_result the frontend parses into a widget spec AND the result fed back
+      // to the model — fine, since it's a faithful record of what was emitted.
       return JSON.stringify(input);
     default:
       throw new Error(`Unknown tool: "${name}"`);

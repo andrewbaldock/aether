@@ -5,8 +5,15 @@ import { Tooltip } from "./Tooltip";
 // Right zone: tabbed widget host. Both agent and user drive it via the capability store.
 // Each widget is drawn by the renderer registered against its `type`.
 export function CapabilityColumn() {
-  const { widgets, activeId, isFullscreen, activate, close, setFullscreen } =
-    useCapabilities();
+  const {
+    widgets,
+    activeId,
+    unseen,
+    isFullscreen,
+    activate,
+    close,
+    setFullscreen,
+  } = useCapabilities();
   const active = widgets.find((w) => w.id === activeId) ?? null;
   const Renderer = active ? getRenderer(active.type) : undefined;
 
@@ -27,9 +34,18 @@ export function CapabilityColumn() {
               <button
                 type="button"
                 onClick={() => activate(w.id)}
-                className="max-w-32 truncate rounded-md py-1.5 pl-3"
+                className="flex max-w-32 items-center gap-1.5 rounded-md py-1.5 pl-3"
               >
-                {w.title}
+                {/* Glowing dot when this tab has new content the user hasn't
+                    viewed yet. Cleared the moment the tab is activated. */}
+                {unseen.includes(w.id) && (
+                  <span
+                    role="img"
+                    aria-label="New content"
+                    className="aether-unseen-dot h-1.5 w-1.5 shrink-0 rounded-full bg-[#fd40a4]"
+                  />
+                )}
+                <span className="truncate">{w.title}</span>
               </button>
               {/* No Tooltip wrapper here: this row is an overflow-x-auto scroll
                   container, and the tooltip's positioned bubble overflowed it

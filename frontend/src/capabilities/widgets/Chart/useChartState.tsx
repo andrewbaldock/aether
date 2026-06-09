@@ -1,0 +1,114 @@
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  type AgentEvent,
+  useAgentEvents,
+} from "../../../shell/AgentEventContext";
+import type { ChartSpec, ChartType } from "./types";
+
+// One rendered chart: a parsed spec plus a stable id assigned on arrival, so the
+// widget can key the stack without leaning on array index.
+export interface ChartEntry {
+  id: number;
+  spec: ChartSpec;
+}
+
+// State for the Chart widget: an accumulating list of chart entries. Each
+// render_chart call carries a complete, self-contained chart; new calls APPEND so
+// several charts from a conversation stack in the one Chart tab. Mounted at the app
+// root so it never misses a tool_result (the widget tab mounts only after the first
+// spec arrives). Mirrors the Table provider.
+
+export interface ChartState {
+  entries: ChartEntry[];
+}
+
+const ChartContext = createContext<ChartState | null>(null);
+
+const VALID_TYPES: ReadonlySet<ChartType> = new Set([
+  "line",
+  "bar",
+  "area",
+  "pie",
+]);
+
+// Parse + validate a render_chart tool_result string. Returns null on any
+// malformed payload so a bad call can't crash the widget. Exported for tests.
+export function parseChartSpec(raw: string): ChartSpec | null {
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (data == null || typeof data !== "object") return null;
+  const {
+    title,
+    type,
+    data: points,
+    xKey,
+    series,
+  } = data as Record<string, unknown>;
+
+  if (!VALID_TYPES.has(type as ChartType)) return null;
+  if (typeof xKey !== "string") return null;
+  if (!Array.isArray(points) || !Array.isArray(series)) return null;
+
+  const validSeries = series.filter(
+    (s): s is ChartSpec["series"][number] =>
+      s != null &&
+      typeof s === "object" &&
+      typeof (s as Record<string, unknown>).key === "string"
+  );
+  if (validSeries.length === 0) return null;
+
+  const validData = points.filter(
+    (p): p is Record<string, unknown> => p != null && typeof p === "object"
+  );
+
+  return {
+    title: typeof title === "string" ? title : undefined,
+    type: type as ChartType,
+    data: validData,
+    xKey,
+    series: validSeries,
+  };
+}
+
+export function ChartProvider({ children }: { children: ReactNode }) {
+  const bus = useAgentEvents();
+  const [entries, setEntries] = useState<ChartEntry[]>([]);
+  const nextId = useRef(0);
+
+  useEffect(() => {
+    function handle(event: AgentEvent) {
+      if (event.type !== "tool_result") return;
+      if (event.tool !== "render_chart") return;
+      const parsed = parseChartSpec(event.result);
+      if (parsed)
+        setEntries((prev) => [...prev, { id: nextId.current++, spec: parsed }]);
+    }
+    return bus.subscribe(handle);
+  }, [bus]);
+
+  const value = useMemo<ChartState>(() => ({ entries }), [entries]);
+
+  return (
+    <ChartContext.Provider value={value}>{children}</ChartContext.Provider>
+  );
+}
+
+export function useChartState(): ChartState {
+  const ctx = useContext(ChartContext);
+  if (!ctx) {
+    throw new Error("useChartState must be used within a ChartProvider");
+  }
+  return ctx;
+}

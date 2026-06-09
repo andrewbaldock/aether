@@ -7,9 +7,13 @@ import {
 // Importing a widget module registers its renderer against the capability registry.
 import "./capabilities/widgets/PlaceholderWidget";
 import "./capabilities/widgets/AgentDiagram";
+import "./capabilities/widgets/Chart";
 import "./capabilities/widgets/KnowledgeGraph";
+import "./capabilities/widgets/Table";
 import "./capabilities/widgets/Welcome";
+import { ChartProvider } from "./capabilities/widgets/Chart/useChartState";
 import { KnowledgeGraphProvider } from "./capabilities/widgets/KnowledgeGraph/useKnowledgeGraphState";
+import { TableProvider } from "./capabilities/widgets/Table/useTableState";
 import { WELCOME_WIDGET } from "./capabilities/widgets/Welcome";
 import { AgentEventProvider } from "./shell/AgentEventContext";
 import { BackendStatusBanner } from "./shell/BackendStatusBanner";
@@ -53,10 +57,17 @@ export default function App() {
             build_knowledge_graph payload — the widget can mount after the first
             one arrives. */}
           <KnowledgeGraphProvider>
-            <CapabilityProvider>
-              <FirstArrivalWelcome />
-              <Shell />
-            </CapabilityProvider>
+            {/* Latest-wins render-tool providers — each stores the most recent
+                spec from its tool_result and is mounted at the root so it never
+                misses one (the widget tab mounts only after the spec lands). */}
+            <TableProvider>
+              <ChartProvider>
+                <CapabilityProvider>
+                  <FirstArrivalWelcome />
+                  <Shell />
+                </CapabilityProvider>
+              </ChartProvider>
+            </TableProvider>
           </KnowledgeGraphProvider>
         </AgentEventProvider>
       </RadixTooltip.Provider>

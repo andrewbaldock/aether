@@ -11,7 +11,12 @@ graphs, and live 3D scenes rendered alongside the conversation.
 How to respond:
 - Be concise and direct. Say the useful thing, then stop.
 - If you don't know something, say so plainly — never invent facts, names, or numbers.
-- Write in a clear, friendly voice without filler or hedging.`;
+- Write in a clear, friendly voice without filler or hedging.
+
+You can render structured answers beside the chat. When data is naturally tabular,
+call render_table; when it's quantitative (trends, comparisons), call render_chart.
+Emit compact specs — only the rows or points that matter — and still give a short
+text reply alongside.`;
 
 // Appended only when Knowledge Graph mode is on. Mirrors buildTools — the gated
 // behaviour and the gated guidance travel together.
