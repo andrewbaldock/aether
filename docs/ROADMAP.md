@@ -38,3 +38,14 @@ is designed so each is a plugin, added one at a time, swapped freely.
 
 > This phase is intentionally underspecified. See [ARCHITECTURE.md](./ARCHITECTURE.md) for the
 > platform seams that make capabilities pluggable.
+
+## Backlog
+
+Improvements that don't fit an active phase but are earmarked for later:
+
+- **PWA** — add a web app manifest + service worker so Aether is installable on desktop and mobile (home-screen icon, offline shell, full-screen launch). Vite plugin: `vite-plugin-pwa`.
+- **`render_timeline`** — vis-timeline widget (backend tool def already written and commented out; just needs the frontend widget + `bun add vis-timeline vis-data`).
+- **`web_search`** — Anthropic native server-side search tool, provider-gated to Claude, `max_uses`-capped. Deferred Tavily/Brave fallback for other providers.
+- **Multi-provider model switcher polish** — Gemini/DeepSeek/Mistral are wired but the picker UI is a plain `<select>`; could become a richer grouped picker when it matters.
+- **Unified Canvas** — Miro-style shared canvas where capability widgets become draggable cards. The render-tool widgets (table, chart, timeline, map) are deliberately built canvas-ready (self-contained spec from `state`); dropping them onto a canvas needs zero renderer changes.
+- **`render_map`** — MapLibre GL (free, no API token). Same render-tool pattern; deferred because MapLibre bundle weight is heavier than the others.
