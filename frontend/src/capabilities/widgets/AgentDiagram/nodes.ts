@@ -252,10 +252,13 @@ export const LOOP_BOXES: LoopBox[] = [
 // ── Colours per role ──────────────────────────────────────────────────────────
 // Idle is shared; active/glow colour keys off the role. Hex values double as the
 // CSS custom property `--node-color` so the pulse drop-shadow matches.
+// 80s punk / synthwave palette, anchored on the app's neon tokens (--neon-cyan
+// #16c2ff, --neon-pink #ff2e9a in index.css) and extended with synthwave purple,
+// acid green, and electric yellow.
 export const ROLE_COLOR: Record<Role, string> = {
-  frontend: "#3b82f6", // blue-500
-  backend: "#22c55e", // green-500
-  claude: "#a855f7", // purple-500
-  tool: "#f59e0b", // amber-500
-  done: "#10b981", // emerald-500
+  frontend: "#16c2ff", // neon cyan (app token) — the browser side
+  backend: "#00f0a8", // acid green — server / loop
+  claude: "#c026ff", // synthwave purple — the model
+  tool: "#ffd400", // electric yellow — tool execution
+  done: "#ff2e9a", // neon pink (app token) — terminal / done
 };
