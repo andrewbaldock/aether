@@ -8,7 +8,9 @@ import {
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useAgentEvents } from "../../../shell/AgentEventContext";
 import type { Widget } from "../../registry";
+import { WithContextMenu } from "../ContextMenu";
 import type { TableSpec } from "./types";
 import { useTableState } from "./useTableState";
 
@@ -37,7 +39,7 @@ export function TableWidget(_props: { widget: Widget }) {
               {spec.title}
             </h2>
           )}
-          <SpecTable spec={spec} />
+          <SpecTable spec={spec} title={spec.title} />
         </section>
       ))}
     </div>
@@ -52,7 +54,8 @@ function cellText(value: unknown): string {
   return String(value);
 }
 
-function SpecTable({ spec }: { spec: TableSpec }) {
+function SpecTable({ spec, title }: { spec: TableSpec; title?: string }) {
+  const bus = useAgentEvents();
   const [sorting, setSorting] = useState<SortingState>([]);
 
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(
@@ -116,18 +119,38 @@ function SpecTable({ spec }: { spec: TableSpec }) {
         ))}
       </thead>
       <tbody>
-        {table.getRowModel().rows.map((row) => (
-          <tr
-            key={row.id}
-            className="border-b border-border/60 hover:bg-elevated"
-          >
-            {row.getVisibleCells().map((cell) => (
-              <td key={cell.id} className="px-3 py-2 align-top">
-                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-              </td>
-            ))}
-          </tr>
-        ))}
+        {table.getRowModel().rows.map((row) => {
+          // Build a readable summary of this row to ground the explore prompt.
+          const rowSummary = spec.columns
+            .map((col) => `${col.label}: ${cellText(row.getValue(col.key))}`)
+            .join(", ");
+          const contextLabel = title
+            ? `in the "${title}" table`
+            : "in this table";
+          return (
+            <WithContextMenu
+              key={row.id}
+              items={[
+                {
+                  label: "Explore further",
+                  onClick: () =>
+                    bus.emit({
+                      type: "explore_request",
+                      prompt: `Tell me more about this row ${contextLabel}: ${rowSummary}`,
+                    }),
+                },
+              ]}
+            >
+              <tr className="border-b border-border/60 hover:bg-elevated">
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id} className="px-3 py-2 align-top">
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            </WithContextMenu>
+          );
+        })}
       </tbody>
     </table>
   );

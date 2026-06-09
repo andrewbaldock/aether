@@ -1,6 +1,7 @@
 import {
   createContext,
   type ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -28,6 +29,8 @@ export interface ChartEntry {
 
 export interface ChartState {
   entries: ChartEntry[];
+  loadEntries: (entries: ChartEntry[]) => void;
+  clearEntries: () => void;
 }
 
 const ChartContext = createContext<ChartState | null>(null);
@@ -98,7 +101,17 @@ export function ChartProvider({ children }: { children: ReactNode }) {
     return bus.subscribe(handle);
   }, [bus]);
 
-  const value = useMemo<ChartState>(() => ({ entries }), [entries]);
+  const loadEntries = useCallback((loaded: ChartEntry[]) => {
+    const rehydrated = loaded.map((e) => ({ ...e, id: nextId.current++ }));
+    setEntries(rehydrated);
+  }, []);
+
+  const clearEntries = useCallback(() => setEntries([]), []);
+
+  const value = useMemo<ChartState>(
+    () => ({ entries, loadEntries, clearEntries }),
+    [entries, loadEntries, clearEntries]
+  );
 
   return (
     <ChartContext.Provider value={value}>{children}</ChartContext.Provider>

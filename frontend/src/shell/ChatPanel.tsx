@@ -1,4 +1,5 @@
-import { ChevronDown } from "lucide-react";
+import * as RadixTooltip from "@radix-ui/react-tooltip";
+import { ChevronDown, Share2 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -626,6 +627,7 @@ function ConversationTitle({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title ?? "");
+  const [copied, setCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -646,9 +648,16 @@ function ConversationTitle({
     if (e.key === "Escape") setEditing(false);
   }
 
+  function handleShare(e: React.MouseEvent) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   if (editing) {
     return (
-      <div className="flex items-center justify-center border-b border-border px-4 pb-2 pt-3.5">
+      <div className="relative flex items-center justify-center border-b border-border px-4 pb-2 pt-3.5">
         <input
           ref={inputRef}
           value={draft}
@@ -662,17 +671,40 @@ function ConversationTitle({
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => setEditing(true)}
-      className="group flex w-full items-center justify-center gap-1 border-b border-border px-4 pb-2 pt-3.5 text-sm text-content-muted hover:text-content transition-colors"
-    >
-      <span className="max-w-sm truncate">{title ?? "·"}</span>
-      <ChevronDown
-        className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-        aria-hidden
-      />
-    </button>
+    <div className="relative border-b border-border">
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="group flex w-full items-center justify-center gap-1 px-4 pb-2 pt-3.5 text-sm text-content-muted hover:text-content transition-colors"
+      >
+        <span className="max-w-sm truncate">{title ?? "·"}</span>
+        <ChevronDown
+          className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          aria-hidden
+        />
+      </button>
+      <RadixTooltip.Root open={copied || undefined}>
+        <RadixTooltip.Trigger asChild>
+          <button
+            type="button"
+            onClick={handleShare}
+            className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-content transition-colors"
+            aria-label="Copy link"
+          >
+            <Share2 className="h-3.5 w-3.5" />
+          </button>
+        </RadixTooltip.Trigger>
+        <RadixTooltip.Portal>
+          <RadixTooltip.Content
+            side="top"
+            sideOffset={6}
+            className="pointer-events-none z-50 select-none rounded-md bg-surface-overlay px-2 py-1 text-xs text-white shadow-lg whitespace-nowrap"
+          >
+            {copied ? "URL Copied" : "Copy link"}
+          </RadixTooltip.Content>
+        </RadixTooltip.Portal>
+      </RadixTooltip.Root>
+    </div>
   );
 }
 

@@ -15,25 +15,42 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useAgentEvents } from "../../../shell/AgentEventContext";
 import type { Widget } from "../../registry";
+import { WithContextMenu } from "../ContextMenu";
 import type { ChartSpec } from "./types";
 import { useChartState } from "./useChartState";
 
-// Brand-derived default palette, used when a series doesn't name its own color.
-// Cycles for additional series. Pink → cyan → violet → amber → green.
+// Named palette for line/bar/area series (up to ~12 before cycling). Anchored to
+// the brand neons then spreads across the spectrum so adjacent series are distinct.
 const PALETTE = [
-  "#ff2e9a",
-  "#16c2ff",
-  "#c35ed1",
-  "#f5a623",
-  "#3ecf8e",
+  "#ff2e9a", // neon pink (brand)
+  "#16c2ff", // neon cyan (brand)
+  "#c35ed1", // violet
+  "#f5a623", // amber
+  "#3ecf8e", // green
+  "#ff6b6b", // coral
+  "#4ecdc4", // teal
+  "#ffe66d", // yellow
+  "#a29bfe", // lavender
+  "#fd79a8", // rose
+  "#55efc4", // mint
+  "#fdcb6e", // peach
 ] as const;
 
-// Indexing is modulo PALETTE.length so it always lands in range, but TS's
-// noUncheckedIndexedAccess still widens to `| undefined` — fall back to the first
-// color to keep the return a plain string.
+// For pie charts the slice count is data-driven and can exceed any fixed palette.
+// Generate a color by spreading slices evenly around the HSL wheel, keeping
+// saturation and lightness tuned for the dark theme. Always returns a string.
+function pieColor(index: number, total: number): string {
+  const hue = Math.round((index / Math.max(total, 1)) * 360);
+  return `hsl(${hue}, 80%, 62%)`;
+}
+
+// For series (line/bar/area): cycle the named palette, fall back to hsl spread.
 function paletteColor(index: number): string {
-  return PALETTE[index % PALETTE.length] ?? PALETTE[0];
+  return (
+    PALETTE[index % PALETTE.length] ?? `hsl(${(index * 47) % 360}, 75%, 60%)`
+  );
 }
 
 function seriesColor(color: string | undefined, index: number): string {
@@ -45,6 +62,7 @@ function seriesColor(color: string | undefined, index: number): string {
 // `widget` prop is unused; state is live.
 export function ChartWidget(_props: { widget: Widget }) {
   const { entries } = useChartState();
+  const bus = useAgentEvents();
 
   if (entries.length === 0) {
     return (
@@ -57,22 +75,37 @@ export function ChartWidget(_props: { widget: Widget }) {
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-auto bg-surface p-4">
-      {entries.map(({ id, spec }) => (
-        <section key={id} className="flex flex-col gap-1">
-          {spec.title && (
-            <h2 className="font-display text-sm font-semibold text-content">
-              {spec.title}
-            </h2>
-          )}
-          {/* Fixed height per chart so ResponsiveContainer has a box to fill in
-              the scrolling stack. */}
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <SpecChart spec={spec} />
-            </ResponsiveContainer>
-          </div>
-        </section>
-      ))}
+      {entries.map(({ id, spec }) => {
+        const label = spec.title ?? `${spec.type} chart`;
+        return (
+          <WithContextMenu
+            key={id}
+            items={[
+              {
+                label: "Explore further",
+                onClick: () =>
+                  bus.emit({
+                    type: "explore_request",
+                    prompt: `Tell me more about the data in the "${label}" — what's interesting, what the trends mean, and what I should explore next.`,
+                  }),
+              },
+            ]}
+          >
+            <section className="flex flex-col gap-1">
+              {spec.title && (
+                <h2 className="font-display text-sm font-semibold text-content">
+                  {spec.title}
+                </h2>
+              )}
+              <div className="h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <SpecChart spec={spec} />
+                </ResponsiveContainer>
+              </div>
+            </section>
+          </WithContextMenu>
+        );
+      })}
     </div>
   );
 }
@@ -108,7 +141,7 @@ function SpecChart({ spec }: { spec: ChartSpec }) {
           {spec.data.map((_, i) => (
             // Slice order is stable for a given spec; index key is fine here.
             // biome-ignore lint/suspicious/noArrayIndexKey: stable slice order
-            <Cell key={i} fill={paletteColor(i)} />
+            <Cell key={i} fill={pieColor(i, spec.data.length)} />
           ))}
         </Pie>
       </PieChart>
@@ -129,7 +162,17 @@ function SpecChart({ spec }: { spec: ChartSpec }) {
             dataKey={s.key}
             name={s.label ?? s.key}
             fill={seriesColor(s.color, i)}
-          />
+          >
+            {/* Single-series bar charts: color each bar by category (like a pie).
+                Multi-series: use the series color uniformly (Cells would override
+                the per-series distinction). */}
+            {spec.series.length === 1
+              ? spec.data.map((_, di) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: stable bar order
+                  <Cell key={di} fill={pieColor(di, spec.data.length)} />
+                ))
+              : null}
+          </Bar>
         ))}
       </BarChart>
     );

@@ -141,6 +141,13 @@ on the model to re-emit it. Run once:
 alter table sessions add column if not exists graph_data jsonb;
 ```
 
+**`sessions.widget_data`** (table + chart persistence): stores the last
+`render_table` and `render_chart` specs for a session so reopening a conversation
+URL restores the table/chart widgets without needing a new turn. Run once:
+```sql
+alter table sessions add column if not exists widget_data jsonb;
+```
+
 ### Manage LLM Providers
 
 Aether is **multi-provider**. The model picker routes each conversation to a

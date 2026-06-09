@@ -10,12 +10,21 @@ export type GraphSnapshot = {
   links: unknown[];
 };
 
+// Persisted render-tool specs for a session. Stored in `widget_data` jsonb.
+// The backend doesn't interpret the shape — it round-trips whatever the
+// frontend saves. null fields mean "nothing generated yet this session".
+export type WidgetSnapshot = {
+  table: unknown[] | null; // TableEntry[] (serialised)
+  chart: unknown[] | null; // ChartEntry[] (serialised)
+};
+
 export interface Session {
   id: string;
   user_id: string;
   title: string | null;
   graph_mode: boolean;
   graph_data: GraphSnapshot | null;
+  widget_data: WidgetSnapshot | null;
   // The Claude model the user last selected for this conversation. null means
   // "use the server default" (env override or built-in default).
   model: string | null;
@@ -213,6 +222,7 @@ export async function forkSession(
       title: source.title,
       graph_mode: source.graph_mode,
       graph_data: source.graph_data,
+      widget_data: source.widget_data,
       model: source.model,
     })
     .select("id")
@@ -240,4 +250,27 @@ export async function forkSession(
 export async function deleteSession(sessionId: string): Promise<void> {
   const { error } = await getDb().from("sessions").delete().eq("id", sessionId);
   if (error) throw new Error(`deleteSession: ${error.message}`);
+}
+
+export async function getSessionWidgets(
+  sessionId: string
+): Promise<WidgetSnapshot | null> {
+  const { data, error } = await getDb()
+    .from("sessions")
+    .select("widget_data")
+    .eq("id", sessionId)
+    .single();
+  if (error) throw new Error(`getSessionWidgets: ${error.message}`);
+  return (data?.widget_data as WidgetSnapshot | null) ?? null;
+}
+
+export async function updateSessionWidgetData(
+  sessionId: string,
+  widgetData: WidgetSnapshot
+): Promise<void> {
+  const { error } = await getDb()
+    .from("sessions")
+    .update({ widget_data: widgetData, updated_at: new Date().toISOString() })
+    .eq("id", sessionId);
+  if (error) throw new Error(`updateSessionWidgetData: ${error.message}`);
 }
