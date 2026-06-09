@@ -1,17 +1,7 @@
 import { Code, Network, Wrench } from "lucide-react";
 import type { Widget } from "../../registry";
 import { AgentDiagramWidget } from "../AgentDiagram/AgentDiagramWidget";
-
-// Portfolio links shown in the footer/intro. The site + case study follow the same
-// dev/prod split the Sidebar uses (localhost in dev, the live domain in prod); the
-// repo is a static GitHub URL.
-const SITE_URL = import.meta.env.DEV
-  ? "http://localhost:5173"
-  : "https://andrewbaldock.com";
-const CASE_STUDY_URL = import.meta.env.DEV
-  ? "http://localhost:5173/aether"
-  : "https://andrewbaldock.com/aether";
-const REPO_URL = "https://github.com/andrewbaldock/aether";
+import { CASE_STUDY_URL, REPO_URL, SITE_URL } from "../../../lib/links";
 
 // "Welcome to Aether" — the first-arrival explainer. It frames the live agent
 // diagram (the same viz the eyeball reveals) with a short pitch and callouts for
