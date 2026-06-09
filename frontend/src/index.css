@@ -246,3 +246,27 @@ body {
     animation: none;
   }
 }
+
+/* Unseen-content indicator on a capability tab: a small dot that pulses its glow
+   so a tab updated in the background catches the eye. Pink to match the brand
+   accent (the send button / loading border). */
+@keyframes aether-unseen-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 2px 0 #fd40a4, 0 0 4px 0 #fd40a466;
+    opacity: 0.85;
+  }
+  50% {
+    box-shadow: 0 0 5px 1px #fd40a4, 0 0 9px 2px #fd40a466;
+    opacity: 1;
+  }
+}
+.aether-unseen-dot {
+  animation: aether-unseen-glow 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .aether-unseen-dot {
+    animation: none;
+    box-shadow: 0 0 3px 0 #fd40a4;
+  }
+}

@@ -19,6 +19,11 @@ interface CapabilityState {
   // mobile shell surface its full-screen overlay on real intent without racing
   // mount timing or diffing activeId. Pure signal; desktop ignores it.
   openTick: number;
+  // Widget ids that have received new content the user hasn't looked at yet — a
+  // tab updated in the background (or while another tab / the help page was on
+  // top). The tab bar shows a glowing dot for each. Cleared when the tab becomes
+  // active; never set for the already-active tab (you're looking at it).
+  unseen: string[];
 }
 
 type Action =
@@ -26,6 +31,7 @@ type Action =
   | { type: "ensure"; widget: Widget }
   | { type: "close"; id: string }
   | { type: "activate"; id: string }
+  | { type: "markUnseen"; id: string }
   | { type: "setFullscreen"; value: boolean }
   | { type: "closeAll" };
 
@@ -34,6 +40,7 @@ const initialState: CapabilityState = {
   activeId: null,
   isFullscreen: false,
   openTick: 0,
+  unseen: [],
 };
 
 function reducer(state: CapabilityState, action: Action): CapabilityState {
@@ -45,6 +52,8 @@ function reducer(state: CapabilityState, action: Action): CapabilityState {
         widgets: exists ? state.widgets : [...state.widgets, action.widget],
         activeId: action.widget.id,
         openTick: state.openTick + 1,
+        // Opening a tab means viewing it — clear its unseen flag.
+        unseen: state.unseen.filter((id) => id !== action.widget.id),
       };
     }
     // Add the widget so it's mounted and ready, but DON'T activate or surface it.
@@ -70,10 +79,24 @@ function reducer(state: CapabilityState, action: Action): CapabilityState {
         widgets,
         activeId: wasActive ? (widgets.at(-1)?.id ?? null) : state.activeId,
         isFullscreen: widgets.length === 0 ? false : state.isFullscreen,
+        unseen: state.unseen.filter((id) => id !== action.id),
       };
     }
     case "activate":
-      return { ...state, activeId: action.id, openTick: state.openTick + 1 };
+      return {
+        ...state,
+        activeId: action.id,
+        openTick: state.openTick + 1,
+        // Viewing a tab clears its unseen flag.
+        unseen: state.unseen.filter((id) => id !== action.id),
+      };
+    // Flag a tab as having new, unviewed content. No-op if it's the active tab
+    // (the user is already looking at it) or already flagged.
+    case "markUnseen": {
+      if (action.id === state.activeId || state.unseen.includes(action.id))
+        return state;
+      return { ...state, unseen: [...state.unseen, action.id] };
+    }
     case "setFullscreen":
       return { ...state, isFullscreen: action.value };
     case "closeAll":
@@ -88,6 +111,7 @@ interface CapabilityContextValue extends CapabilityState {
   ensure: (widget: Widget) => void;
   close: (id: string) => void;
   activate: (id: string) => void;
+  markUnseen: (id: string) => void;
   setFullscreen: (value: boolean) => void;
   closeAll: () => void;
   isOpen: boolean;
@@ -114,6 +138,10 @@ export function CapabilityProvider({ children }: { children: ReactNode }) {
     (id: string) => dispatch({ type: "activate", id }),
     []
   );
+  const markUnseen = useCallback(
+    (id: string) => dispatch({ type: "markUnseen", id }),
+    []
+  );
   const setFullscreen = useCallback(
     (value: boolean) => dispatch({ type: "setFullscreen", value }),
     []
@@ -127,11 +155,12 @@ export function CapabilityProvider({ children }: { children: ReactNode }) {
       ensure,
       close,
       activate,
+      markUnseen,
       setFullscreen,
       closeAll,
       isOpen: state.widgets.length > 0,
     }),
-    [state, open, ensure, close, activate, setFullscreen, closeAll]
+    [state, open, ensure, close, activate, markUnseen, setFullscreen, closeAll]
   );
 
   return (
