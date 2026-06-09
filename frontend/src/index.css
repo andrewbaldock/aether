@@ -87,6 +87,13 @@ body,
   height: 100%;
 }
 
+@layer base {
+  *:focus,
+  *:focus-visible {
+    outline: none;
+  }
+}
+
 button,
 [role="button"],
 label,

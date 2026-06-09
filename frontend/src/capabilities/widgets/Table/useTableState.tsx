@@ -1,6 +1,7 @@
 import {
   createContext,
   type ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -29,6 +30,8 @@ export interface TableEntry {
 
 export interface TableState {
   entries: TableEntry[];
+  loadEntries: (entries: TableEntry[]) => void;
+  clearEntries: () => void;
 }
 
 const TableContext = createContext<TableState | null>(null);
@@ -83,7 +86,18 @@ export function TableProvider({ children }: { children: ReactNode }) {
     return bus.subscribe(handle);
   }, [bus]);
 
-  const value = useMemo<TableState>(() => ({ entries }), [entries]);
+  const loadEntries = useCallback((loaded: TableEntry[]) => {
+    // Assign fresh ids so they don't collide with any ids already in nextId.
+    const rehydrated = loaded.map((e) => ({ ...e, id: nextId.current++ }));
+    setEntries(rehydrated);
+  }, []);
+
+  const clearEntries = useCallback(() => setEntries([]), []);
+
+  const value = useMemo<TableState>(
+    () => ({ entries, loadEntries, clearEntries }),
+    [entries, loadEntries, clearEntries]
+  );
 
   return (
     <TableContext.Provider value={value}>{children}</TableContext.Provider>

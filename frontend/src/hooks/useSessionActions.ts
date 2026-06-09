@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { apiFetch } from "../lib/queryClient";
 import type { Message } from "../shell/useChat";
 import { navigate } from "./useRoute";
@@ -41,10 +41,15 @@ export function useSessionActions({
     () => queryClient.invalidateQueries({ queryKey: sessionsKey(userId) }),
     [queryClient, userId]
   );
+  // Deduplicates concurrent loadSession calls for the same id (e.g. StrictMode
+  // double-mount). Prevents duplicate fork creation when opening a foreign URL.
+  const loadingRef = useRef<string | null>(null);
 
   const loadSession = useCallback(
     async (id: string) => {
       if (id === sessionId) return;
+      if (loadingRef.current === id) return;
+      loadingRef.current = id;
       // fetchQuery caches the messages so re-opening a recent conversation is instant.
       // The query cache's onError logs failures; bail quietly on error so a failed
       // load doesn't switch the view to an empty conversation.
@@ -60,6 +65,7 @@ export function useSessionActions({
           apiFetch<Session>(`/api/sessions/${id}`),
         ]);
       } catch {
+        loadingRef.current = null;
         navigate("/");
         return;
       }
@@ -79,9 +85,11 @@ export function useSessionActions({
           );
           forkId = fork.id;
         } catch {
+          loadingRef.current = null;
           navigate("/");
           return;
         }
+        loadingRef.current = null;
         invalidateSessions();
         // Recurse into the fork — it's now owned by this user, so the foreign
         // branch below won't fire again.
@@ -98,6 +106,7 @@ export function useSessionActions({
       // Re-sync the list on switch so any session created moments ago (and briefly
       // untitled in memory) picks up its persisted auto-title from the DB.
       invalidateSessions();
+      loadingRef.current = null;
     },
     [sessionId, switchSession, queryClient, invalidateSessions, userId]
   );

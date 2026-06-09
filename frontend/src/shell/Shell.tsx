@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import { useCapabilities } from "../capabilities/useCapabilities";
 import { GraphPersistenceBridge } from "../capabilities/widgets/KnowledgeGraph/GraphPersistenceBridge";
+import { WidgetPersistenceBridge } from "../capabilities/widgets/WidgetPersistenceBridge";
 import { parseRoute } from "../hooks/useRoute";
 import { CapabilityColumn } from "./CapabilityColumn";
 import { ChatPanel } from "./ChatPanel";
@@ -44,6 +45,8 @@ export function Shell() {
       {/* Loads/saves the per-session knowledge graph. Inside SessionProvider so
           it can read sessionId; the graph state itself lives at the app root. */}
       <GraphPersistenceBridge />
+      {/* Loads/saves table + chart widget specs for the active session. */}
+      <WidgetPersistenceBridge />
       <RouteBootstrap />
       <ShellInner />
     </SessionProvider>

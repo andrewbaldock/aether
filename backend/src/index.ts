@@ -8,6 +8,7 @@ import {
   getMessages,
   getSession,
   getSessionGraph,
+  getSessionWidgets,
   listSessions,
   saveMessage,
   updateSessionGraphData,
@@ -15,6 +16,8 @@ import {
   updateSessionModel,
   updateSessionTitle,
   updateSessionTitleIfEmpty,
+  updateSessionWidgetData,
+  type WidgetSnapshot,
 } from "./db";
 import { type ChatMessage, createClient, generateTitle } from "./llm";
 import { MODELS, resolveModel } from "./models";
@@ -202,6 +205,48 @@ app.put("/api/sessions/:id/graph", async (c) => {
   } catch (err) {
     console.error("PUT /api/sessions/:id/graph failed:", err);
     return c.json({ error: "Failed to save graph" }, 500);
+  }
+});
+
+// Persisted render-tool widget specs (table + chart) for a session. Loaded
+// when a conversation is reopened so tables/charts the model generated are
+// visible without a new turn. Returns { table: null, chart: null } when nothing
+// has been saved yet.
+app.get("/api/sessions/:id/widgets", async (c) => {
+  const id = c.req.param("id");
+  try {
+    const data = await getSessionWidgets(id);
+    return c.json(data ?? { table: null, chart: null });
+  } catch (err) {
+    console.error("GET /api/sessions/:id/widgets failed:", err);
+    return c.json({ error: "Failed to load widgets" }, 500);
+  }
+});
+
+// Save the current widget snapshot. Round-tripped as-is; we only check the
+// expected top-level keys so a malformed save can't corrupt the column.
+app.put("/api/sessions/:id/widgets", async (c) => {
+  const id = c.req.param("id");
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Request body must be JSON" }, 400);
+  }
+  const b = body as { table?: unknown; chart?: unknown };
+  if (!("table" in b) || !("chart" in b)) {
+    return c.json({ error: "Expected { table, chart }" }, 400);
+  }
+  try {
+    const snapshot: WidgetSnapshot = {
+      table: Array.isArray(b.table) ? b.table : null,
+      chart: Array.isArray(b.chart) ? b.chart : null,
+    };
+    await updateSessionWidgetData(id, snapshot);
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("PUT /api/sessions/:id/widgets failed:", err);
+    return c.json({ error: "Failed to save widgets" }, 500);
   }
 });
 
