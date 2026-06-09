@@ -168,6 +168,16 @@ function createClaudeClient(
       // the model again.
       let iteration = 0;
 
+      // Per-turn token totals across every loop iteration. The point of logging
+      // these is to make prompt caching *visible*: on iteration 1 the prefix is
+      // written to cache (cacheCreation > 0); on iterations 2+ the growing prefix
+      // should be read from cache (cacheRead large, cacheCreation ~0). A healthy
+      // read/creation ratio is the proof the cache breakpoints are paying off.
+      let turnInput = 0;
+      let turnOutput = 0;
+      let turnCacheRead = 0;
+      let turnCacheCreation = 0;
+
       while (true) {
         iteration++;
         if (iteration > 1) await onLoopStart?.(iteration);
@@ -180,13 +190,29 @@ function createClaudeClient(
         const textBlocks: { type: "text"; text: string }[] = [];
         let currentText = "";
         let stopReason: string | null = null;
+        // Usage for THIS iteration. message_start carries the input-side counts
+        // (including cache_read/cache_creation); message_delta carries the final
+        // output token count. We read both off the stream rather than discarding
+        // the SDK's usage metadata.
+        let inputTokens = 0;
+        let outputTokens = 0;
+        let cacheReadTokens = 0;
+        let cacheCreationTokens = 0;
 
         // for await ensures each onToken call is awaited before the next token
         // arrives — writeSSE errors surface instead of being silently dropped.
         for await (const event of getClient().messages.stream(
           apiParams(history)
         )) {
-          if (event.type === "content_block_start") {
+          if (event.type === "message_start") {
+            // Input-side usage is final at message_start: prompt tokens plus the
+            // cache split (read vs. creation). Output is still 0 here — it lands
+            // in message_delta below.
+            const u = event.message.usage;
+            inputTokens = u.input_tokens ?? 0;
+            cacheReadTokens = u.cache_read_input_tokens ?? 0;
+            cacheCreationTokens = u.cache_creation_input_tokens ?? 0;
+          } else if (event.type === "content_block_start") {
             if (event.content_block.type === "tool_use") {
               pendingTools.set(event.index, {
                 id: event.content_block.id,
@@ -213,8 +239,21 @@ function createClaudeClient(
             }
           } else if (event.type === "message_delta") {
             stopReason = event.delta.stop_reason ?? null;
+            // Output token count is cumulative-final on message_delta.
+            outputTokens = event.usage.output_tokens ?? 0;
           }
         }
+
+        // Roll this iteration into the per-turn totals and log it. cacheRead high
+        // with cacheCreation ~0 on iterations 2+ is the cache working across the
+        // agent loop; iteration 1 is where the prefix gets written (creation > 0).
+        turnInput += inputTokens;
+        turnOutput += outputTokens;
+        turnCacheRead += cacheReadTokens;
+        turnCacheCreation += cacheCreationTokens;
+        console.log(
+          `[usage] iter=${iteration} model=${model} input=${inputTokens} output=${outputTokens} cache_read=${cacheReadTokens} cache_creation=${cacheCreationTokens}`
+        );
 
         // Truncated by the output budget. Any pending tool_use JSON is partial
         // and unparseable — don't try to parse it (that would throw and kill the
@@ -226,8 +265,12 @@ function createClaudeClient(
           );
         }
 
-        // No tool calls — stream is complete.
+        // No tool calls — stream is complete. Log the per-turn totals: the
+        // read/creation ratio across all iterations is the cache's bottom line.
         if (stopReason !== "tool_use" || pendingTools.size === 0) {
+          console.log(
+            `[usage] turn total: iterations=${iteration} input=${turnInput} output=${turnOutput} cache_read=${turnCacheRead} cache_creation=${turnCacheCreation}`
+          );
           await onDone();
           return;
         }

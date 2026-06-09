@@ -29,6 +29,7 @@ import {
 import { DynamicIcon, type IconName, iconNames } from "lucide-react/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TYPE_COLOR } from "./colors";
+import { dedupeNodes, filterDanglingLinks } from "./sanitize";
 import type { GraphLink, GraphNode } from "./types";
 import type { NodePosition } from "./useKnowledgeGraphState";
 
@@ -40,6 +41,10 @@ const NODE_R = 16;
 // Pointer movement (in SVG units) beyond which a press counts as a drag, not a
 // click. Keeps tap-to-select working while still allowing drag-to-pin.
 const DRAG_THRESHOLD = 4;
+// Quiet window after the last nodes/links change before we reconcile + re-heat the
+// sim. Collapses a burst of build_knowledge_graph updates (some models fire many
+// per turn) into a single settle instead of one violent re-layout per update.
+const RECONCILE_DEBOUNCE_MS = 150;
 
 interface ContextMenuState {
   id: string;
@@ -104,90 +109,117 @@ export function ForceGraph({
   // Reconcile incoming nodes/links into the simulation's mutable arrays, then
   // (re)heat the sim. Keeps existing nodes' positions; seeds new ones near centre.
   // Restored nodes arrive with saved x/y (and maybe fx/fy) — honour those.
+  //
+  // Debounced: some models fire many build_knowledge_graph calls in one turn, each
+  // landing as its own [nodes, links] change. Reconciling + re-heating per change
+  // re-flings the whole layout on every update — that's the rapid "flashing". We
+  // wait for the burst to stop (RECONCILE_DEBOUNCE_MS of quiet), then reconcile to
+  // the final data exactly once. Each render re-arms the timer with fresh closure
+  // values, so the trailing run always sees the latest props.
   useEffect(() => {
-    // Compute centroid of existing positioned nodes so new arrivals spawn near
-    // the current cluster rather than the static viewport centre.
-    const positioned = simNodes.current.filter(
-      (n) => n.x != null && n.y != null
-    );
-    const cx =
-      positioned.length > 0
-        ? positioned.reduce((s, n) => s + (n.x ?? 0), 0) / positioned.length
-        : VIEW_W / 2;
-    const cy =
-      positioned.length > 0
-        ? positioned.reduce((s, n) => s + (n.y ?? 0), 0) / positioned.length
-        : VIEW_H / 2;
+    const timer = setTimeout(reconcile, RECONCILE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
 
-    const byId = new Map(simNodes.current.map((n) => [n.id, n]));
-    simNodes.current = nodes.map((n) => {
-      const existing = byId.get(n.id);
-      if (existing) {
-        // Keep live position/velocity, refresh display fields (incl. fx/fy so
-        // pin/unpin from the provider takes effect).
-        return Object.assign(existing, n);
-      }
-      // Use a saved position if present (restore), else seed near cluster centroid.
-      return {
-        ...n,
-        x: n.x ?? cx + (Math.random() - 0.5) * 40,
-        y: n.y ?? cy + (Math.random() - 0.5) * 40,
-      };
-    });
-    simLinks.current = links.map((l) => ({ ...l }));
-
-    // Radial force that pulls orphan nodes (no edges) toward the graph centroid.
-    // Recomputed each reconcile so the target tracks the evolving cluster.
-    function updateOrphanForce(sim: Simulation<GraphNode, GraphLink>) {
-      const linkedIds = new Set<string>();
-      for (const l of simLinks.current) {
-        linkedIds.add(typeof l.source === "string" ? l.source : l.source.id);
-        linkedIds.add(typeof l.target === "string" ? l.target : l.target.id);
-      }
-      const lx =
-        simNodes.current.length > 0
-          ? simNodes.current.reduce((s, n) => s + (n.x ?? 0), 0) /
-            simNodes.current.length
-          : VIEW_W / 2;
-      const ly =
-        simNodes.current.length > 0
-          ? simNodes.current.reduce((s, n) => s + (n.y ?? 0), 0) /
-            simNodes.current.length
-          : VIEW_H / 2;
-      sim.force(
-        "orphan",
-        forceRadial<GraphNode>(0, lx, ly).strength((n) =>
-          linkedIds.has(n.id) ? 0 : 0.08
-        )
+    function reconcile() {
+      // Compute centroid of existing positioned nodes so new arrivals spawn near
+      // the current cluster rather than the static viewport centre.
+      const positioned = simNodes.current.filter(
+        (n) => n.x != null && n.y != null
       );
-    }
+      const cx =
+        positioned.length > 0
+          ? positioned.reduce((s, n) => s + (n.x ?? 0), 0) / positioned.length
+          : VIEW_W / 2;
+      const cy =
+        positioned.length > 0
+          ? positioned.reduce((s, n) => s + (n.y ?? 0), 0) / positioned.length
+          : VIEW_H / 2;
 
-    let sim = simRef.current;
-    if (!sim) {
-      sim = forceSimulation<GraphNode, GraphLink>(simNodes.current)
-        .force(
-          "link",
-          forceLink<GraphNode, GraphLink>(simLinks.current)
-            .id((d) => d.id)
-            .distance(90)
-            .strength(0.5)
-        )
-        .force("charge", forceManyBody().strength(-260))
-        .force("center", forceCenter(VIEW_W / 2, VIEW_H / 2))
-        .force("collide", forceCollide(NODE_R * 2.2));
-      sim.on("tick", () => setTick((t) => t + 1));
-      // When the layout settles, report final positions for persistence.
-      sim.on("end", () => reportPositions());
-      simRef.current = sim;
-    } else {
-      sim.nodes(simNodes.current);
-      const linkForce = sim.force("link") as ReturnType<
-        typeof forceLink<GraphNode, GraphLink>
-      >;
-      linkForce.links(simLinks.current);
+      // Sanitise before the sim touches anything: collapse duplicate node ids (a
+      // duplicate key would crash the keyed render) so we never seed two sim nodes
+      // for one id, then below drop links whose endpoint isn't among the surviving
+      // ids — d3-force throws "node not found" on any dangling endpoint. The reducer
+      // tries to keep these consistent, but a restored snapshot or a loadGraph race
+      // can still deliver bad data; this is the boundary that makes the view safe.
+      const safeNodes = dedupeNodes(nodes);
+
+      const byId = new Map(simNodes.current.map((n) => [n.id, n]));
+      simNodes.current = safeNodes.map((n) => {
+        const existing = byId.get(n.id);
+        if (existing) {
+          // Keep live position/velocity, refresh display fields (incl. fx/fy so
+          // pin/unpin from the provider takes effect).
+          return Object.assign(existing, n);
+        }
+        // Use a saved position if present (restore), else seed near cluster centroid.
+        return {
+          ...n,
+          x: n.x ?? cx + (Math.random() - 0.5) * 40,
+          y: n.y ?? cy + (Math.random() - 0.5) * 40,
+        };
+      });
+      const liveIds = new Set(simNodes.current.map((n) => n.id));
+      simLinks.current = filterDanglingLinks(links, liveIds).map((l) => ({
+        ...l,
+      }));
+
+      // Radial force that pulls orphan nodes (no edges) toward the graph centroid.
+      // Recomputed each reconcile so the target tracks the evolving cluster.
+      function updateOrphanForce(sim: Simulation<GraphNode, GraphLink>) {
+        const linkedIds = new Set<string>();
+        for (const l of simLinks.current) {
+          linkedIds.add(typeof l.source === "string" ? l.source : l.source.id);
+          linkedIds.add(typeof l.target === "string" ? l.target : l.target.id);
+        }
+        const lx =
+          simNodes.current.length > 0
+            ? simNodes.current.reduce((s, n) => s + (n.x ?? 0), 0) /
+              simNodes.current.length
+            : VIEW_W / 2;
+        const ly =
+          simNodes.current.length > 0
+            ? simNodes.current.reduce((s, n) => s + (n.y ?? 0), 0) /
+              simNodes.current.length
+            : VIEW_H / 2;
+        sim.force(
+          "orphan",
+          forceRadial<GraphNode>(0, lx, ly).strength((n) =>
+            linkedIds.has(n.id) ? 0 : 0.08
+          )
+        );
+      }
+
+      let sim = simRef.current;
+      const firstBuild = !sim;
+      if (!sim) {
+        sim = forceSimulation<GraphNode, GraphLink>(simNodes.current)
+          .force(
+            "link",
+            forceLink<GraphNode, GraphLink>(simLinks.current)
+              .id((d) => d.id)
+              .distance(90)
+              .strength(0.5)
+          )
+          .force("charge", forceManyBody().strength(-260))
+          .force("center", forceCenter(VIEW_W / 2, VIEW_H / 2))
+          .force("collide", forceCollide(NODE_R * 2.2));
+        sim.on("tick", () => setTick((t) => t + 1));
+        // When the layout settles, report final positions for persistence.
+        sim.on("end", () => reportPositions());
+        simRef.current = sim;
+      } else {
+        sim.nodes(simNodes.current);
+        const linkForce = sim.force("link") as ReturnType<
+          typeof forceLink<GraphNode, GraphLink>
+        >;
+        linkForce.links(simLinks.current);
+      }
+      updateOrphanForce(sim);
+      // Re-heat gently for incremental updates so existing nodes barely shift and new
+      // ones ease into place; only the first build (or a full reload that recreates
+      // the sim) earns the strong fling that lays the graph out from scratch.
+      sim.alpha(firstBuild ? 0.8 : 0.3).restart();
     }
-    updateOrphanForce(sim);
-    sim.alpha(0.8).restart();
   }, [nodes, links, reportPositions]);
 
   // Tear the simulation down on unmount.

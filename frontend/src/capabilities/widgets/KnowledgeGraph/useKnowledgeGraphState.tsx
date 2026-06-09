@@ -236,7 +236,11 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
       const freshNodes: GraphNode[] = [];
       for (const e of payload.entities) {
         if (nodeIds.current.has(e.id)) continue; // exact id already present
-        const survivor = findDuplicateId(e, canonicalKeys.current, nodesRef.current);
+        const survivor = findDuplicateId(
+          e,
+          canonicalKeys.current,
+          nodesRef.current
+        );
         if (survivor && survivor !== e.id) {
           aliasMap.set(e.id, survivor); // drift duplicate — fold into survivor
           continue;
@@ -253,7 +257,12 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
 
       // New links — rewrite endpoints through the alias map first (so a link from a
       // folded id attaches to the survivor), then dedupe by from→to key and skip
-      // self-loops.
+      // self-loops. Drop any link whose endpoint isn't a live node: the model can
+      // emit a relationship referencing an entity it never declared (or one folded
+      // away), and d3-force throws "node not found" the instant it sees a dangling
+      // endpoint. nodeIds.current already includes the freshNodes added just above,
+      // so it's the authoritative live set at this point. (Endpoints removed later
+      // in this same payload are stripped by the removal filter below.)
       const freshLinks: GraphLink[] = [];
       for (const r of payload.relationships) {
         const { source: from, target: to } = remapLinkEndpoints(
@@ -261,6 +270,7 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
           aliasMap
         );
         if (from === to) continue;
+        if (!nodeIds.current.has(from) || !nodeIds.current.has(to)) continue; // dangling endpoint
         const key = `${from}→${to}`;
         if (linkKeys.current.has(key)) continue;
         linkKeys.current.add(key);
