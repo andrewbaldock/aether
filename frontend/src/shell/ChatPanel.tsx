@@ -1,4 +1,4 @@
-import { ChevronDown, Network, Wrench } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -294,17 +294,9 @@ export function ChatPanel() {
         {!started && (
           <div className="mx-auto mt-20 flex w-full max-w-md flex-col items-center gap-4 text-center max-md:mt-0 max-md:gap-3">
             <Wordmark height={72} />
-            <div className="flex items-center gap-2.5">
-              <Wrench className="h-5 w-5 text-content-muted" aria-hidden />
-              <p className="font-display text-lg font-semibold text-content">
-                I Can Use Tools
-              </p>
-              <Network className="h-5 w-5 text-content-muted" aria-hidden />
-            </div>
             <p className="text-sm text-content-muted max-md:px-2">
-              {graphMode
-                ? "Knowledge Graph is on — just start talking and I'll map the people, places, and ideas as a live diagram beside us."
-                : "Ask me anything. Flip on Knowledge Graph (the node icon below) and I'll map the conversation as a live diagram beside us."}
+              Ask me anything. I'll answer in whatever form fits best — text, a
+              chart, a table, a graph — rendered live beside us.
             </p>
           </div>
         )}
