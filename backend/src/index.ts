@@ -16,7 +16,7 @@ import {
   updateSessionTitle,
   updateSessionTitleIfEmpty,
 } from "./db";
-import { type ChatMessage, createClient } from "./llm";
+import { type ChatMessage, createClient, generateTitle } from "./llm";
 import { MODELS, resolveModel } from "./models";
 
 const app = new Hono();
@@ -291,12 +291,16 @@ app.post("/api/chat", async (c) => {
               });
             }
 
-            // Auto-title the session from the first user message. The
-            // conditional UPDATE is a no-op once a title exists, and a failure
-            // here must never affect message persistence — so it's decoupled.
+            // Auto-title the session from the first user message. A one-shot
+            // Haiku micro-agent names it in a few words; if that fails (bad key,
+            // rate limit) it returns null and we fall back to the truncated
+            // message. The conditional UPDATE is a no-op once a title exists, and
+            // a failure here must never affect message persistence — so it's
+            // decoupled.
             if (lastUserMessage.content) {
               try {
-                const title = lastUserMessage.content.slice(0, 60);
+                const generated = await generateTitle(lastUserMessage.content);
+                const title = generated ?? lastUserMessage.content.slice(0, 60);
                 await updateSessionTitleIfEmpty(persistSession, title);
               } catch (err) {
                 console.error("Failed to auto-title session:", err);

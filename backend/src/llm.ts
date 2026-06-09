@@ -605,3 +605,41 @@ export function createClient(opts: {
       );
   }
 }
+
+// A dirt-cheap micro-agent that names a conversation in a few words from its first
+// message. One-shot Haiku — no tools, no streaming, no agent loop — so it's the
+// cheapest call we make, fired once per new session. Always uses Haiku regardless
+// of the conversation's selected model (titling shouldn't burn Opus tokens). The
+// caller treats this as best-effort: on any failure it returns null and the caller
+// falls back to the truncated first message, so a bad key or rate limit never
+// blocks the turn.
+export async function generateTitle(
+  firstMessage: string
+): Promise<string | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const client = new Anthropic({ apiKey });
+    const response = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 32,
+      system:
+        "You name conversations. Given the user's first message, reply with a " +
+        "concise title of at most 5 words that captures its topic. No quotes, no " +
+        "punctuation at the end, no preamble — just the title.",
+      messages: [{ role: "user", content: firstMessage }],
+    });
+    const text = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .trim();
+    // Strip stray wrapping quotes the model sometimes adds, and bound the length
+    // so a runaway reply can't become an oversized title.
+    const cleaned = text.replace(/^["']|["']$/g, "").trim();
+    return cleaned.length > 0 ? cleaned.slice(0, 60) : null;
+  } catch (err) {
+    console.error("generateTitle failed:", err);
+    return null;
+  }
+}
