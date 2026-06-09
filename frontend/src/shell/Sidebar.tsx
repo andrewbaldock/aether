@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "../brand/Wordmark";
 import { ThemeToggle } from "../theme/ThemeToggle";
+import { useModelLabel } from "./ModelPicker";
 import { useSessionContext } from "./SessionContext";
 import { Tooltip } from "./Tooltip";
 
@@ -41,6 +42,10 @@ export function Sidebar({
   const started = messages.length > 0;
   const provisionalTitle =
     messages.find((m) => m.role === "user")?.text ?? "New conversation";
+
+  // Resolve each session's saved model id to a short label for the thumbnail.
+  // One cached fetch (shared with the picker) labels the whole list.
+  const labelForModel = useModelLabel();
 
   function titleFor(s: (typeof sessions)[number]): string {
     if (s.title) return s.title;
@@ -102,6 +107,7 @@ export function Sidebar({
             id={s.id}
             title={titleFor(s)}
             date={s.created_at}
+            modelLabel={labelForModel(s.model)}
             active={s.id === sessionId}
             onClick={() => {
               loadSession(s.id);
@@ -135,6 +141,10 @@ interface SessionItemProps {
   id: string;
   title: string;
   date: string;
+  // Short label of the model this conversation last used (e.g. "Sonnet 4.6").
+  // Sessions with no explicit model resolve to the default's label; null only
+  // when the allowlist hasn't loaded yet, in which case we show just the date.
+  modelLabel: string | null;
   active: boolean;
   onClick: () => void;
   onRename: (title: string) => void;
@@ -144,6 +154,7 @@ interface SessionItemProps {
 function SessionItem({
   title,
   date,
+  modelLabel,
   active,
   onClick,
   onRename,
@@ -211,8 +222,9 @@ function SessionItem({
           }`}
         >
           <div className="truncate pr-5">{title}</div>
-          <div className="mt-0.5 text-xs text-content-faint">
+          <div className="mt-0.5 truncate text-xs text-content-faint">
             {formatDate(date)}
+            {modelLabel && ` · ${modelLabel}`}
           </div>
         </button>
       )}
