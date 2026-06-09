@@ -90,6 +90,17 @@ function set(
 // trailing pulse so the last token still registers.
 const TOKEN_THROTTLE_MS = 250;
 
+// Minimum time a node stays visibly lit (active/looping) before it's allowed to
+// drop to complete/idle. Real agent events can fire well under a second apart
+// (text → tool_start → tool_result), which would flash a node's role colour by
+// too fast to see — this guarantees each lit node holds for at least 2s.
+const MIN_LIT_MS = 2000;
+
+// A node is "lit" (showing its role colour) while active or looping.
+function isLit(status: NodeStatus): boolean {
+  return status === "active" || status === "looping";
+}
+
 export function useAgentDiagramState(): DiagramState {
   const bus = useAgentEvents();
   const [state, setState] = useState<DiagramState>(INITIAL);
@@ -99,18 +110,90 @@ export function useAgentDiagramState(): DiagramState {
   const fadeTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const tokenLast = useRef(0);
   const tokenTrailing = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Per-node timestamp (epoch ms) until which the node is hold-locked lit. A
+  // patch that would dim a node before this expires is deferred (see
+  // applyStatuses); cleared on every turn boundary via clearTimers.
+  const litUntil = useRef<Partial<Record<NodeId, number>>>({});
+  // Pending deferred-demotion timers, keyed by node, so a later patch can cancel
+  // a node's stale pending demotion before scheduling a new one.
+  const holdTimers = useRef<Partial<Record<NodeId, ReturnType<typeof setTimeout>>>>(
+    {}
+  );
   // True once we've logged "streaming tokens…" for the current burst, so dozens
   // of token events produce one console line, not dozens.
   const loggedStreaming = useRef(false);
 
   useEffect(() => {
-    function clearTimers() {
+    // Cancel scheduled fade/token timers. By default also clears the per-node
+    // min-lit holds — a hard reset for turn boundaries (request_start, idle,
+    // error, unmount). Pass { preserveHolds: true } at the natural end of a turn
+    // (done) so nodes lit moments before still get their full 2s before the
+    // staggered fade dims them.
+    function clearTimers(opts?: { preserveHolds: boolean }) {
       for (const t of fadeTimers.current) clearTimeout(t);
       fadeTimers.current = [];
       if (tokenTrailing.current) {
         clearTimeout(tokenTrailing.current);
         tokenTrailing.current = null;
       }
+      if (!opts?.preserveHolds) {
+        for (const t of Object.values(holdTimers.current)) {
+          if (t) clearTimeout(t);
+        }
+        holdTimers.current = {};
+        litUntil.current = {};
+      }
+    }
+
+    // Apply a status patch on top of `prev`, enforcing the 2s min-lit hold.
+    // - Nodes being promoted to active/looping apply immediately and (re)stamp
+    //   their litUntil window.
+    // - Nodes being dimmed (→ complete/idle) while still inside their hold
+    //   window are skipped now and re-applied by a deferred timer once the hold
+    //   expires, so a fast event can't snuff a colour before it's been seen.
+    // Always funnel writes through here instead of raw `set()` so the hold is
+    // centralised. The deferred timers register in holdTimers (cancellable per
+    // node) and are cleared at every turn boundary by clearTimers.
+    function applyStatuses(
+      prev: Record<NodeId, NodeStatus>,
+      patch: Partial<Record<NodeId, NodeStatus>>
+    ): Record<NodeId, NodeStatus> {
+      const now = Date.now();
+      const immediate: Partial<Record<NodeId, NodeStatus>> = {};
+      for (const key of Object.keys(patch) as NodeId[]) {
+        const next = patch[key];
+        if (next === undefined) continue;
+        const wasLit = isLit(prev[key]);
+        if (isLit(next)) {
+          // Promotion (or re-pulse): apply now, refresh the hold window. Any
+          // pending demotion for this node is now stale.
+          immediate[key] = next;
+          litUntil.current[key] = now + MIN_LIT_MS;
+          const pending = holdTimers.current[key];
+          if (pending) {
+            clearTimeout(pending);
+            delete holdTimers.current[key];
+          }
+        } else if (wasLit && (litUntil.current[key] ?? 0) > now) {
+          // Demotion inside the hold window: defer to when the hold expires.
+          const remaining = (litUntil.current[key] ?? now) - now;
+          const pending = holdTimers.current[key];
+          if (pending) clearTimeout(pending);
+          holdTimers.current[key] = setTimeout(() => {
+            delete holdTimers.current[key];
+            delete litUntil.current[key];
+            setState((s) => ({
+              ...s,
+              nodeStatuses: { ...s.nodeStatuses, [key]: next },
+            }));
+          }, remaining);
+        } else {
+          // Demotion past the hold (or a non-lit→non-lit change): apply now.
+          immediate[key] = next;
+          delete litUntil.current[key];
+        }
+      }
+      return { ...prev, ...immediate };
     }
 
     // Pulse the streaming/append nodes once. Used both for the throttled leading
@@ -118,7 +201,7 @@ export function useAgentDiagramState(): DiagramState {
     function pulseTokens() {
       setState((s) => ({
         ...s,
-        nodeStatuses: set(s.nodeStatuses, {
+        nodeStatuses: applyStatuses(s.nodeStatuses, {
           claude_api: "active",
           stream_tokens: "active",
           token_append: "active",
@@ -163,7 +246,7 @@ export function useAgentDiagramState(): DiagramState {
               ...s,
               phase: "running",
               activeToolName: null,
-              nodeStatuses: set(s.nodeStatuses, {
+              nodeStatuses: applyStatuses(s.nodeStatuses, {
                 user: "complete",
                 http_post: "complete",
                 build_history: "complete",
@@ -200,7 +283,7 @@ export function useAgentDiagramState(): DiagramState {
                 ...s,
                 phase: "tool_use",
                 activeToolName: tool,
-                nodeStatuses: set(s.nodeStatuses, {
+                nodeStatuses: applyStatuses(s.nodeStatuses, {
                   claude_api: "complete",
                   stream_tokens: "complete",
                   token_append: "complete",
@@ -220,7 +303,7 @@ export function useAgentDiagramState(): DiagramState {
             logLine(
               {
                 ...s,
-                nodeStatuses: set(s.nodeStatuses, {
+                nodeStatuses: applyStatuses(s.nodeStatuses, {
                   stop_reason: "complete",
                   tool_exec: "complete",
                   feed_results: "active",
@@ -241,7 +324,7 @@ export function useAgentDiagramState(): DiagramState {
                 ...s,
                 phase: "running",
                 loopCount: Math.max(s.loopCount, event.iteration),
-                nodeStatuses: set(s.nodeStatuses, {
+                nodeStatuses: applyStatuses(s.nodeStatuses, {
                   feed_results: "complete",
                   build_history: "looping",
                   claude_api: "active",
@@ -254,38 +337,44 @@ export function useAgentDiagramState(): DiagramState {
         }
 
         case "done": {
-          clearTimers();
+          // Preserve in-flight holds so a node lit just before done still gets
+          // its full 2s; the fade below routes through applyStatuses and so
+          // defers around those holds.
+          clearTimers({ preserveHolds: true });
           loggedStreaming.current = false;
           // Everything that ran briefly shows complete, then done flashes, then
           // the whole diagram fades back to idle top-to-bottom.
           setState((s) => {
-            const completed = { ...s.nodeStatuses };
-            for (const id of FADE_ORDER) {
-              if (completed[id] === "active" || completed[id] === "looping") {
-                completed[id] = "complete";
-              }
-            }
+            const completed = applyStatuses(s.nodeStatuses, {
+              ...Object.fromEntries(
+                FADE_ORDER.filter(
+                  (id) =>
+                    s.nodeStatuses[id] === "active" ||
+                    s.nodeStatuses[id] === "looping"
+                ).map((id) => [id, "complete" as NodeStatus])
+              ),
+              stop_reason: "complete",
+              done: "active",
+            });
             return logLine(
               {
                 ...s,
                 phase: "done",
                 activeToolName: null,
-                nodeStatuses: set(completed, {
-                  stop_reason: "complete",
-                  done: "active",
-                }),
+                nodeStatuses: completed,
               },
               "stop_reason = end_turn → onDone() → [DONE]"
             );
           });
 
-          // Staggered fade.
+          // Staggered fade — routed through applyStatuses so a still-held node
+          // (e.g. done, lit last) waits out its 2s before going idle.
           FADE_ORDER.forEach((id, i) => {
             const t = setTimeout(
               () => {
                 setState((s) => ({
                   ...s,
-                  nodeStatuses: set(s.nodeStatuses, { [id]: "idle" }),
+                  nodeStatuses: applyStatuses(s.nodeStatuses, { [id]: "idle" }),
                 }));
               },
               1200 + i * 80
@@ -293,13 +382,18 @@ export function useAgentDiagramState(): DiagramState {
             fadeTimers.current.push(t);
           });
           // Reset nodes + counters once the fade completes, but keep the log on
-          // screen — it's only cleared on the next send (request_start).
+          // screen — it's only cleared on the next send (request_start). By this
+          // point (2200ms) every 2s hold has expired; clear the hold refs too so
+          // nothing leaks into the next turn.
           const reset = setTimeout(
-            () =>
+            () => {
+              litUntil.current = {};
+              holdTimers.current = {};
               setState((s) => ({
                 ...INITIAL,
                 log: s.log,
-              })),
+              }));
+            },
             1200 + FADE_ORDER.length * 80 + 200
           );
           fadeTimers.current.push(reset);

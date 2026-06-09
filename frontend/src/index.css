@@ -163,9 +163,10 @@ body {
   animation: agent-edge-flow 0.9s linear infinite reverse;
 }
 
-/* The agent-loop container glows while the loop is actively re-entering. */
+/* The agent-loop container glows while the loop is actively re-entering.
+   Hex matches ROLE_COLOR.backend (acid green) in nodes.ts. */
 .agent-loop-box[data-looping="true"] {
-  filter: drop-shadow(0 0 6px #22c55e);
+  filter: drop-shadow(0 0 6px #00f0a8);
 }
 
 /* ── Knowledge-graph nodes ───────────────────────────────────────────────────

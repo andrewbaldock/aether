@@ -35,13 +35,19 @@ const IDLE_STROKE = "var(--content-subtle)"; // visible chip outline at rest
 // legible, and the role colour is reserved for "this is firing right now."
 // The role hex is also written to --node-color so the pulse drop-shadow (CSS)
 // glows in the matching hue while active.
+// Active fill is a translucent wash of the role colour (8-digit #rrggbbaa, the
+// same pattern as the neon box-shadows in index.css) so the whole chip reads as
+// "lit" — not just the border — while white text stays legible over the dark
+// surface that still dominates at this low alpha.
+const ACTIVE_FILL_ALPHA = "26"; // ~15%
+
 function nodeColors(node: DiagramNode, status: NodeStatus) {
   const role = ROLE_COLOR[node.role];
   switch (status) {
     case "active":
     case "looping":
       return {
-        fill: "var(--surface)",
+        fill: `${role}${ACTIVE_FILL_ALPHA}`,
         stroke: role,
         text: "var(--content)",
         glow: role,
