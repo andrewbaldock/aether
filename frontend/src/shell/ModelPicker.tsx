@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useLayoutEffect, useRef } from "react";
 import { apiFetch } from "../lib/queryClient";
 import { Tooltip } from "./Tooltip";
 
@@ -67,6 +68,8 @@ interface ModelPickerProps {
 // one persists it to the session (handled by the parent).
 export function ModelPicker({ value, onChange, disabled }: ModelPickerProps) {
   const models = useModels();
+  const spanRef = useRef<HTMLSpanElement>(null);
+  const selectRef = useRef<HTMLSelectElement>(null);
 
   // Until the list loads (or if it failed), render nothing rather than an empty
   // select — the conversation still works on the server default.
@@ -75,6 +78,7 @@ export function ModelPicker({ value, onChange, disabled }: ModelPickerProps) {
   // The select shows the session's model if set, else the first option (the
   // default), so the control always reflects what a turn would actually use.
   const selected = value ?? models[0]?.id;
+  const selectedLabel = models.find((m) => m.id === selected)?.label ?? "";
 
   // Group models under their provider for <optgroup> headers, in PROVIDER_LABELS
   // order. Within a group the backend's allowlist order is preserved. Only render
@@ -89,27 +93,77 @@ export function ModelPicker({ value, onChange, disabled }: ModelPickerProps) {
 
   return (
     <Tooltip label="Choose which model answers" side="top" className="min-w-0">
-      <select
-        value={selected}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        aria-label="Model"
-        // field-sizing:content makes the select size to its CURRENT value, not its
-        // widest <option> (the browser default — which is what left the big gap
-        // before the chevron). max-w-full keeps a long label from overflowing the
-        // footer. Unsupported browsers fall back to the default widest-option width.
-        className="w-auto max-w-full [field-sizing:content] rounded-lg border border-transparent bg-transparent py-1.5 pl-1.5 pr-1 text-xs text-content-muted hover:bg-border-strong hover:text-content focus:outline-none disabled:opacity-50 max-md:py-2.5 max-md:text-sm"
-      >
-        {groups.map((g) => (
-          <optgroup key={g.provider} label={PROVIDER_LABELS[g.provider]}>
-            {g.items.map((m) => (
-              <option key={m.id} value={m.id} className="text-content">
-                {m.label}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
+      <div className="relative">
+        {/*
+          Hidden span that mirrors the selected label. We read its width in
+          useLayoutEffect and apply it to the <select>, making the select hug
+          its current value across all browsers. field-sizing:content only works
+          in Chrome/Safari; Firefox falls back to the widest option, leaving a gap.
+        */}
+        <span
+          ref={spanRef}
+          aria-hidden
+          className="pointer-events-none invisible absolute whitespace-nowrap px-3 text-xs"
+        >
+          {selectedLabel}
+        </span>
+        <SelectWithWidth
+          spanRef={spanRef}
+          selectRef={selectRef}
+          selectedLabel={selectedLabel}
+          selected={selected}
+          onChange={onChange}
+          disabled={disabled}
+          groups={groups}
+        />
+      </div>
     </Tooltip>
+  );
+}
+
+// Split into its own component so useLayoutEffect can safely access spanRef after render.
+function SelectWithWidth({
+  spanRef,
+  selectRef,
+  selectedLabel,
+  selected,
+  onChange,
+  disabled,
+  groups,
+}: {
+  spanRef: React.RefObject<HTMLSpanElement | null>;
+  selectRef: React.RefObject<HTMLSelectElement | null>;
+  selectedLabel: string;
+  selected: string | undefined;
+  onChange: (model: string) => void;
+  disabled?: boolean;
+  groups: { provider: Provider; items: ModelOption[] }[];
+}) {
+  useLayoutEffect(() => {
+    if (spanRef.current && selectRef.current) {
+      // +4px for the native dropdown arrow glyph
+      selectRef.current.style.width = `${spanRef.current.offsetWidth + 4}px`;
+    }
+  }, [selectedLabel, spanRef, selectRef]);
+
+  return (
+    <select
+      ref={selectRef}
+      value={selected}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      aria-label="Model"
+      className="max-w-full shrink-0 rounded-lg border border-transparent bg-transparent py-1.5 pl-1.5 pr-1 text-xs text-content-muted hover:bg-border-strong hover:text-content focus:outline-none disabled:opacity-50 max-md:py-2.5 max-md:text-sm"
+    >
+      {groups.map((g) => (
+        <optgroup key={g.provider} label={PROVIDER_LABELS[g.provider]}>
+          {g.items.map((m) => (
+            <option key={m.id} value={m.id} className="text-content">
+              {m.label}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </select>
   );
 }

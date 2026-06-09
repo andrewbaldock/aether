@@ -81,7 +81,7 @@ export function ChatPanel() {
   useEffect(() => {
     registerAbort(abortStream);
   }, [registerAbort, abortStream]);
-  const { open, ensure, activate, close, markUnseen, activeId, widgets } =
+  const { open, ensure, activate, markUnseen, activeId, widgets } =
     useCapabilities();
   // Whether the Welcome/help tab is currently on top. Read via a ref inside the
   // bus subscription so a graph turn doesn't yank the user off the help page they
@@ -149,14 +149,14 @@ export function ChatPanel() {
         event.type === "tool_result" &&
         event.tool === "build_knowledge_graph"
       ) {
-        if (helpOnTop) {
-          // Graph updated while help is on top — flag it unseen instead of
-          // pulling the user off the help page.
+        if (helpOnTop || activeId !== KNOWLEDGE_GRAPH_WIDGET.id) {
+          // Help is on top, or another widget tab is active — mount in the
+          // background and flag unseen so the glowing dot appears.
           ensure(KNOWLEDGE_GRAPH_WIDGET);
           markUnseen(KNOWLEDGE_GRAPH_WIDGET.id);
         } else {
+          // KG is already the active tab — update in place, no dot needed.
           open(KNOWLEDGE_GRAPH_WIDGET);
-          activate(KNOWLEDGE_GRAPH_WIDGET.id);
         }
       }
     });
@@ -173,14 +173,14 @@ export function ChatPanel() {
       if (event.type !== "tool_result") return;
       const widget = RENDER_TOOL_WIDGETS[event.tool];
       if (!widget) return;
-      if (helpOnTopRef.current) {
-        // User is reading the help page — mount the tab in the background and
-        // flag it as unseen (glowing dot) rather than yanking them off help.
+      if (helpOnTopRef.current || activeId !== widget.id) {
+        // Help is on top, or a different tab is active — mount in the background
+        // and flag unseen so the glowing dot appears.
         ensure(widget);
         markUnseen(widget.id);
       } else {
+        // This widget is already the active tab — update in place, no dot needed.
         open(widget);
-        activate(widget.id);
       }
     });
     return unsubscribe;
@@ -197,14 +197,11 @@ export function ChatPanel() {
     return unsubscribe;
   }, [bus, sendMessage, isLoading]);
 
-  // Open a capability tab if it's not already in the column; close it if it is.
-  function toggleCapability(widget: Widget) {
-    if (widgets.some((w) => w.id === widget.id)) {
-      close(widget.id);
-    } else {
-      open(widget);
-      activate(widget.id);
-    }
+  // Always expose a capability tab — open it if absent, bring it to front if already there.
+  // The × on the tab itself is the only close affordance.
+  function revealCapability(widget: Widget) {
+    open(widget);
+    activate(widget.id);
   }
 
   // Pick a model: update the seed for the next new
@@ -478,13 +475,13 @@ export function ChatPanel() {
             </div>
           </div>
 
-          {/* Tool row — each chip opens/closes its capability tab. */}
+          {/* Tool row — each chip opens/activates its capability tab. */}
           <div className="mt-2 flex items-center gap-2">
             <ToolChip
               active={widgets.some((w) => w.id === KNOWLEDGE_GRAPH_WIDGET.id)}
               onClick={() => {
                 if (isMobile) setKgSheetOpen(true);
-                else toggleCapability(KNOWLEDGE_GRAPH_WIDGET);
+                else revealCapability(KNOWLEDGE_GRAPH_WIDGET);
               }}
               label="Knowledge Graph"
               icon={<GraphIcon />}
@@ -502,7 +499,7 @@ export function ChatPanel() {
               active={widgets.some((w) => w.id === TABLE_WIDGET.id)}
               onClick={() => {
                 if (isMobile) setTableSheetOpen(true);
-                else toggleCapability(TABLE_WIDGET);
+                else revealCapability(TABLE_WIDGET);
               }}
               label="Table"
               icon={<TableIcon />}
@@ -520,7 +517,7 @@ export function ChatPanel() {
               active={widgets.some((w) => w.id === CHART_WIDGET.id)}
               onClick={() => {
                 if (isMobile) setChartSheetOpen(true);
-                else toggleCapability(CHART_WIDGET);
+                else revealCapability(CHART_WIDGET);
               }}
               label="Chart"
               icon={<ChartIcon />}
