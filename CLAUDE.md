@@ -56,3 +56,10 @@ them; don't assume.
   touching `backend/` lands on `main`, the running Fly machine is stale until redeployed. When you
   notice the backend is behind, offer to deploy — run `~/.fly/bin/fly deploy` from `backend/`. (The
   frontend auto-deploys to Vercel on push; only the backend needs this.)
+- **Prefer additive, backwards-compatible changes.** Frontend (Vercel) and backend (Fly)
+  deploy on different cadences, so a new version routinely runs against an older
+  counterpart. Whenever possible make changes **additive, not destructive**: add new
+  fields/endpoints/params rather than renaming or removing existing ones, keep old shapes
+  working alongside new ones, and tolerate missing/unknown fields. The goal is that an
+  out-of-sync version degrades gracefully instead of crashing. Maximize backwards
+  compatibility and stability.

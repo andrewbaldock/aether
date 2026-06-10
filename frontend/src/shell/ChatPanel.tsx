@@ -8,10 +8,15 @@ import { Wordmark } from "../brand/Wordmark";
 import type { Widget } from "../capabilities/registry";
 import { useCapabilities } from "../capabilities/useCapabilities";
 import { CHART_WIDGET } from "../capabilities/widgets/Chart";
+import { useChartState } from "../capabilities/widgets/Chart/useChartState";
 import { IMAGES_WIDGET } from "../capabilities/widgets/Images";
+import { useImagesState } from "../capabilities/widgets/Images/useImagesState";
 import { KNOWLEDGE_GRAPH_WIDGET } from "../capabilities/widgets/KnowledgeGraph";
+import { useKnowledgeGraphState } from "../capabilities/widgets/KnowledgeGraph/useKnowledgeGraphState";
 import { TABLE_WIDGET } from "../capabilities/widgets/Table";
+import { useTableState } from "../capabilities/widgets/Table/useTableState";
 import { TIMELINE_WIDGET } from "../capabilities/widgets/Timeline";
+import { useTimelineState } from "../capabilities/widgets/Timeline/useTimelineState";
 import { WELCOME_WIDGET } from "../capabilities/widgets/Welcome";
 import { useUpdateSession } from "../hooks/useUpdateSession";
 import { useAgentEvents } from "./AgentEventContext";
@@ -86,13 +91,36 @@ export function ChatPanel() {
   useEffect(() => {
     registerAbort(abortStream);
   }, [registerAbort, abortStream]);
-  const { open, ensure, activate, markUnseen, activeId, widgets } =
-    useCapabilities();
+  const {
+    open,
+    ensure,
+    activate,
+    markUnseen,
+    restore,
+    closeAll,
+    activeId,
+    widgets,
+  } = useCapabilities();
+  // Content signals for restoring tabs on conversation load: a tab is reopened
+  // only when its widget actually has content. Entries/graph hydrate async (via
+  // the persistence bridges), so the restore effect keys on these and runs once
+  // they settle. We only read `.length` / `.nodes.length`, never mutate here.
+  const { entries: tableEntries } = useTableState();
+  const { entries: chartEntries } = useChartState();
+  const { entries: timelineEntries } = useTimelineState();
+  const { entries: imageEntries } = useImagesState();
+  const { nodes: graphNodes } = useKnowledgeGraphState();
   // Whether the Welcome/help tab is currently on top. Read via a ref inside the
   // bus subscription so a graph turn doesn't yank the user off the help page they
   // opened to read — without re-subscribing every time the active tab changes.
   const helpOnTopRef = useRef(activeId === WELCOME_WIDGET.id);
   helpOnTopRef.current = activeId === WELCOME_WIDGET.id;
+  // Same reason: the bus subscriptions below need the *current* active tab to
+  // decide "update in place vs. flag unseen", but must not re-subscribe on every
+  // tab switch. Read activeId through a ref so the once-mounted closure always
+  // sees the latest value.
+  const activeIdRef = useRef(activeId);
+  activeIdRef.current = activeId;
   const isMobile = useIsMobile();
   const updateSession = useUpdateSession(userId);
   const bus = useAgentEvents();
@@ -111,26 +139,74 @@ export function ChatPanel() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // When graph mode is on, make sure the Knowledge Graph tab exists so it's ready
-  // before the first graph data arrives. Use `ensure` (mount-only, no activate):
-  // activating here would force the mobile full-screen overlay open over an empty
-  // graph on load. The overlay surfaces only on real intent — toggling graph mode
-  // (below) or graph data arriving (the bus subscription).
-  useEffect(() => {
-    ensure(KNOWLEDGE_GRAPH_WIDGET);
-  }, [ensure]);
+  // Restore the capability column from a saved conversation. On load we reopen
+  // every tab that actually HAS content (Knowledge Graph included — treated like
+  // any other widget, opened only when it has nodes) and bring the last-viewed
+  // tab back to the front. The id of that tab is remembered per-conversation in
+  // ui_state.activeWidget. restoredSessionRef tracks which session we've already
+  // restored, so restore runs once per switch and active-tab SAVES (below) don't
+  // fire mid-restore.
+  const restoredSessionRef = useRef<string | null>(null);
 
-  // When the active session changes (e.g. bookmark load or sidebar click) and the
-  // session has graph mode on, surface the KG panel immediately so the graph is
-  // visible without requiring a new message turn.
-  const prevSessionIdRef = useRef<string | null>(sessionId);
+  // On session switch: clear the column so the previous conversation's tabs don't
+  // bleed in, and arm restore for the new session. Keyed on sessionId only.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sessionId is the trigger, not a value the effect reads
   useEffect(() => {
-    const prev = prevSessionIdRef.current;
-    prevSessionIdRef.current = sessionId;
-    if (!sessionId || sessionId === prev) return;
-    open(KNOWLEDGE_GRAPH_WIDGET);
-    activate(KNOWLEDGE_GRAPH_WIDGET.id);
-  }, [sessionId, open, activate]);
+    restoredSessionRef.current = null;
+    closeAll();
+  }, [sessionId, closeAll]);
+
+  // Once this session's content has hydrated (entries/graph arrive async via the
+  // persistence bridges), reopen the content-bearing tabs and restore the active
+  // one. Keyed on the content signals so it runs after they settle; the ref guard
+  // makes it run at most once per session. `restore` is atomic and does NOT bump
+  // openTick, so this never pops the mobile full-screen overlay on load.
+  const savedActiveWidget = currentSession?.ui_state?.activeWidget ?? null;
+  useEffect(() => {
+    if (!sessionId || restoredSessionRef.current === sessionId) return;
+    const widgetsToOpen: Widget[] = [];
+    if (graphNodes.length > 0) widgetsToOpen.push(KNOWLEDGE_GRAPH_WIDGET);
+    if (tableEntries.length > 0) widgetsToOpen.push(TABLE_WIDGET);
+    if (chartEntries.length > 0) widgetsToOpen.push(CHART_WIDGET);
+    if (timelineEntries.length > 0) widgetsToOpen.push(TIMELINE_WIDGET);
+    if (imageEntries.length > 0) widgetsToOpen.push(IMAGES_WIDGET);
+    // The remembered tab, but only if it still has content; else fall back to the
+    // last opened tab (or none for an empty conversation).
+    const restoreActiveId =
+      savedActiveWidget && widgetsToOpen.some((w) => w.id === savedActiveWidget)
+        ? savedActiveWidget
+        : (widgetsToOpen.at(-1)?.id ?? null);
+    restore(widgetsToOpen, restoreActiveId);
+    restoredSessionRef.current = sessionId;
+  }, [
+    sessionId,
+    savedActiveWidget,
+    graphNodes,
+    tableEntries,
+    chartEntries,
+    timelineEntries,
+    imageEntries,
+    restore,
+  ]);
+
+  // Remember which tab the user is viewing, per conversation. Debounced PATCH of
+  // ui_state.activeWidget — but only once this session has been restored (so we
+  // never overwrite the saved tab with a transient mid-restore value). The help/
+  // Welcome tab isn't a capability, so viewing it clears the remembered tab.
+  useEffect(() => {
+    if (!sessionId || restoredSessionRef.current !== sessionId) return;
+    const isCapabilityTab = widgets.some(
+      (w) => w.id === activeId && w.id !== WELCOME_WIDGET.id
+    );
+    const activeWidget = isCapabilityTab ? activeId : null;
+    const timer = setTimeout(() => {
+      updateSession.mutate({
+        id: sessionId,
+        patch: { ui_state: { activeWidget } },
+      });
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [sessionId, activeId, widgets, updateSession]);
 
   // Surface the KG tab at the right moments so its "mapping…" loading state and
   // the resulting graph are actually on-screen:
@@ -159,7 +235,7 @@ export function ChatPanel() {
         event.type === "tool_result" &&
         event.tool === "build_knowledge_graph"
       ) {
-        if (helpOnTop || activeId !== KNOWLEDGE_GRAPH_WIDGET.id) {
+        if (helpOnTop || activeIdRef.current !== KNOWLEDGE_GRAPH_WIDGET.id) {
           // Help is on top, or another widget tab is active — mount in the
           // background and flag unseen so the glowing dot appears.
           ensure(KNOWLEDGE_GRAPH_WIDGET);
@@ -183,7 +259,7 @@ export function ChatPanel() {
       if (event.type !== "tool_result") return;
       const widget = RENDER_TOOL_WIDGETS[event.tool];
       if (!widget) return;
-      if (helpOnTopRef.current || activeId !== widget.id) {
+      if (helpOnTopRef.current || activeIdRef.current !== widget.id) {
         // Help is on top, or a different tab is active — mount in the background
         // and flag unseen so the glowing dot appears.
         ensure(widget);
@@ -194,7 +270,7 @@ export function ChatPanel() {
       }
     });
     return unsubscribe;
-  }, [bus, open, activate, ensure, markUnseen]);
+  }, [bus, open, ensure, markUnseen]);
 
   // "Explore further" from a graph node: the widget emits an explore_request on
   // the bus; here we turn it into a real chat turn (only when not mid-stream).
@@ -577,8 +653,8 @@ export function ChatPanel() {
                   <span className="font-semibold">Images</span>
                   <br />
                   Ask to see photos or pictures of something — I'll search the
-                  web (Wikimedia Commons & Unsplash) and lay the results out as a
-                  gallery beside the chat.
+                  web (Wikimedia Commons & Unsplash) and lay the results out as
+                  a gallery beside the chat.
                 </>
               }
             />

@@ -11,11 +11,13 @@ import {
   getSessionWidgets,
   listSessions,
   saveMessage,
+  type UiState,
   updateSessionGraphData,
   updateSessionGraphMode,
   updateSessionModel,
   updateSessionTitle,
   updateSessionTitleIfEmpty,
+  updateSessionUiState,
   updateSessionWidgetData,
   type WidgetSnapshot,
 } from "./db";
@@ -117,27 +119,32 @@ app.patch("/api/sessions/:id", async (c) => {
   } catch {
     return c.json({ error: "Request body must be JSON" }, 400);
   }
-  // Accepts a title rename, a graph_mode change, and/or a model change —
-  // whichever fields are present and valid. One endpoint for all session
-  // mutation.
+  // Accepts a title rename, a graph_mode change, a model change, and/or a
+  // ui_state patch — whichever fields are present and valid. One endpoint for
+  // all session mutation.
   const {
     title,
     graph_mode: graphMode,
     model,
+    ui_state: uiState,
   } = body as {
     title?: unknown;
     graph_mode?: unknown;
     model?: unknown;
+    ui_state?: unknown;
   };
   const hasTitle = typeof title === "string" && title.trim().length > 0;
   const hasGraphMode = typeof graphMode === "boolean";
+  // A plain object (frontend-owned grab-bag); round-tripped as-is.
+  const hasUiState =
+    typeof uiState === "object" && uiState !== null && !Array.isArray(uiState);
   // Only persist a model that's in the allowlist.
   const validModel = resolveModel(model);
-  if (!hasTitle && !hasGraphMode && !validModel) {
+  if (!hasTitle && !hasGraphMode && !validModel && !hasUiState) {
     return c.json(
       {
         error:
-          "Expected { title: string }, { graph_mode: boolean }, and/or { model: string }",
+          "Expected { title: string }, { graph_mode: boolean }, { model: string }, and/or { ui_state: object }",
       },
       400
     );
@@ -146,6 +153,7 @@ app.patch("/api/sessions/:id", async (c) => {
     if (hasTitle) await updateSessionTitle(id, (title as string).trim());
     if (hasGraphMode) await updateSessionGraphMode(id, graphMode as boolean);
     if (validModel) await updateSessionModel(id, validModel);
+    if (hasUiState) await updateSessionUiState(id, uiState as UiState);
     return c.json({ ok: true });
   } catch (err) {
     console.error("PATCH /api/sessions/:id failed:", err);

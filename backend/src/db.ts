@@ -30,6 +30,16 @@ export type ImageData = {
   unsplashSearches: number;
 };
 
+// Frontend-owned per-conversation UI state, stored in the `ui_state` jsonb
+// column — "how this conversation was last being viewed". Distinct from
+// widget_data (widget CONTENT) and image_data (backend-owned counters). The
+// backend round-trips whatever the frontend saves. Open-ended on purpose so
+// future per-conversation UI memories can land here without a new column.
+export type UiState = {
+  // Which capability tab (widget id) was last on top. null/absent = none.
+  activeWidget?: string | null;
+};
+
 export interface Session {
   id: string;
   user_id: string;
@@ -38,6 +48,7 @@ export interface Session {
   graph_data: GraphSnapshot | null;
   widget_data: WidgetSnapshot | null;
   image_data: ImageData | null;
+  ui_state: UiState | null;
   // The Claude model the user last selected for this conversation. null means
   // "use the server default" (env override or built-in default).
   model: string | null;
@@ -181,6 +192,17 @@ export async function updateSessionModel(
     .update({ model, updated_at: new Date().toISOString() })
     .eq("id", sessionId);
   if (error) throw new Error(`updateSessionModel: ${error.message}`);
+}
+
+export async function updateSessionUiState(
+  sessionId: string,
+  uiState: UiState
+): Promise<void> {
+  const { error } = await getDb()
+    .from("sessions")
+    .update({ ui_state: uiState, updated_at: new Date().toISOString() })
+    .eq("id", sessionId);
+  if (error) throw new Error(`updateSessionUiState: ${error.message}`);
 }
 
 // Read just the persisted graph snapshot for a session. Returns null when the
