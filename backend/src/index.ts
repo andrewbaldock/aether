@@ -19,9 +19,9 @@ import {
   updateSessionWidgetData,
   type WidgetSnapshot,
 } from "./db";
+import { checkHealth } from "./health";
 import { type ChatMessage, createClient, generateTitle } from "./llm";
 import { MODELS, resolveModel } from "./models";
-import { checkHealth } from "./health";
 
 const app = new Hono();
 
@@ -294,13 +294,6 @@ app.post("/api/chat", async (c) => {
   // resolves to undefined, which lets the client fall back to the env/default.
   const selectedModel = resolveModel(model);
 
-  // Build the client per request so the tool surface (and graph-mode prompt)
-  // matches this conversation's mode, and so the chosen model applies this turn.
-  const llm = createClient({
-    graphMode: graphMode === true,
-    model: selectedModel,
-  });
-
   // Narrow once here; persistSession is a string exactly when persist is true,
   // so the streaming callback below doesn't need to re-cast at every call site.
   const persistSession =
@@ -310,6 +303,16 @@ app.post("/api/chat", async (c) => {
     userId.length > 0
       ? sessionId
       : null;
+
+  // Build the client per request so the tool surface (and graph-mode prompt)
+  // matches this conversation's mode, and so the chosen model applies this turn.
+  // sessionId is threaded through for per-conversation tool limits (Unsplash cap);
+  // only a persisted conversation has a count to scope to, so pass null otherwise.
+  const llm = createClient({
+    graphMode: graphMode === true,
+    model: selectedModel,
+    sessionId: persistSession ?? undefined,
+  });
 
   // The last user message — needed for saving and for auto-titling the session.
   const lastUserMessage = [...messages]

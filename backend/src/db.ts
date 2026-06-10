@@ -20,6 +20,16 @@ export type WidgetSnapshot = {
   images: unknown[] | null; // ImagesEntry[] (serialised)
 };
 
+// Backend-owned per-conversation image state, stored in the `image_data` jsonb
+// column. Distinct from `widget_data` (frontend-owned, written only after a turn)
+// so the backend can read/increment it mid-turn without racing the frontend.
+// Today it just holds the Unsplash-search budget counter; room to grow.
+export type ImageData = {
+  // Number of searches in this conversation that actually returned Unsplash
+  // photos. Caps real Unsplash usage per conversation (see searchUnsplash).
+  unsplashSearches: number;
+};
+
 export interface Session {
   id: string;
   user_id: string;
@@ -27,6 +37,7 @@ export interface Session {
   graph_mode: boolean;
   graph_data: GraphSnapshot | null;
   widget_data: WidgetSnapshot | null;
+  image_data: ImageData | null;
   // The Claude model the user last selected for this conversation. null means
   // "use the server default" (env override or built-in default).
   model: string | null;
@@ -227,6 +238,8 @@ export async function forkSession(
       graph_mode: source.graph_mode,
       graph_data: source.graph_data,
       widget_data: source.widget_data,
+      // Deliberately NOT copying image_data: a fork is a fresh conversation and
+      // should get its own Unsplash-search budget (column default null → 0 used).
       model: source.model,
     })
     .select("id")
@@ -277,4 +290,33 @@ export async function updateSessionWidgetData(
     .update({ widget_data: widgetData, updated_at: new Date().toISOString() })
     .eq("id", sessionId);
   if (error) throw new Error(`updateSessionWidgetData: ${error.message}`);
+}
+
+// Read this conversation's count of searches that returned Unsplash photos.
+// Returns 0 when the session has none recorded yet (image_data null). Checked
+// before an Unsplash fetch so the per-conversation cap can prevent it.
+export async function getUnsplashSearchCount(
+  sessionId: string
+): Promise<number> {
+  const { data, error } = await getDb()
+    .from("sessions")
+    .select("image_data")
+    .eq("id", sessionId)
+    .single();
+  if (error) throw new Error(`getUnsplashSearchCount: ${error.message}`);
+  const imageData = data?.image_data as ImageData | null;
+  return imageData?.unsplashSearches ?? 0;
+}
+
+// Bump this conversation's Unsplash-search counter by one. Called only after a
+// search actually returned Unsplash photos, so the count tracks real usage.
+// Atomic increment via the increment_session_unsplash_search RPC so concurrent
+// turns in the same session can't lose a count (see the migration).
+export async function bumpUnsplashSearchCount(
+  sessionId: string
+): Promise<void> {
+  const { error } = await getDb().rpc("increment_session_unsplash_search", {
+    p_session_id: sessionId,
+  });
+  if (error) throw new Error(`bumpUnsplashSearchCount: ${error.message}`);
 }
