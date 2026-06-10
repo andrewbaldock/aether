@@ -1,7 +1,11 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type OpenAI from "openai";
+import type { Provider } from "./models";
 
-export type ToolDefinition = Anthropic.Messages.Tool;
+// ToolDefinition covers both regular tools (name/description/input_schema) and
+// Anthropic server-side tools like WebSearchTool20260209. Using ToolUnion keeps
+// the typing accurate without manual casting.
+export type ToolDefinition = Anthropic.Messages.ToolUnion;
 
 // Always-on tools, available regardless of mode.
 export const BASE_TOOLS: ToolDefinition[] = [
@@ -289,29 +293,47 @@ export const RENDER_TIMELINE_TOOL: ToolDefinition = {
 // is intentionally omitted until its frontend widget exists (see note above).
 const RENDER_TOOLS: ToolDefinition[] = [RENDER_TABLE_TOOL, RENDER_CHART_TOOL];
 
+// Anthropic server-side web search. Runs on Anthropic's infrastructure — the host
+// never calls executeTool() for it. Gated to Claude only (OpenAI-compat providers
+// can't use Anthropic server-side tools). max_uses=3 caps spend per turn; real
+// research questions rarely need more than 2-3 searches to answer.
+export const WEB_SEARCH_TOOL: Anthropic.Messages.WebSearchTool20260209 = {
+  type: "web_search_20260209",
+  name: "web_search",
+  max_uses: 3,
+};
+
 // The tool list for a turn. Render tools + base are always present; Knowledge
-// Graph mode adds the graph tool.
-export function buildTools(opts: { graphMode: boolean }): ToolDefinition[] {
-  const tools = [...BASE_TOOLS, ...RENDER_TOOLS];
-  return opts.graphMode ? [...tools, BUILD_KNOWLEDGE_GRAPH_TOOL] : tools;
+// Graph mode adds the graph tool; Claude provider adds server-side web search.
+export function buildTools(opts: {
+  graphMode: boolean;
+  provider?: Provider;
+}): ToolDefinition[] {
+  const tools: ToolDefinition[] = [...BASE_TOOLS, ...RENDER_TOOLS];
+  if (opts.graphMode) tools.push(BUILD_KNOWLEDGE_GRAPH_TOOL);
+  if (opts.provider === "claude") tools.push(WEB_SEARCH_TOOL);
+  return tools;
 }
 
-// Translate our tool definitions (Anthropic's {name, description, input_schema})
-// into OpenAI's function-tool envelope. The JSON Schema body is identical between
-// the two formats — only the wrapper differs — so input_schema passes through as
-// `parameters` untouched. Used by the OpenAI-compatible client (Gemini / DeepSeek
-// / Mistral) so all providers share one tool vocabulary and one executeTool().
+// Translate regular tool definitions into OpenAI's function-tool envelope. Skips
+// server-side tools (no `input_schema`) — those are Claude-only and will never
+// appear in a non-Claude tool list, but the filter is a safety net.
 export function toOpenAITools(
   tools: ToolDefinition[]
 ): OpenAI.Chat.Completions.ChatCompletionTool[] {
-  return tools.map((t) => ({
-    type: "function",
-    function: {
-      name: t.name,
-      description: t.description,
-      parameters: t.input_schema as Record<string, unknown>,
-    },
-  }));
+  return tools
+    .filter(
+      (t): t is Anthropic.Messages.Tool =>
+        "input_schema" in t && t.input_schema !== undefined
+    )
+    .map((t) => ({
+      type: "function",
+      function: {
+        name: t.name,
+        description: t.description,
+        parameters: t.input_schema as Record<string, unknown>,
+      },
+    }));
 }
 
 export function executeTool(name: string, input: unknown): string {
