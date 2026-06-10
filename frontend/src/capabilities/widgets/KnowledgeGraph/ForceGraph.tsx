@@ -239,12 +239,15 @@ export function ForceGraph({
       // Don't pan/zoom when the gesture starts on a node — those go to the
       // node's own drag handlers. d3-zoom binds native listeners on the SVG, so
       // React's stopPropagation on the node can't reach it; this filter is the
-      // right seam. Mirror d3's default (reject non-primary buttons + ctrl) but
-      // additionally reject anything inside a .kg-node.
+      // right seam. Mirror d3's default filter but additionally reject anything
+      // inside a .kg-node. Use d3's exact `!event.button` test (not `=== 0`):
+      // touch events have no `button` property, and a strict `=== 0` check would
+      // be `undefined === 0` → false, silently blocking all touch gestures.
       .filter((e: Event) => {
         const target = e.target as Element | null;
         if (target?.closest(".kg-node")) return false;
-        return !(e as MouseEvent).ctrlKey && (e as MouseEvent).button === 0;
+        const me = e as MouseEvent;
+        return (!me.ctrlKey || e.type === "wheel") && !me.button;
       })
       .on("zoom", (e) => setTransform(e.transform.toString()));
     zoomRef.current = zoomBehavior;
@@ -426,7 +429,7 @@ export function ForceGraph({
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-        className="h-full w-full"
+        className="h-full w-full touch-none"
         role="img"
         aria-label="Knowledge graph"
       >
