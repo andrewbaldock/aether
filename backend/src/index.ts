@@ -21,10 +21,16 @@ import {
 } from "./db";
 import { type ChatMessage, createClient, generateTitle } from "./llm";
 import { MODELS, resolveModel } from "./models";
+import { checkHealth } from "./health";
 
 const app = new Hono();
 
 app.get("/api/health", (c) => c.json({ ok: true }));
+
+app.get("/api/health/full", async (c) => {
+  const result = await checkHealth();
+  return c.json(result);
+});
 
 // The model picker's options — single source of truth so the frontend doesn't
 // hardcode the allowlist.

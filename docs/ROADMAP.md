@@ -39,6 +39,10 @@ is designed so each is a plugin, added one at a time, swapped freely.
 > This phase is intentionally underspecified. See [ARCHITECTURE.md](./ARCHITECTURE.md) for the
 > platform seams that make capabilities pluggable.
 
+| | Focus | Scope |
+|---|-------|-------|
+| ✅ | Health dashboard | System Health widget checks all plumbing on demand: Supabase + each LLM provider key. Linked from Welcome tab. Works in dev and prod. |
+
 ## Backlog
 
 Improvements that don't fit an active phase but are earmarked for later:

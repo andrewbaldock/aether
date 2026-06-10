@@ -14,6 +14,7 @@ A single reference for dev, build, deploy, and management across both projects. 
 | Frontend (live) | `https://aether.andrewbaldock.com` (Vercel) |
 | Backend API | `https://aether-ab-api.fly.dev` |
 | Health check | `GET https://aether-ab-api.fly.dev/api/health` |
+| Full health dashboard | Open Aether → Welcome tab → "System health →" (or open the **System Health** tab directly) |
 
 ### Dev
 
