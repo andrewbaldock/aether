@@ -246,10 +246,6 @@ export const RENDER_CHART_TOOL: ToolDefinition = {
   },
 };
 
-// NOT YET WIRED: the timeline widget (frontend) isn't built, so this tool is
-// kept defined but deliberately left OUT of RENDER_TOOLS below — advertising it
-// would let the model emit a render_timeline call that nothing renders. Add it
-// back to RENDER_TOOLS when the Timeline widget lands (commit 6).
 export const RENDER_TIMELINE_TOOL: ToolDefinition = {
   name: "render_timeline",
   description:
@@ -289,9 +285,11 @@ export const RENDER_TIMELINE_TOOL: ToolDefinition = {
   },
 };
 
-// The render tools, always present in every turn's tool list. RENDER_TIMELINE_TOOL
-// is intentionally omitted until its frontend widget exists (see note above).
-const RENDER_TOOLS: ToolDefinition[] = [RENDER_TABLE_TOOL, RENDER_CHART_TOOL];
+const RENDER_TOOLS: ToolDefinition[] = [
+  RENDER_TABLE_TOOL,
+  RENDER_CHART_TOOL,
+  RENDER_TIMELINE_TOOL,
+];
 
 // Anthropic server-side web search. Runs on Anthropic's infrastructure — the host
 // never calls executeTool() for it. Gated to Claude only (OpenAI-compat providers

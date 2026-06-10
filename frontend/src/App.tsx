@@ -11,10 +11,12 @@ import "./capabilities/widgets/Chart";
 import "./capabilities/widgets/Health";
 import "./capabilities/widgets/KnowledgeGraph";
 import "./capabilities/widgets/Table";
+import "./capabilities/widgets/Timeline";
 import "./capabilities/widgets/Welcome";
 import { ChartProvider } from "./capabilities/widgets/Chart/useChartState";
 import { KnowledgeGraphProvider } from "./capabilities/widgets/KnowledgeGraph/useKnowledgeGraphState";
 import { TableProvider } from "./capabilities/widgets/Table/useTableState";
+import { TimelineProvider } from "./capabilities/widgets/Timeline/useTimelineState";
 import { WELCOME_WIDGET } from "./capabilities/widgets/Welcome";
 import { AgentEventProvider } from "./shell/AgentEventContext";
 import { BackendStatusBanner } from "./shell/BackendStatusBanner";
@@ -63,10 +65,12 @@ export default function App() {
                 misses one (the widget tab mounts only after the spec lands). */}
             <TableProvider>
               <ChartProvider>
-                <CapabilityProvider>
-                  <FirstArrivalWelcome />
-                  <Shell />
-                </CapabilityProvider>
+                <TimelineProvider>
+                  <CapabilityProvider>
+                    <FirstArrivalWelcome />
+                    <Shell />
+                  </CapabilityProvider>
+                </TimelineProvider>
               </ChartProvider>
             </TableProvider>
           </KnowledgeGraphProvider>
