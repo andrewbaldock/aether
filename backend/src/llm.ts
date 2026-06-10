@@ -33,7 +33,12 @@ export interface LlmClient {
     // each time tool results are fed back and the model is called again. Lets the
     // frontend visualise the loop re-entering. Iteration 1 is implied by the
     // request itself, so it is not signalled here.
-    onLoopStart?: (iteration: number) => Promise<void>
+    onLoopStart?: (iteration: number) => Promise<void>,
+    // Display-only status blurb for the activity indicator, fired at points the
+    // loop would otherwise be silent (before the first call, on loop re-entry,
+    // while wrapping up). Cosmetic — it carries no tool semantics and is
+    // superseded the moment a token / tool_start / tool_result arrives.
+    onStatus?: (message: string) => Promise<void>
   ): Promise<void>;
 }
 
@@ -172,7 +177,8 @@ function createClaudeClient(
       onDone,
       onToolStart,
       onToolResult,
-      onLoopStart
+      onLoopStart,
+      onStatus
     ) {
       // The agent loop: call the API, handle tool_use if the model requests it,
       // feed results back, and repeat until the model produces a terminal response.
@@ -198,13 +204,21 @@ function createClaudeClient(
 
       while (true) {
         iteration++;
-        if (iteration > 1) await onLoopStart?.(iteration);
+        if (iteration > 1) {
+          await onLoopStart?.(iteration);
+          await onStatus?.("Reviewing what came back…");
+        } else {
+          // Fill the pre-first-token gap immediately — the longest, most common
+          // dead-air window. Superseded as soon as a token or tool_start arrives.
+          await onStatus?.("Thinking it through…");
+        }
 
         // On the final allowed iteration, call without tools so the model must
         // answer in text — the loop closes cleanly instead of requesting another
         // tool it can't run. (Equality, not >: the previous iteration's tool
         // results are already in history, so this call produces the final reply.)
         const atCap = iteration >= MAX_ITERATIONS;
+        if (atCap) await onStatus?.("Wrapping up…");
 
         // Per-turn accumulators — reset each iteration.
         const pendingTools = new Map<
@@ -436,7 +450,8 @@ function createOpenAICompatClient(
       onDone,
       onToolStart,
       onToolResult,
-      onLoopStart
+      onLoopStart,
+      onStatus
     ) {
       // The agent loop — identical control flow to the Claude client, parsing
       // OpenAI chunk deltas instead of Anthropic stream events.
@@ -447,11 +462,17 @@ function createOpenAICompatClient(
 
       while (true) {
         iteration++;
-        if (iteration > 1) await onLoopStart?.(iteration);
+        if (iteration > 1) {
+          await onLoopStart?.(iteration);
+          await onStatus?.("Reviewing what came back…");
+        } else {
+          await onStatus?.("Thinking it through…");
+        }
 
         // Final allowed iteration: send no tools so the model must answer in text
         // and the loop closes cleanly (the cap). Mirrors the Claude client.
         const atCap = iteration >= MAX_ITERATIONS;
+        if (atCap) await onStatus?.("Wrapping up…");
 
         // Per-turn accumulators. Tool calls arrive as deltas keyed by index; we
         // collect id/name/argument-fragments until the chunk stream ends, then

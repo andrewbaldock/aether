@@ -22,6 +22,7 @@ import { ToolInfoSheet } from "./ToolInfoSheet";
 import { Tooltip } from "./Tooltip";
 import { useChat } from "./useChat";
 import { useIsMobile } from "./useIsMobile";
+import { useWaitingMessage } from "./useWaitingMessage";
 
 // Seed for a new conversation's model (until its session row exists). undefined
 // means "no explicit choice yet" — the backend uses its default.
@@ -95,6 +96,9 @@ export function ChatPanel() {
   const isMobile = useIsMobile();
   const updateSession = useUpdateSession(userId);
   const bus = useAgentEvents();
+  // Calm filler shown beneath the glyph during dead air (gaps between real
+  // status events). null when there's real status to show or nothing to fill.
+  const waitingMessage = useWaitingMessage(isLoading);
   const [draft, setDraft] = useState("");
   // Mobile-only: the Knowledge Graph info+toggle sheet (no hover tooltips on touch).
   const [kgSheetOpen, setKgSheetOpen] = useState(false);
@@ -387,8 +391,13 @@ export function ChatPanel() {
             </li>
           ))}
           {started && (
-            <li className="flex justify-start px-4 py-1">
+            <li className="flex items-center gap-2 px-4 py-1">
               <ThinkingGlyph height={36} animate={isLoading} />
+              {waitingMessage && (
+                <span className="text-xs text-content-subtle italic">
+                  {waitingMessage}
+                </span>
+              )}
             </li>
           )}
           {error && (

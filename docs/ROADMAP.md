@@ -33,8 +33,9 @@ capability column ready to host experiences.
 
 The first experiences that plug into the platform. Leading direction: a **chat-driven 3D scene
 builder on 3dverse** — talk, and a 3D world assembles itself; ideally a *living* scene that open
-data animates. The exact first experience and the ones after it are **not locked** — the platform
-is designed so each is a plugin, added one at a time, swapped freely.
+data animates. This is the home for a dedicated 3D render tool/capability (e.g. `render_3d`). The
+exact first experience and the ones after it are **not locked** — the platform is designed so each
+is a plugin, added one at a time, swapped freely.
 
 > This phase is intentionally underspecified. See [ARCHITECTURE.md](./ARCHITECTURE.md) for the
 > platform seams that make capabilities pluggable.
@@ -51,5 +52,7 @@ Improvements that don't fit an active phase but are earmarked for later:
 - **`render_timeline`** — vis-timeline widget (backend tool def already written and commented out; just needs the frontend widget + `bun add vis-timeline vis-data`).
 - **`web_search`** — Anthropic native server-side search tool, provider-gated to Claude, `max_uses`-capped. Deferred Tavily/Brave fallback for other providers.
 - **Multi-provider model switcher polish** — Gemini/DeepSeek/Mistral are wired but the picker UI is a plain `<select>`; could become a richer grouped picker when it matters.
-- **Unified Canvas** — Miro-style shared canvas where capability widgets become draggable cards. The render-tool widgets (table, chart, timeline, map) are deliberately built canvas-ready (self-contained spec from `state`); dropping them onto a canvas needs zero renderer changes.
+- **Unified Canvas (project "bigsail")** — Miro-style shared canvas where capability widgets become draggable cards. The render-tool widgets (table, chart, timeline, map) are deliberately built canvas-ready (self-contained spec from `state`); dropping them onto a canvas needs zero renderer changes. The toolbar rethink (see [KNOWN_ISSUES.md](./KNOWN_ISSUES.md)) lands here.
+- **Google accounts / sign-in** — Google OAuth sign-in; on signup, sends a beautiful welcome email.
+- **Stop button redesign** — the stop/cancel button is under-designed; needs a visual pass.
 - **`render_map`** — MapLibre GL (free, no API token). Same render-tool pattern; deferred because MapLibre bundle weight is heavier than the others.

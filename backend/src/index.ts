@@ -22,6 +22,7 @@ import {
 import { checkHealth } from "./health";
 import { type ChatMessage, createClient, generateTitle } from "./llm";
 import { MODELS, resolveModel } from "./models";
+import { toolStatusLabel } from "./tools";
 
 const app = new Hono();
 
@@ -374,8 +375,16 @@ app.post("/api/chat", async (c) => {
           }
         },
         async (tool, input) => {
+          // Carry a human-readable, input-aware label alongside the raw tool so
+          // the UI can show "Searching the web for "…"" instead of the bare name.
+          // The frontend falls back to "Using {tool}…" if label is ever absent.
           await stream.writeSSE({
-            data: JSON.stringify({ type: "tool_start", tool, input }),
+            data: JSON.stringify({
+              type: "tool_start",
+              tool,
+              input,
+              label: toolStatusLabel(tool, input),
+            }),
           });
         },
         async (tool, result) => {
@@ -386,6 +395,11 @@ app.post("/api/chat", async (c) => {
         async (iteration) => {
           await stream.writeSSE({
             data: JSON.stringify({ type: "loop_start", iteration }),
+          });
+        },
+        async (message) => {
+          await stream.writeSSE({
+            data: JSON.stringify({ type: "status", message }),
           });
         }
       );

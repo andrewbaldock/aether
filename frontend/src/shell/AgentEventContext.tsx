@@ -18,6 +18,10 @@ import {
 export type AgentEvent =
   | { type: "request_start" }
   | { type: "text"; content: string }
+  // Display-only status blurb for the activity indicator (e.g. "Thinking it
+  // through…"). Cosmetic — carries no tool semantics; observers that only care
+  // about real loop milestones can ignore it.
+  | { type: "status"; message: string }
   | { type: "tool_start"; tool: string; input: unknown }
   | { type: "tool_result"; tool: string; result: string }
   | { type: "loop_start"; iteration: number }

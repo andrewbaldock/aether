@@ -408,6 +408,45 @@ export function toOpenAITools(
     }));
 }
 
+// Human-readable, present-tense status labels for the activity indicator. Keyed
+// by tool name; falls back to "Using {name}…" for anything not listed (e.g. a
+// newly added tool). The label is display-only — it never feeds the model.
+const TOOL_STATUS_LABELS: Record<string, string> = {
+  get_current_datetime: "Checking the time",
+  search_images: "Searching for images",
+  web_search: "Searching the web",
+  build_knowledge_graph: "Mapping the knowledge graph",
+  render_table: "Building a table",
+  render_chart: "Building a chart",
+  render_timeline: "Building a timeline",
+  render_images: "Laying out images",
+};
+
+// Build the status blurb shown while a tool runs. Where the input carries a
+// query/title we fold it in ("Searching the web for "…"") for a more specific,
+// varied message; otherwise we use the bare label. Defensive about the input
+// shape since it's model-supplied — a missing/odd field just drops the suffix.
+export function toolStatusLabel(name: string, input?: unknown): string {
+  const base = TOOL_STATUS_LABELS[name] ?? `Using ${name}`;
+  const obj =
+    input && typeof input === "object"
+      ? (input as Record<string, unknown>)
+      : null;
+  const subject =
+    obj && typeof obj.query === "string" && obj.query.trim()
+      ? obj.query.trim()
+      : obj && typeof obj.title === "string" && obj.title.trim()
+        ? obj.title.trim()
+        : null;
+
+  if (!subject) return `${base}…`;
+  // Search tools read naturally with "for"; the rest don't take a subject suffix.
+  if (name === "search_images" || name === "web_search") {
+    return `${base} for “${subject}”…`;
+  }
+  return `${base}: “${subject}”…`;
+}
+
 export async function executeTool(
   name: string,
   input: unknown,

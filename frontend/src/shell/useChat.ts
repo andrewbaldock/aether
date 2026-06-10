@@ -198,6 +198,8 @@ export function useChat({
         for (const data of events) {
           if (data === "[DONE]") {
             bus.emit({ type: "done" });
+            // Clear any lingering status blurb now the turn is complete.
+            updateAssistant((m) => ({ ...m, toolActivity: undefined }));
             // Only refresh on the first turn — that's when a title is assigned;
             // later turns don't change the sidebar, so skip the 50-row refetch.
             // Guard against a superseded stream firing a stale refresh.
@@ -213,11 +215,23 @@ export function useChat({
             input?: unknown;
             result?: string;
             iteration?: number;
+            label?: string;
           };
 
           if (event.type === "text" && event.content) {
             bus.emit({ type: "text", content: event.content });
-            updateAssistant((m) => ({ ...m, text: m.text + event.content }));
+            // Real answer text supersedes any status blurb — clear the activity
+            // line so it doesn't hang above the streaming reply.
+            updateAssistant((m) => ({
+              ...m,
+              text: m.text + event.content,
+              toolActivity: undefined,
+            }));
+          } else if (event.type === "status" && event.message) {
+            // Display-only blurb for the activity indicator. Reuses the same
+            // toolActivity slot as tool_start so there's a single status line.
+            bus.emit({ type: "status", message: event.message });
+            updateAssistant((m) => ({ ...m, toolActivity: event.message }));
           } else if (event.type === "tool_start" && event.tool) {
             bus.emit({
               type: "tool_start",
@@ -226,7 +240,9 @@ export function useChat({
             });
             updateAssistant((m) => ({
               ...m,
-              toolActivity: `Using ${event.tool}…`,
+              // Prefer the backend's human-readable label; fall back to the bare
+              // tool name so an older/missing label still renders something.
+              toolActivity: event.label ?? `Using ${event.tool}…`,
             }));
           } else if (event.type === "tool_result" && event.tool) {
             bus.emit({
