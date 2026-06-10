@@ -77,34 +77,77 @@ export function ChartWidget(_props: { widget: Widget }) {
     <div className="flex h-full flex-col gap-4 overflow-auto bg-surface p-4">
       {entries.map(({ id, spec }) => {
         const label = spec.title ?? `${spec.type} chart`;
-        return (
-          <WithContextMenu
-            key={id}
-            items={[
-              {
-                label: "Explore further",
-                onClick: () =>
-                  bus.emit({
-                    type: "explore_request",
-                    prompt: `Tell me more about the data in the "${label}" — what's interesting, what the trends mean, and what I should explore next.`,
-                  }),
-              },
-            ]}
-          >
-            <section className="flex flex-col gap-1">
-              {spec.title && (
-                <h2 className="font-display text-sm font-semibold text-content">
-                  {spec.title}
-                </h2>
-              )}
-              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <SpecChart spec={spec} />
-                </ResponsiveContainer>
-              </div>
-            </section>
-          </WithContextMenu>
+        const chart = (
+          <section className="flex flex-col gap-1">
+            {spec.title && (
+              <h2 className="font-display text-sm font-semibold text-content">
+                {spec.title}
+              </h2>
+            )}
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <SpecChart spec={spec} />
+              </ResponsiveContainer>
+            </div>
+            {/* Explore surface. A pie's single series IS the whole chart, so it
+                gets one whole-chart target; line/bar/area get one chip per
+                series. Recharts' SVG internals don't take a DOM wrapper, so the
+                right-click target lives in these chips, not on the plotted
+                marks. */}
+            {spec.type !== "pie" && (
+              <ul className="flex flex-wrap gap-1.5 pt-1">
+                {spec.series.map((s, i) => (
+                  <li key={s.key}>
+                    <WithContextMenu
+                      items={[
+                        {
+                          label: "Explore further",
+                          onClick: () =>
+                            bus.emit({
+                              type: "explore_request",
+                              prompt: `Tell me more about the "${s.label ?? s.key}" series in the "${label}" chart — what the trend means and what to explore next.`,
+                            }),
+                        },
+                      ]}
+                    >
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-xs text-content-muted">
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: seriesColor(s.color, i) }}
+                          aria-hidden
+                        />
+                        {s.label ?? s.key}
+                      </span>
+                    </WithContextMenu>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         );
+
+        // Pie: keep a single whole-chart explore target.
+        if (spec.type === "pie") {
+          return (
+            <WithContextMenu
+              key={id}
+              items={[
+                {
+                  label: "Explore further",
+                  onClick: () =>
+                    bus.emit({
+                      type: "explore_request",
+                      prompt: `Tell me more about the data in the "${label}" — what's interesting, what the trends mean, and what I should explore next.`,
+                    }),
+                },
+              ]}
+            >
+              {chart}
+            </WithContextMenu>
+          );
+        }
+
+        return <div key={id}>{chart}</div>;
       })}
     </div>
   );

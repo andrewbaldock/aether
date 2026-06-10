@@ -6,7 +6,6 @@ import { useTimelineState } from "./useTimelineState";
 
 export function TimelineWidget(_props: { widget: Widget }) {
   const { entries } = useTimelineState();
-  const bus = useAgentEvents();
 
   if (entries.length === 0) {
     return (
@@ -19,31 +18,18 @@ export function TimelineWidget(_props: { widget: Widget }) {
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-auto bg-surface p-4">
-      {entries.map(({ id, spec }) => {
-        const label = spec.title ?? "Timeline";
-        return (
-          <WithContextMenu
-            key={id}
-            items={[
-              {
-                label: "Explore further",
-                onClick: () =>
-                  bus.emit({
-                    type: "explore_request",
-                    prompt: `Tell me more about the events in the "${label}" — what's significant, what I might be missing, and what to explore next.`,
-                  }),
-              },
-            ]}
-          >
-            <SpecTimeline spec={spec} />
-          </WithContextMenu>
-        );
-      })}
+      {entries.map(({ id, spec }) => (
+        <SpecTimeline key={id} spec={spec} />
+      ))}
     </div>
   );
 }
 
 function SpecTimeline({ spec }: { spec: TimelineSpec }) {
+  const bus = useAgentEvents();
+  // Ground each entry's explore prompt in the timeline title when present.
+  const titleCtx = spec.title ? ` in the "${spec.title}" timeline` : "";
+
   // Sort chronologically by start date. Invalid dates sort to the end.
   const sorted = [...spec.items].sort((a, b) => {
     const ta = Date.parse(a.start);
@@ -91,16 +77,35 @@ function SpecTimeline({ spec }: { spec: TimelineSpec }) {
             </p>
           )}
           <ol className="relative border-l border-border-strong pl-5 space-y-4">
-            {lane.items.map((item) => (
-              <li key={item.id} className="relative">
-                {/* Dot on the spine */}
-                <span className="absolute -left-[1.4rem] top-1 h-2.5 w-2.5 rounded-full border-2 border-[#ff2e9a] bg-surface" />
-                <DateRange item={item} />
-                <p className="text-sm text-content leading-snug">
-                  {item.content}
-                </p>
-              </li>
-            ))}
+            {lane.items.map((item) => {
+              const dateLabel = item.end
+                ? `${formatDate(item.start)} – ${formatDate(item.end)}`
+                : formatDate(item.start);
+              return (
+                <WithContextMenu
+                  key={item.id}
+                  items={[
+                    {
+                      label: "Explore further",
+                      onClick: () =>
+                        bus.emit({
+                          type: "explore_request",
+                          prompt: `Tell me more about this event${titleCtx}: ${dateLabel} — ${item.content}. What's significant about it and what to explore next.`,
+                        }),
+                    },
+                  ]}
+                >
+                  <li className="relative">
+                    {/* Dot on the spine */}
+                    <span className="absolute -left-[1.4rem] top-1 h-2.5 w-2.5 rounded-full border-2 border-[#ff2e9a] bg-surface" />
+                    <DateRange item={item} />
+                    <p className="text-sm text-content leading-snug">
+                      {item.content}
+                    </p>
+                  </li>
+                </WithContextMenu>
+              );
+            })}
           </ol>
         </div>
       ))}

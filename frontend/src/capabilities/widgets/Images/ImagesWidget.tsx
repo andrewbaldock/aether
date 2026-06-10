@@ -6,7 +6,6 @@ import { useImagesState } from "./useImagesState";
 
 export function ImagesWidget(_props: { widget: Widget }) {
   const { entries } = useImagesState();
-  const bus = useAgentEvents();
 
   if (entries.length === 0) {
     return (
@@ -19,31 +18,9 @@ export function ImagesWidget(_props: { widget: Widget }) {
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-auto bg-surface p-4">
-      {entries.map(({ id, spec }) => {
-        const label = spec.title ?? "Images";
-        // Seed follow-up with the model's own blurb when it wrote one, so
-        // "Explore further" has real subject matter rather than just a title.
-        const explorePrompt = spec.blurb
-          ? `Tell me more about this — "${spec.blurb}" — and what to explore next.`
-          : `Tell me more about "${label}" — context behind these images and what to explore next.`;
-        return (
-          <WithContextMenu
-            key={id}
-            items={[
-              {
-                label: "Explore further",
-                onClick: () =>
-                  bus.emit({
-                    type: "explore_request",
-                    prompt: explorePrompt,
-                  }),
-              },
-            ]}
-          >
-            <SpecImages spec={spec} />
-          </WithContextMenu>
-        );
-      })}
+      {entries.map(({ id, spec }) => (
+        <SpecImages key={id} spec={spec} />
+      ))}
     </div>
   );
 }
@@ -92,6 +69,9 @@ function Attribution({ img }: { img: ImageItem }) {
 }
 
 function SpecImages({ spec }: { spec: ImagesSpec }) {
+  const bus = useAgentEvents();
+  // Ground each image's explore prompt in the gallery title when present.
+  const titleCtx = spec.title ? ` from the "${spec.title}" gallery` : "";
   return (
     <section className="flex flex-col gap-2">
       {spec.title && (
@@ -105,35 +85,54 @@ function SpecImages({ spec }: { spec: ImagesSpec }) {
       {/* CSS columns give true masonry flow with no extra dependency. Each tile
           must avoid breaking across a column boundary. */}
       <div className="columns-2 gap-2 lg:columns-3 *:mb-2 *:break-inside-avoid">
-        {spec.images.map((img) => (
-          <figure key={img.url} className="overflow-hidden">
-            <a
-              href={img.href ?? img.url}
-              target="_blank"
-              rel="noreferrer"
-              className="block"
+        {spec.images.map((img) => {
+          // Best available subject text for this specific image.
+          const subject =
+            img.caption ?? img.alt ?? spec.blurb ?? spec.title ?? "this image";
+          return (
+            <WithContextMenu
+              key={img.url}
+              items={[
+                {
+                  label: "Explore further",
+                  onClick: () =>
+                    bus.emit({
+                      type: "explore_request",
+                      prompt: `Tell me more about this image${titleCtx}: "${subject}". Context behind it and what to explore next.`,
+                    }),
+                },
+              ]}
             >
-              <img
-                src={img.url}
-                alt={img.alt ?? ""}
-                loading="lazy"
-                // Hide the whole tile when an image fails so a dead URL never
-                // leaves a gap in the grid.
-                onError={(e) => {
-                  const fig = e.currentTarget.closest("figure");
-                  if (fig) fig.style.display = "none";
-                }}
-                className="w-full rounded border border-border transition-opacity hover:opacity-90"
-              />
-            </a>
-            {img.caption && (
-              <figcaption className="mt-0.5 text-xs text-content-subtle leading-snug">
-                {img.caption}
-              </figcaption>
-            )}
-            <Attribution img={img} />
-          </figure>
-        ))}
+              <figure className="overflow-hidden">
+                <a
+                  href={img.href ?? img.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block"
+                >
+                  <img
+                    src={img.url}
+                    alt={img.alt ?? ""}
+                    loading="lazy"
+                    // Hide the whole tile when an image fails so a dead URL never
+                    // leaves a gap in the grid.
+                    onError={(e) => {
+                      const fig = e.currentTarget.closest("figure");
+                      if (fig) fig.style.display = "none";
+                    }}
+                    className="w-full rounded border border-border transition-opacity hover:opacity-90"
+                  />
+                </a>
+                {img.caption && (
+                  <figcaption className="mt-0.5 text-xs text-content-subtle leading-snug">
+                    {img.caption}
+                  </figcaption>
+                )}
+                <Attribution img={img} />
+              </figure>
+            </WithContextMenu>
+          );
+        })}
       </div>
     </section>
   );
