@@ -16,6 +16,7 @@ export type GraphSnapshot = {
 export type WidgetSnapshot = {
   table: unknown[] | null; // TableEntry[] (serialised)
   chart: unknown[] | null; // ChartEntry[] (serialised)
+  timeline: unknown[] | null; // TimelineEntry[] (serialised)
 };
 
 export interface Session {

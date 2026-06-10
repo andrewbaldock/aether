@@ -3,6 +3,7 @@ import { apiFetch, logApiError } from "../../lib/queryClient";
 import { useSessionContext } from "../../shell/SessionContext";
 import { useChartState } from "./Chart/useChartState";
 import { useTableState } from "./Table/useTableState";
+import { useTimelineState } from "./Timeline/useTimelineState";
 
 const SAVE_DEBOUNCE_MS = 900;
 
@@ -26,6 +27,11 @@ export function WidgetPersistenceBridge() {
     loadEntries: loadChart,
     clearEntries: clearChart,
   } = useChartState();
+  const {
+    entries: timelineEntries,
+    loadEntries: loadTimeline,
+    clearEntries: clearTimeline,
+  } = useTimelineState();
 
   const loadedSessionRef = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -41,6 +47,7 @@ export function WidgetPersistenceBridge() {
       loadedSessionRef.current = null;
       clearTable();
       clearChart();
+      clearTimeline();
       return;
     }
 
@@ -51,6 +58,7 @@ export function WidgetPersistenceBridge() {
         const snapshot = await apiFetch<{
           table: unknown[] | null;
           chart: unknown[] | null;
+          timeline: unknown[] | null;
         }>(`/api/sessions/${sessionId}/widgets`);
         if (cancelled) return;
         // The stored entries have specs but stale ids — loadEntries reassigns ids.
@@ -60,11 +68,15 @@ export function WidgetPersistenceBridge() {
         if (snapshot.chart)
           loadChart(snapshot.chart as Parameters<typeof loadChart>[0]);
         else clearChart();
+        if (snapshot.timeline)
+          loadTimeline(snapshot.timeline as Parameters<typeof loadTimeline>[0]);
+        else clearTimeline();
       } catch (err) {
         logApiError(`widget load ${sessionId}`, err);
         if (!cancelled) {
           clearTable();
           clearChart();
+          clearTimeline();
         }
       } finally {
         if (!cancelled) loadedSessionRef.current = sessionId;
@@ -74,13 +86,13 @@ export function WidgetPersistenceBridge() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, loadTable, clearTable, loadChart, clearChart]);
+  }, [sessionId, loadTable, clearTable, loadChart, clearChart, loadTimeline, clearTimeline]);
 
   // Debounce-save when either widget's entries change — but only once the
   // active session's data has been loaded (loadedSessionRef matches).
   useEffect(() => {
     if (!sessionId || loadedSessionRef.current !== sessionId) return;
-    if (tableEntries.length === 0 && chartEntries.length === 0) return;
+    if (tableEntries.length === 0 && chartEntries.length === 0 && timelineEntries.length === 0) return;
 
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
@@ -90,6 +102,7 @@ export function WidgetPersistenceBridge() {
         body: JSON.stringify({
           table: tableEntries.length > 0 ? tableEntries : null,
           chart: chartEntries.length > 0 ? chartEntries : null,
+          timeline: timelineEntries.length > 0 ? timelineEntries : null,
         }),
       }).catch((err) => logApiError(`widget save ${sessionId}`, err));
     }, SAVE_DEBOUNCE_MS);
@@ -97,7 +110,7 @@ export function WidgetPersistenceBridge() {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [tableEntries, chartEntries, sessionId]);
+  }, [tableEntries, chartEntries, timelineEntries, sessionId]);
 
   return null;
 }
