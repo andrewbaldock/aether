@@ -10,6 +10,7 @@ import { useCapabilities } from "../capabilities/useCapabilities";
 import { CHART_WIDGET } from "../capabilities/widgets/Chart";
 import { KNOWLEDGE_GRAPH_WIDGET } from "../capabilities/widgets/KnowledgeGraph";
 import { TABLE_WIDGET } from "../capabilities/widgets/Table";
+import { TIMELINE_WIDGET } from "../capabilities/widgets/Timeline";
 import { WELCOME_WIDGET } from "../capabilities/widgets/Welcome";
 import { useUpdateSession } from "../hooks/useUpdateSession";
 import { useAgentEvents } from "./AgentEventContext";
@@ -37,6 +38,7 @@ function readLastModel(): string | undefined {
 const RENDER_TOOL_WIDGETS: Record<string, Widget> = {
   render_table: TABLE_WIDGET,
   render_chart: CHART_WIDGET,
+  render_timeline: TIMELINE_WIDGET,
 };
 
 export function ChatPanel() {
@@ -96,6 +98,7 @@ export function ChatPanel() {
   const [kgSheetOpen, setKgSheetOpen] = useState(false);
   const [tableSheetOpen, setTableSheetOpen] = useState(false);
   const [chartSheetOpen, setChartSheetOpen] = useState(false);
+  const [timelineSheetOpen, setTimelineSheetOpen] = useState(false);
   const started = messages.length > 0;
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -531,6 +534,24 @@ export function ChatPanel() {
                 </>
               }
             />
+            <ToolChip
+              active={widgets.some((w) => w.id === TIMELINE_WIDGET.id)}
+              onClick={() => {
+                if (isMobile) setTimelineSheetOpen(true);
+                else revealCapability(TIMELINE_WIDGET);
+              }}
+              label="Timeline"
+              icon={<TimelineIcon />}
+              tooltip={
+                <>
+                  <span className="font-semibold">Timeline</span>
+                  <br />
+                  Ask about anything chronological — a history, sequence, or
+                  schedule — and I'll lay it out as a sortable timeline beside
+                  the chat.
+                </>
+              }
+            />
             <HelpButton className="ml-auto" />
           </div>
 
@@ -562,6 +583,15 @@ export function ChatPanel() {
           >
             Ask for trends, distributions, or comparisons over a dimension and
             I'll render a line, bar, area, or pie chart beside the chat.
+          </ToolInfoSheet>
+          <ToolInfoSheet
+            open={timelineSheetOpen}
+            onClose={() => setTimelineSheetOpen(false)}
+            title="Timeline"
+            icon={<TimelineIcon />}
+          >
+            Ask about anything chronological — a history, sequence, or schedule
+            — and I'll lay it out as a timeline beside the chat.
           </ToolInfoSheet>
         </div>
       </form>
@@ -746,6 +776,29 @@ function TableIcon() {
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <path d="M3 9h18" />
       <path d="M9 9v12" />
+    </svg>
+  );
+}
+
+// A vertical timeline spine + dots glyph.
+function TimelineIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <line x1="6" y1="3" x2="6" y2="21" />
+      <circle cx="6" cy="7" r="2" fill="currentColor" stroke="none" />
+      <circle cx="6" cy="14" r="2" fill="currentColor" stroke="none" />
+      <line x1="10" y1="7" x2="20" y2="7" />
+      <line x1="10" y1="14" x2="18" y2="14" />
     </svg>
   );
 }
