@@ -8,6 +8,7 @@ import {
 import "./capabilities/widgets/PlaceholderWidget";
 import "./capabilities/widgets/AgentDiagram";
 import "./capabilities/widgets/Chart";
+import "./capabilities/widgets/Health";
 import "./capabilities/widgets/KnowledgeGraph";
 import "./capabilities/widgets/Table";
 import "./capabilities/widgets/Welcome";

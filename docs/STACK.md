@@ -3,7 +3,7 @@
 Every dependency in Aether, what it does, and why it was chosen. **Keep this current:** when a
 commit adds, removes, or upgrades a dependency, update this file in the same commit.
 
-Last updated: TanStack Query data layer + knowledge-graph widget.
+Last updated: Health dashboard widget + `/api/health/full` route.
 
 ---
 

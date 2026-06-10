@@ -3,7 +3,7 @@
 How Aether fits together. **Keep this current:** update it in the same commit that changes how
 the pieces connect.
 
-Last updated: TanStack Query data layer (reads-as-queries, writes-as-mutations).
+Last updated: Health dashboard (System Health widget + `/api/health/full` route).
 
 ---
 
@@ -91,14 +91,17 @@ The backend is a Hono server (`backend/src/index.ts`) served by **bun's native s
 (`export default { port, fetch }` — no `@hono/node-server`). Routes today:
 
 - `GET /api/health` → `{ ok: true }` — liveness, works before any API key is set.
+- `GET /api/health/full` → full plumbing check: Supabase + all four LLM provider keys, run in parallel with a 5 s timeout each. Powers the System Health widget.
 - `GET /api/models` → `{ models }` — the selectable model list for the picker.
 - `POST /api/chat` — one chat turn, streamed as SSE.
 - `POST /api/sessions` — create a new session; returns `{ id }`.
 - `GET /api/sessions?userId=...` — list sessions for a user (most-recent-first).
 - `PATCH /api/sessions/:id` — patch a session row (`title`, `graph_mode`, `model`); returns `{ ok: true }`.
 - `DELETE /api/sessions/:id` — delete a session; returns `{ ok: true }`.
+- `POST /api/sessions/:id/fork` — fork a session into a new one for the same user.
 - `GET /api/sessions/:id/messages` — load the full message history for a session.
-- `GET /api/sessions/:id/graph` / `PUT /api/sessions/:id/graph` — load / save the knowledge graph.
+- `GET /api/sessions/:id/graph` / `PUT /api/sessions/:id/graph` — load / save the knowledge graph snapshot.
+- `GET /api/sessions/:id/widgets` / `PUT /api/sessions/:id/widgets` — load / save the last table + chart specs for a session.
 
 Note: writes return a JSON body (`{ ok: true }`), not an empty 204 — the frontend's `apiFetch`
 tolerates an empty body defensively but no endpoint currently sends one.
