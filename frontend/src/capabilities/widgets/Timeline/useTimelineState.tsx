@@ -50,7 +50,7 @@ export function parseTimelineSpec(raw: string): TimelineSpec | null {
 
   const validGroups = Array.isArray(groups)
     ? groups.filter(
-        (g): g is TimelineSpec["groups"][number] =>
+        (g): g is NonNullable<TimelineSpec["groups"]>[number] =>
           g != null &&
           typeof g === "object" &&
           typeof (g as Record<string, unknown>).id === "string" &&

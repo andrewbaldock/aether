@@ -1,6 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type OpenAI from "openai";
 import type { Provider } from "./models";
+import { tryConsume } from "./rateLimit";
+import { rememberUnsplashDownload, triggerUnsplashDownloads } from "./unsplash";
 
 // ToolDefinition covers both regular tools (name/description/input_schema) and
 // Anthropic server-side tools like WebSearchTool20260209. Using ToolUnion keeps
@@ -14,6 +16,22 @@ export const BASE_TOOLS: ToolDefinition[] = [
     description:
       "Returns the current date and time in ISO 8601 format (UTC). Use when the user asks what time or date it is, or when you need the current date/time for any calculation.",
     input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "search_images",
+    description:
+      "Search the web (Wikimedia Commons + Unsplash) for real images. Returns, per result, an image url plus a provider-written description, credit, and source link. Call this FIRST whenever the user wants to see photos/pictures of something — never invent image URLs or descriptions yourself.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "what to search for" },
+        count: {
+          type: "number",
+          description: "how many results, 1-20 (default 12)",
+        },
+      },
+      required: ["query"],
+    },
   },
 ];
 
@@ -285,10 +303,60 @@ export const RENDER_TIMELINE_TOOL: ToolDefinition = {
   },
 };
 
+export const RENDER_IMAGES_TOOL: ToolDefinition = {
+  name: "render_images",
+  description:
+    "Display images in a masonry grid beside the chat. Pass only results you got back from search_images — never invent URLs or text. For each image, carry the provider's `url`, `description` (as caption), `href`, `credit`, and `source` through VERBATIM; do not paraphrase or write your own captions. Curate the best results.",
+  input_schema: {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "optional gallery title" },
+      blurb: {
+        type: "string",
+        description:
+          "one-sentence summary of what this gallery shows — used to seed follow-up exploration",
+      },
+      images: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            url: {
+              type: "string",
+              description: "image URL from search_images",
+            },
+            caption: {
+              type: "string",
+              description:
+                "the search result's `description` (or `title`), copied verbatim — do not write your own",
+            },
+            href: {
+              type: "string",
+              description: "the result's `href` (source page link)",
+            },
+            credit: {
+              type: "string",
+              description: "the result's `credit` (creator/photographer name)",
+            },
+            source: {
+              type: "string",
+              enum: ["wikimedia", "unsplash"],
+              description: "the result's `source`",
+            },
+          },
+          required: ["url"],
+        },
+      },
+    },
+    required: ["images"],
+  },
+};
+
 const RENDER_TOOLS: ToolDefinition[] = [
   RENDER_TABLE_TOOL,
   RENDER_CHART_TOOL,
   RENDER_TIMELINE_TOOL,
+  RENDER_IMAGES_TOOL,
 ];
 
 // Anthropic server-side web search. Runs on Anthropic's infrastructure — the host
@@ -334,10 +402,20 @@ export function toOpenAITools(
     }));
 }
 
-export function executeTool(name: string, input: unknown): string {
+export async function executeTool(
+  name: string,
+  input: unknown
+): Promise<string> {
   switch (name) {
     case "get_current_datetime":
       return new Date().toISOString();
+    case "search_images":
+      return searchImages(input);
+    case "render_images":
+      // Fire Unsplash photographer-credit pings for the photos actually being
+      // rendered (API-terms compliance), then echo like the other render tools.
+      fireUnsplashCreditsForRender(input);
+      return JSON.stringify(input);
     case "build_knowledge_graph":
     case "render_table":
     case "render_chart":
@@ -349,4 +427,235 @@ export function executeTool(name: string, input: unknown): string {
     default:
       throw new Error(`Unknown tool: "${name}"`);
   }
+}
+
+// Pull the image urls out of a render_images input and fire the Unsplash
+// credit pings for any that came from Unsplash. Defensive about the shape since
+// it's model-supplied; a malformed input just fires nothing.
+function fireUnsplashCreditsForRender(input: unknown): void {
+  const images = (input as { images?: unknown })?.images;
+  if (!Array.isArray(images)) return;
+  const urls = images
+    .map((im) =>
+      im && typeof im === "object" ? (im as { url?: unknown }).url : undefined
+    )
+    .filter((u): u is string => typeof u === "string");
+  if (urls.length > 0) triggerUnsplashDownloads(urls);
+}
+
+// --- search_images ---------------------------------------------------------
+// Server-side image search so the model never has to invent (and hallucinate)
+// image URLs or descriptions. Runs in our backend, so it works identically
+// across every provider — unlike Anthropic's server-side web_search.
+//
+// Two sources, polled in parallel and merged:
+//   • Wikimedia Commons — keyless; real human-written ImageDescription/Artist.
+//   • Unsplash — OPTIONAL (needs UNSPLASH_ACCESS_KEY); photographer-written
+//     description/alt_description, glossier photos.
+// Both supply their OWN captions — the description is never model-authored. If
+// the Unsplash key is unset, or either source fails, we degrade to whatever
+// returned. Results are kept minimal to protect the token budget.
+
+const IMAGE_SEARCH_TIMEOUT_MS = 5000;
+
+// The merged result shape handed back to the model. Every field is
+// provider-supplied; `source` lets the UI/credit distinguish origins.
+type ImageResult = {
+  url: string;
+  title?: string;
+  description?: string;
+  credit?: string;
+  href?: string;
+  source: "wikimedia" | "unsplash";
+};
+
+// extmetadata / HTML-bearing values: strip tags, decode the handful of entities
+// that show up, collapse whitespace, cap length so a stray long caption can't
+// blow the token budget.
+function stripHtml(html: string | undefined): string | undefined {
+  if (!html) return undefined;
+  const text = html
+    .replace(/<[^>]*>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text) return undefined;
+  return text.length > 300 ? `${text.slice(0, 297)}...` : text;
+}
+
+const COMMONS_ENDPOINT = "https://commons.wikimedia.org/w/api.php";
+// Commons asks API clients to send a descriptive User-Agent with contact info.
+const COMMONS_USER_AGENT = "Aether/1.0 (https://github.com/baldrocks; demo)";
+
+type CommonsExtMeta = { value?: string };
+type CommonsPage = {
+  title?: string;
+  imageinfo?: Array<{
+    thumburl?: string;
+    url?: string;
+    descriptionurl?: string;
+    extmetadata?: {
+      ObjectName?: CommonsExtMeta;
+      ImageDescription?: CommonsExtMeta;
+      Artist?: CommonsExtMeta;
+    };
+  }>;
+};
+
+async function searchCommons(
+  query: string,
+  limit: number
+): Promise<ImageResult[]> {
+  const url = new URL(COMMONS_ENDPOINT);
+  url.searchParams.set("action", "query");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("generator", "search");
+  url.searchParams.set("gsrsearch", query);
+  url.searchParams.set("gsrnamespace", "6"); // File: namespace
+  url.searchParams.set("gsrlimit", String(limit));
+  url.searchParams.set("prop", "imageinfo");
+  url.searchParams.set("iiprop", "url|extmetadata");
+  url.searchParams.set("iiurlwidth", "800"); // generate an 800px thumb to display
+  url.searchParams.set(
+    "iiextmetadatafilter",
+    "ImageDescription|ObjectName|Artist"
+  );
+
+  const res = await fetch(url, {
+    headers: { Accept: "application/json", "User-Agent": COMMONS_USER_AGENT },
+    signal: AbortSignal.timeout(IMAGE_SEARCH_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`Wikimedia ${res.status}`);
+  const data = (await res.json()) as {
+    query?: { pages?: Record<string, CommonsPage> };
+  };
+  // Display the 800px thumb; full-res Commons originals can be tens of MB.
+  return Object.values(data.query?.pages ?? {})
+    .map((p): ImageResult | null => {
+      const info = p.imageinfo?.[0];
+      const url = info?.thumburl ?? info?.url;
+      if (!url) return null;
+      const meta = info?.extmetadata;
+      return {
+        url,
+        title: stripHtml(meta?.ObjectName?.value) ?? p.title,
+        description: stripHtml(meta?.ImageDescription?.value),
+        credit: stripHtml(meta?.Artist?.value),
+        href: info?.descriptionurl,
+        source: "wikimedia",
+      };
+    })
+    .filter((r): r is ImageResult => r !== null);
+}
+
+type UnsplashPhoto = {
+  urls?: { regular?: string; small?: string };
+  description?: string | null;
+  alt_description?: string | null;
+  links?: { html?: string; download_location?: string };
+  user?: { name?: string; links?: { html?: string } };
+};
+
+// Polled only when UNSPLASH_ACCESS_KEY is configured. description/alt_description
+// are photographer-supplied — still provider text, not model text. Gated by the
+// app-wide hourly rate limiter (Unsplash's demo tier caps the whole app at
+// 50 req/hr); when the budget is spent we skip Unsplash and the caller falls
+// back to Wikimedia-only.
+async function searchUnsplash(
+  query: string,
+  limit: number
+): Promise<ImageResult[]> {
+  const key = process.env.UNSPLASH_ACCESS_KEY;
+  if (!key) return [];
+  if (!(await tryConsume("unsplash"))) return [];
+
+  const url = new URL("https://api.unsplash.com/search/photos");
+  url.searchParams.set("query", query);
+  url.searchParams.set("per_page", String(limit));
+  url.searchParams.set("content_filter", "high");
+
+  const res = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Client-ID ${key}`,
+      "Accept-Version": "v1",
+    },
+    signal: AbortSignal.timeout(IMAGE_SEARCH_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`Unsplash ${res.status}`);
+  const data = (await res.json()) as { results?: UnsplashPhoto[] };
+  return (data.results ?? [])
+    .map((p): ImageResult | null => {
+      const url = p.urls?.regular ?? p.urls?.small;
+      if (!url) return null;
+      // Remember the download_location so we can fire the photographer-credit
+      // ping if/when this photo is actually rendered (Unsplash API terms).
+      rememberUnsplashDownload(url, p.links?.download_location);
+      return {
+        url,
+        description:
+          p.description?.trim() || p.alt_description?.trim() || undefined,
+        credit: p.user?.name,
+        // Source page link, used both as the image's href and for the required
+        // "on Unsplash" attribution link.
+        href: p.links?.html,
+        source: "unsplash",
+      };
+    })
+    .filter((r): r is ImageResult => r !== null);
+}
+
+// Interleave two source lists so the merged gallery isn't all-Commons-then-all-
+// Unsplash. Stops when both are exhausted.
+function interleave<T>(a: T[], b: T[]): T[] {
+  const out: T[] = [];
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if (i < a.length) out.push(a[i] as T);
+    if (i < b.length) out.push(b[i] as T);
+  }
+  return out;
+}
+
+async function searchImages(input: unknown): Promise<string> {
+  const { query, count } = (input ?? {}) as {
+    query?: string;
+    count?: number;
+  };
+  if (!query || typeof query !== "string") {
+    return JSON.stringify({
+      error: "search_images requires a `query` string.",
+    });
+  }
+  // Default small and cap hard — every result re-enters the model's context on
+  // the next loop iteration, so this is the main token cost of the feature.
+  // Each source fetches up to `limit`; the merged set is capped to `limit` too.
+  const limit = Math.min(16, Math.max(1, Math.round(count ?? 8)));
+
+  // Poll both sources in parallel; one failing (or Unsplash unconfigured)
+  // doesn't sink the other.
+  const [commons, unsplash] = await Promise.allSettled([
+    searchCommons(query, limit),
+    searchUnsplash(query, limit),
+  ]);
+
+  const commonsResults = commons.status === "fulfilled" ? commons.value : [];
+  const unsplashResults = unsplash.status === "fulfilled" ? unsplash.value : [];
+
+  if (commonsResults.length === 0 && unsplashResults.length === 0) {
+    const why =
+      commons.status === "rejected"
+        ? String(commons.reason)
+        : "no matching images";
+    return JSON.stringify({
+      error: `Image search failed (${why}). Tell the user and offer to try again.`,
+    });
+  }
+
+  const results = interleave(commonsResults, unsplashResults).slice(0, limit);
+  return JSON.stringify({ query, results });
 }

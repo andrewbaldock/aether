@@ -222,7 +222,9 @@ app.get("/api/sessions/:id/widgets", async (c) => {
   const id = c.req.param("id");
   try {
     const data = await getSessionWidgets(id);
-    return c.json(data ?? { table: null, chart: null, timeline: null });
+    return c.json(
+      data ?? { table: null, chart: null, timeline: null, images: null }
+    );
   } catch (err) {
     console.error("GET /api/sessions/:id/widgets failed:", err);
     return c.json({ error: "Failed to load widgets" }, 500);
@@ -239,7 +241,12 @@ app.put("/api/sessions/:id/widgets", async (c) => {
   } catch {
     return c.json({ error: "Request body must be JSON" }, 400);
   }
-  const b = body as { table?: unknown; chart?: unknown; timeline?: unknown };
+  const b = body as {
+    table?: unknown;
+    chart?: unknown;
+    timeline?: unknown;
+    images?: unknown;
+  };
   if (!("table" in b) || !("chart" in b) || !("timeline" in b)) {
     return c.json({ error: "Expected { table, chart, timeline }" }, 400);
   }
@@ -248,6 +255,9 @@ app.put("/api/sessions/:id/widgets", async (c) => {
       table: Array.isArray(b.table) ? b.table : null,
       chart: Array.isArray(b.chart) ? b.chart : null,
       timeline: Array.isArray(b.timeline) ? b.timeline : null,
+      // images added later; treat a missing key as "none" so older clients
+      // that don't send it still save cleanly.
+      images: Array.isArray(b.images) ? b.images : null,
     };
     await updateSessionWidgetData(id, snapshot);
     return c.json({ ok: true });
