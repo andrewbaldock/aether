@@ -54,7 +54,11 @@ const MAX_ITERATIONS = Number(process.env.LLM_MAX_ITERATIONS) || 6;
 function createClaudeClient(
   tools: ToolDefinition[],
   systemPrompt: string,
-  selectedModel?: string
+  selectedModel?: string,
+  // Conversation id, threaded to executeTool so per-conversation tool limits
+  // (e.g. the Unsplash search cap) can be scoped to this session. Undefined for
+  // ephemeral/unpersisted chats.
+  sessionId?: string
 ): LlmClient {
   // Build the SDK client lazily on first use, not at construction time. This lets
   // the server start (and /api/health respond) without a key set — only an actual
@@ -326,7 +330,7 @@ function createClaudeClient(
             tool.inputChunks.join("") || "{}"
           ) as unknown;
           await onToolStart?.(tool.name, input);
-          const result = await executeTool(tool.name, input);
+          const result = await executeTool(tool.name, input, sessionId);
           await onToolResult?.(tool.name, result);
           toolResults.push({
             type: "tool_result",
@@ -378,7 +382,9 @@ function createOpenAICompatClient(
   provider: Exclude<Provider, "claude">,
   tools: ToolDefinition[],
   systemPrompt: string,
-  selectedModel: string
+  selectedModel: string,
+  // See createClaudeClient: conversation id for per-conversation tool limits.
+  sessionId?: string
 ): LlmClient {
   const cfg = OPENAI_COMPAT[provider];
 
@@ -567,7 +573,7 @@ function createOpenAICompatClient(
         for (const tool of sortedTools) {
           const input = JSON.parse(tool.argChunks.join("") || "{}") as unknown;
           await onToolStart?.(tool.name, input);
-          const result = await executeTool(tool.name, input);
+          const result = await executeTool(tool.name, input, sessionId);
           await onToolResult?.(tool.name, result);
           history.push({
             role: "tool",
@@ -590,6 +596,9 @@ function createOpenAICompatClient(
 export function createClient(opts: {
   graphMode: boolean;
   model?: string;
+  // Conversation id, threaded down to executeTool for per-conversation tool
+  // limits (e.g. the Unsplash search cap). Undefined for unpersisted chats.
+  sessionId?: string;
 }): LlmClient {
   const provider = providerForModel(opts.model);
   const toolOpts = { ...opts, provider };
@@ -598,7 +607,8 @@ export function createClient(opts: {
       return createClaudeClient(
         buildTools(toolOpts),
         buildSystemPrompt(opts),
-        opts.model
+        opts.model,
+        opts.sessionId
       );
     case "google":
     case "deepseek":
@@ -610,7 +620,8 @@ export function createClient(opts: {
         // provider is non-undefined here, so the model resolved in the allowlist;
         // fall back to DEFAULT_MODEL only to satisfy the type (won't happen for
         // these cases, since DEFAULT_MODEL is a Claude model).
-        opts.model ?? DEFAULT_MODEL
+        opts.model ?? DEFAULT_MODEL,
+        opts.sessionId
       );
     default:
       throw new Error(

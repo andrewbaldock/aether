@@ -1,8 +1,14 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type OpenAI from "openai";
+import { bumpUnsplashSearchCount, getUnsplashSearchCount } from "./db";
 import type { Provider } from "./models";
 import { tryConsume } from "./rateLimit";
 import { rememberUnsplashDownload, triggerUnsplashDownloads } from "./unsplash";
+
+// Per-conversation cap on searches that actually return Unsplash photos. Once a
+// conversation hits this, further searches fall back to Wikimedia-only (silently).
+// Curbs real Unsplash usage per conversation, on top of the app-wide hourly limit.
+const MAX_UNSPLASH_SEARCHES_PER_CONVERSATION = 3;
 
 // ToolDefinition covers both regular tools (name/description/input_schema) and
 // Anthropic server-side tools like WebSearchTool20260209. Using ToolUnion keeps
@@ -404,13 +410,14 @@ export function toOpenAITools(
 
 export async function executeTool(
   name: string,
-  input: unknown
+  input: unknown,
+  sessionId?: string
 ): Promise<string> {
   switch (name) {
     case "get_current_datetime":
       return new Date().toISOString();
     case "search_images":
-      return searchImages(input);
+      return searchImages(input, sessionId);
     case "render_images":
       // Fire Unsplash photographer-credit pings for the photos actually being
       // rendered (API-terms compliance), then echo like the other render tools.
@@ -568,10 +575,30 @@ type UnsplashPhoto = {
 // back to Wikimedia-only.
 async function searchUnsplash(
   query: string,
-  limit: number
+  limit: number,
+  sessionId?: string
 ): Promise<ImageResult[]> {
   const key = process.env.UNSPLASH_ACCESS_KEY;
   if (!key) return [];
+
+  // Per-conversation cap: once this conversation has had N searches that actually
+  // returned Unsplash photos, stop hitting Unsplash and fall back to Wikimedia-only.
+  // Skip when there's no session (ephemeral chats aren't persisted → nothing to count).
+  if (sessionId) {
+    try {
+      if (
+        (await getUnsplashSearchCount(sessionId)) >=
+        MAX_UNSPLASH_SEARCHES_PER_CONVERSATION
+      ) {
+        return [];
+      }
+    } catch (err) {
+      // Fail closed: if we can't read the count, don't risk overspending Unsplash.
+      console.error("unsplash per-conversation cap check failed:", err);
+      return [];
+    }
+  }
+
   if (!(await tryConsume("unsplash"))) return [];
 
   const url = new URL("https://api.unsplash.com/search/photos");
@@ -589,7 +616,7 @@ async function searchUnsplash(
   });
   if (!res.ok) throw new Error(`Unsplash ${res.status}`);
   const data = (await res.json()) as { results?: UnsplashPhoto[] };
-  return (data.results ?? [])
+  const results = (data.results ?? [])
     .map((p): ImageResult | null => {
       const url = p.urls?.regular ?? p.urls?.small;
       if (!url) return null;
@@ -608,6 +635,18 @@ async function searchUnsplash(
       };
     })
     .filter((r): r is ImageResult => r !== null);
+
+  // Only count this against the conversation's budget if it actually returned
+  // photos — we're rate-limiting real Unsplash usage, so an empty result is a
+  // free retry. Non-fatal if the bump fails: we still return the photos.
+  if (sessionId && results.length > 0) {
+    try {
+      await bumpUnsplashSearchCount(sessionId);
+    } catch (err) {
+      console.error("unsplash per-conversation count bump failed:", err);
+    }
+  }
+  return results;
 }
 
 // Interleave two source lists so the merged gallery isn't all-Commons-then-all-
@@ -621,7 +660,10 @@ function interleave<T>(a: T[], b: T[]): T[] {
   return out;
 }
 
-async function searchImages(input: unknown): Promise<string> {
+async function searchImages(
+  input: unknown,
+  sessionId?: string
+): Promise<string> {
   const { query, count } = (input ?? {}) as {
     query?: string;
     count?: number;
@@ -640,7 +682,7 @@ async function searchImages(input: unknown): Promise<string> {
   // doesn't sink the other.
   const [commons, unsplash] = await Promise.allSettled([
     searchCommons(query, limit),
-    searchUnsplash(query, limit),
+    searchUnsplash(query, limit, sessionId),
   ]);
 
   const commonsResults = commons.status === "fulfilled" ? commons.value : [];

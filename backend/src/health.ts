@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import OpenAI from "openai";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import OpenAI from "openai";
 
 export interface ProviderResult {
   ok: boolean;
@@ -25,14 +25,22 @@ async function checkSupabase(): Promise<HealthResult["supabase"]> {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_ANON_KEY;
   if (!url || !key) {
-    return { ok: false, latencyMs: 0, error: "SUPABASE_URL / SUPABASE_ANON_KEY not set" };
+    return {
+      ok: false,
+      latencyMs: 0,
+      error: "SUPABASE_URL / SUPABASE_ANON_KEY not set",
+    };
   }
   const t0 = Date.now();
   try {
-    const db = createSupabaseClient(url, key, { auth: { persistSession: false } });
-    const { error } = await db.from("sessions").select("id").limit(1).abortSignal(
-      AbortSignal.timeout(TIMEOUT_MS)
-    );
+    const db = createSupabaseClient(url, key, {
+      auth: { persistSession: false },
+    });
+    const { error } = await db
+      .from("sessions")
+      .select("id")
+      .limit(1)
+      .abortSignal(AbortSignal.timeout(TIMEOUT_MS));
     const latencyMs = Date.now() - t0;
     if (error) return { ok: false, latencyMs, error: error.message };
     return { ok: true, latencyMs };
@@ -57,7 +65,12 @@ async function checkClaude(): Promise<ProviderResult> {
     );
     return { ok: true, configured: true, latencyMs: Date.now() - t0 };
   } catch (err) {
-    return { ok: false, configured: true, latencyMs: Date.now() - t0, error: String(err) };
+    return {
+      ok: false,
+      configured: true,
+      latencyMs: Date.now() - t0,
+      error: String(err),
+    };
   }
 }
 
@@ -83,7 +96,12 @@ async function checkOpenAICompat(
   } catch (err) {
     const msg = String(err);
     // A 401/403 means the key is wrong but the service is reachable — still a failure.
-    return { ok: false, configured: true, latencyMs: Date.now() - t0, error: msg };
+    return {
+      ok: false,
+      configured: true,
+      latencyMs: Date.now() - t0,
+      error: msg,
+    };
   }
 }
 
