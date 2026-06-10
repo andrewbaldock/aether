@@ -9,6 +9,9 @@ export interface Session {
   graph_mode: boolean;
   // The Claude model last selected for this conversation; null = server default.
   model: string | null;
+  // Frontend-owned per-conversation UI memory (e.g. which capability tab was
+  // last on top). Open-ended; null = nothing remembered.
+  ui_state: { activeWidget?: string | null } | null;
   created_at: string;
   updated_at: string;
 }

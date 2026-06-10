@@ -33,6 +33,7 @@ type Action =
   | { type: "activate"; id: string }
   | { type: "markUnseen"; id: string }
   | { type: "setFullscreen"; value: boolean }
+  | { type: "restore"; widgets: Widget[]; activeId: string | null }
   | { type: "closeAll" };
 
 const initialState: CapabilityState = {
@@ -99,6 +100,21 @@ function reducer(state: CapabilityState, action: Action): CapabilityState {
     }
     case "setFullscreen":
       return { ...state, isFullscreen: action.value };
+    // Rehydrate the whole column from a saved conversation in one shot: set the
+    // open tabs and the active tab atomically. Deliberately does NOT bump
+    // openTick — the mobile shell surfaces its full-screen overlay on openTick,
+    // and loading a conversation is not "intent" to pop it open. (Doing this as
+    // ensure()×N + activate() would bump openTick on the activate and yank the
+    // mobile overlay up on every load.) Starts with a clean unseen/fullscreen
+    // slate; nothing is "unseen" on a fresh load.
+    case "restore":
+      return {
+        ...state,
+        widgets: action.widgets,
+        activeId: action.activeId,
+        unseen: [],
+        isFullscreen: false,
+      };
     case "closeAll":
       return initialState;
     default:
@@ -113,6 +129,7 @@ interface CapabilityContextValue extends CapabilityState {
   activate: (id: string) => void;
   markUnseen: (id: string) => void;
   setFullscreen: (value: boolean) => void;
+  restore: (widgets: Widget[], activeId: string | null) => void;
   closeAll: () => void;
   isOpen: boolean;
 }
@@ -146,6 +163,11 @@ export function CapabilityProvider({ children }: { children: ReactNode }) {
     (value: boolean) => dispatch({ type: "setFullscreen", value }),
     []
   );
+  const restore = useCallback(
+    (widgets: Widget[], activeId: string | null) =>
+      dispatch({ type: "restore", widgets, activeId }),
+    []
+  );
   const closeAll = useCallback(() => dispatch({ type: "closeAll" }), []);
 
   const value = useMemo<CapabilityContextValue>(
@@ -157,10 +179,21 @@ export function CapabilityProvider({ children }: { children: ReactNode }) {
       activate,
       markUnseen,
       setFullscreen,
+      restore,
       closeAll,
       isOpen: state.widgets.length > 0,
     }),
-    [state, open, ensure, close, activate, markUnseen, setFullscreen, closeAll]
+    [
+      state,
+      open,
+      ensure,
+      close,
+      activate,
+      markUnseen,
+      setFullscreen,
+      restore,
+      closeAll,
+    ]
   );
 
   return (
