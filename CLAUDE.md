@@ -52,3 +52,7 @@ them; don't assume.
 - **Code-review agents (Odin / Angel) are expensive — ask first.** Seek meaningful opportunities
   to run them, but **always ask the maintainer before launching**, and only suggest it at natural
   moments: big changes, seam/architecture changes, refactors. Never run them unprompted.
+- **Watch for chances to `fly deploy` the backend.** Fly does NOT auto-deploy. After a commit
+  touching `backend/` lands on `main`, the running Fly machine is stale until redeployed. When you
+  notice the backend is behind, offer to deploy — run `~/.fly/bin/fly deploy` from `backend/`. (The
+  frontend auto-deploys to Vercel on push; only the backend needs this.)
