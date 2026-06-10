@@ -222,7 +222,7 @@ app.get("/api/sessions/:id/widgets", async (c) => {
   const id = c.req.param("id");
   try {
     const data = await getSessionWidgets(id);
-    return c.json(data ?? { table: null, chart: null });
+    return c.json(data ?? { table: null, chart: null, timeline: null });
   } catch (err) {
     console.error("GET /api/sessions/:id/widgets failed:", err);
     return c.json({ error: "Failed to load widgets" }, 500);
@@ -239,14 +239,15 @@ app.put("/api/sessions/:id/widgets", async (c) => {
   } catch {
     return c.json({ error: "Request body must be JSON" }, 400);
   }
-  const b = body as { table?: unknown; chart?: unknown };
-  if (!("table" in b) || !("chart" in b)) {
-    return c.json({ error: "Expected { table, chart }" }, 400);
+  const b = body as { table?: unknown; chart?: unknown; timeline?: unknown };
+  if (!("table" in b) || !("chart" in b) || !("timeline" in b)) {
+    return c.json({ error: "Expected { table, chart, timeline }" }, 400);
   }
   try {
     const snapshot: WidgetSnapshot = {
       table: Array.isArray(b.table) ? b.table : null,
       chart: Array.isArray(b.chart) ? b.chart : null,
+      timeline: Array.isArray(b.timeline) ? b.timeline : null,
     };
     await updateSessionWidgetData(id, snapshot);
     return c.json({ ok: true });
