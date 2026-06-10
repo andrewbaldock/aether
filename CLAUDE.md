@@ -41,3 +41,14 @@ explicitly asked. Leave the working tree clean and ready; summarize what to test
 
 `bun run check`, `bun run typecheck`, and (frontend) `bun run build` should pass. Actually run
 them; don't assume.
+
+## Proactive practices
+
+- **Seek meaningful unit tests.** Look for opportunities to add unit tests that help future devs
+  not break things. Do this autonomously — no need to ask.
+- **Check whether docs need updating.** On every change, check whether `STACK.md`,
+  `ARCHITECTURE.md`, or the README need updates (reinforces "Keep docs current" above). Do this
+  autonomously.
+- **Code-review agents (Odin / Angel) are expensive — ask first.** Seek meaningful opportunities
+  to run them, but **always ask the maintainer before launching**, and only suggest it at natural
+  moments: big changes, seam/architecture changes, refactors. Never run them unprompted.
