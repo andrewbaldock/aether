@@ -239,6 +239,17 @@ function createClaudeClient(
                 name: event.content_block.name,
                 inputChunks: [],
               });
+            } else if (event.content_block.type === "server_tool_use") {
+              // Server-side tool starting (e.g. web_search) — fire onToolStart so
+              // the UI shows the activity indicator. No host-side execution needed.
+              await onToolStart?.(event.content_block.name, {});
+            } else if (event.content_block.type === "web_search_tool_result") {
+              // Web search completed — fire onToolResult so the UI clears the
+              // activity indicator. The result is handled server-side by Anthropic.
+              await onToolResult?.(
+                "web_search",
+                JSON.stringify(event.content_block.content)
+              );
             } else if (event.content_block.type === "text") {
               currentText = "";
             }
@@ -574,16 +585,18 @@ function createOpenAICompatClient(
 // (DEFAULT_MODEL's provider) when no model is named. Throws on an unknown provider
 // rather than silently doing the wrong thing. `graphMode` gates the Knowledge
 // Graph tool + its prompt guidance — called per request, so each turn gets exactly
-// the right tool surface.
+// the right tool surface. Provider is threaded into buildTools so Claude-only
+// server-side tools (web_search) are gated correctly.
 export function createClient(opts: {
   graphMode: boolean;
   model?: string;
 }): LlmClient {
   const provider = providerForModel(opts.model);
+  const toolOpts = { ...opts, provider };
   switch (provider) {
     case "claude":
       return createClaudeClient(
-        buildTools(opts),
+        buildTools(toolOpts),
         buildSystemPrompt(opts),
         opts.model
       );
@@ -592,7 +605,7 @@ export function createClient(opts: {
     case "mistral":
       return createOpenAICompatClient(
         provider,
-        buildTools(opts),
+        buildTools(toolOpts),
         buildSystemPrompt(opts),
         // provider is non-undefined here, so the model resolved in the allowlist;
         // fall back to DEFAULT_MODEL only to satisfy the type (won't happen for
