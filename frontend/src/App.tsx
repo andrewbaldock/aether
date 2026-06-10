@@ -9,11 +9,13 @@ import "./capabilities/widgets/PlaceholderWidget";
 import "./capabilities/widgets/AgentDiagram";
 import "./capabilities/widgets/Chart";
 import "./capabilities/widgets/Health";
+import "./capabilities/widgets/Images";
 import "./capabilities/widgets/KnowledgeGraph";
 import "./capabilities/widgets/Table";
 import "./capabilities/widgets/Timeline";
 import "./capabilities/widgets/Welcome";
 import { ChartProvider } from "./capabilities/widgets/Chart/useChartState";
+import { ImagesProvider } from "./capabilities/widgets/Images/useImagesState";
 import { KnowledgeGraphProvider } from "./capabilities/widgets/KnowledgeGraph/useKnowledgeGraphState";
 import { TableProvider } from "./capabilities/widgets/Table/useTableState";
 import { TimelineProvider } from "./capabilities/widgets/Timeline/useTimelineState";
@@ -66,10 +68,12 @@ export default function App() {
             <TableProvider>
               <ChartProvider>
                 <TimelineProvider>
-                  <CapabilityProvider>
-                    <FirstArrivalWelcome />
-                    <Shell />
-                  </CapabilityProvider>
+                  <ImagesProvider>
+                    <CapabilityProvider>
+                      <FirstArrivalWelcome />
+                      <Shell />
+                    </CapabilityProvider>
+                  </ImagesProvider>
                 </TimelineProvider>
               </ChartProvider>
             </TableProvider>

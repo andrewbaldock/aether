@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { apiFetch, logApiError } from "../../lib/queryClient";
 import { useSessionContext } from "../../shell/SessionContext";
 import { useChartState } from "./Chart/useChartState";
+import { useImagesState } from "./Images/useImagesState";
 import { useTableState } from "./Table/useTableState";
 import { useTimelineState } from "./Timeline/useTimelineState";
 
@@ -32,6 +33,11 @@ export function WidgetPersistenceBridge() {
     loadEntries: loadTimeline,
     clearEntries: clearTimeline,
   } = useTimelineState();
+  const {
+    entries: imageEntries,
+    loadEntries: loadImages,
+    clearEntries: clearImages,
+  } = useImagesState();
 
   const loadedSessionRef = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -48,6 +54,7 @@ export function WidgetPersistenceBridge() {
       clearTable();
       clearChart();
       clearTimeline();
+      clearImages();
       return;
     }
 
@@ -59,6 +66,7 @@ export function WidgetPersistenceBridge() {
           table: unknown[] | null;
           chart: unknown[] | null;
           timeline: unknown[] | null;
+          images: unknown[] | null;
         }>(`/api/sessions/${sessionId}/widgets`);
         if (cancelled) return;
         // The stored entries have specs but stale ids — loadEntries reassigns ids.
@@ -71,12 +79,16 @@ export function WidgetPersistenceBridge() {
         if (snapshot.timeline)
           loadTimeline(snapshot.timeline as Parameters<typeof loadTimeline>[0]);
         else clearTimeline();
+        if (snapshot.images)
+          loadImages(snapshot.images as Parameters<typeof loadImages>[0]);
+        else clearImages();
       } catch (err) {
         logApiError(`widget load ${sessionId}`, err);
         if (!cancelled) {
           clearTable();
           clearChart();
           clearTimeline();
+          clearImages();
         }
       } finally {
         if (!cancelled) loadedSessionRef.current = sessionId;
@@ -86,13 +98,29 @@ export function WidgetPersistenceBridge() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, loadTable, clearTable, loadChart, clearChart, loadTimeline, clearTimeline]);
+  }, [
+    sessionId,
+    loadTable,
+    clearTable,
+    loadChart,
+    clearChart,
+    loadTimeline,
+    clearTimeline,
+    loadImages,
+    clearImages,
+  ]);
 
   // Debounce-save when either widget's entries change — but only once the
   // active session's data has been loaded (loadedSessionRef matches).
   useEffect(() => {
     if (!sessionId || loadedSessionRef.current !== sessionId) return;
-    if (tableEntries.length === 0 && chartEntries.length === 0 && timelineEntries.length === 0) return;
+    if (
+      tableEntries.length === 0 &&
+      chartEntries.length === 0 &&
+      timelineEntries.length === 0 &&
+      imageEntries.length === 0
+    )
+      return;
 
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
@@ -103,6 +131,7 @@ export function WidgetPersistenceBridge() {
           table: tableEntries.length > 0 ? tableEntries : null,
           chart: chartEntries.length > 0 ? chartEntries : null,
           timeline: timelineEntries.length > 0 ? timelineEntries : null,
+          images: imageEntries.length > 0 ? imageEntries : null,
         }),
       }).catch((err) => logApiError(`widget save ${sessionId}`, err));
     }, SAVE_DEBOUNCE_MS);
@@ -110,7 +139,7 @@ export function WidgetPersistenceBridge() {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [tableEntries, chartEntries, timelineEntries, sessionId]);
+  }, [tableEntries, chartEntries, timelineEntries, imageEntries, sessionId]);
 
   return null;
 }

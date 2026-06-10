@@ -8,6 +8,7 @@ import { Wordmark } from "../brand/Wordmark";
 import type { Widget } from "../capabilities/registry";
 import { useCapabilities } from "../capabilities/useCapabilities";
 import { CHART_WIDGET } from "../capabilities/widgets/Chart";
+import { IMAGES_WIDGET } from "../capabilities/widgets/Images";
 import { KNOWLEDGE_GRAPH_WIDGET } from "../capabilities/widgets/KnowledgeGraph";
 import { TABLE_WIDGET } from "../capabilities/widgets/Table";
 import { TIMELINE_WIDGET } from "../capabilities/widgets/Timeline";
@@ -39,6 +40,7 @@ const RENDER_TOOL_WIDGETS: Record<string, Widget> = {
   render_table: TABLE_WIDGET,
   render_chart: CHART_WIDGET,
   render_timeline: TIMELINE_WIDGET,
+  render_images: IMAGES_WIDGET,
 };
 
 export function ChatPanel() {
@@ -99,6 +101,7 @@ export function ChatPanel() {
   const [tableSheetOpen, setTableSheetOpen] = useState(false);
   const [chartSheetOpen, setChartSheetOpen] = useState(false);
   const [timelineSheetOpen, setTimelineSheetOpen] = useState(false);
+  const [imagesSheetOpen, setImagesSheetOpen] = useState(false);
   const started = messages.length > 0;
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -552,6 +555,24 @@ export function ChatPanel() {
                 </>
               }
             />
+            <ToolChip
+              active={widgets.some((w) => w.id === IMAGES_WIDGET.id)}
+              onClick={() => {
+                if (isMobile) setImagesSheetOpen(true);
+                else revealCapability(IMAGES_WIDGET);
+              }}
+              label="Images"
+              icon={<ImagesIcon />}
+              tooltip={
+                <>
+                  <span className="font-semibold">Images</span>
+                  <br />
+                  Ask to see photos or pictures of something — I'll search the
+                  web (Wikimedia Commons & Unsplash) and lay the results out as a
+                  gallery beside the chat.
+                </>
+              }
+            />
             <HelpButton className="ml-auto" />
           </div>
 
@@ -592,6 +613,16 @@ export function ChatPanel() {
           >
             Ask about anything chronological — a history, sequence, or schedule
             — and I'll lay it out as a timeline beside the chat.
+          </ToolInfoSheet>
+          <ToolInfoSheet
+            open={imagesSheetOpen}
+            onClose={() => setImagesSheetOpen(false)}
+            title="Images"
+            icon={<ImagesIcon />}
+          >
+            Ask to see photos or pictures of something — I'll search the web
+            (Wikimedia Commons & Unsplash) and lay the results out as a gallery
+            beside the chat.
           </ToolInfoSheet>
         </div>
       </form>
@@ -799,6 +830,28 @@ function TimelineIcon() {
       <circle cx="6" cy="14" r="2" fill="currentColor" stroke="none" />
       <line x1="10" y1="7" x2="20" y2="7" />
       <line x1="10" y1="14" x2="18" y2="14" />
+    </svg>
+  );
+}
+
+// A stacked-frames glyph (lucide "images").
+function ImagesIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="3" width="14" height="14" rx="2" />
+      <circle cx="7.5" cy="7.5" r="1.25" fill="currentColor" stroke="none" />
+      <path d="M3 13l3.5-3.5a1.5 1.5 0 0 1 2 0L17 18" />
+      <path d="M14 7h5a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9" />
     </svg>
   );
 }

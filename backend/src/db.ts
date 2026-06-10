@@ -17,6 +17,7 @@ export type WidgetSnapshot = {
   table: unknown[] | null; // TableEntry[] (serialised)
   chart: unknown[] | null; // ChartEntry[] (serialised)
   timeline: unknown[] | null; // TimelineEntry[] (serialised)
+  images: unknown[] | null; // ImagesEntry[] (serialised)
 };
 
 export interface Session {
@@ -55,7 +56,9 @@ function createDb() {
 // Memoized at module level — one client for the process, created on first use.
 let _db: ReturnType<typeof createDb> | null = null;
 
-function getDb() {
+// Exported so sibling modules (appState, rateLimit) share the one memoized
+// client rather than spinning up their own.
+export function getDb() {
   _db ??= createDb();
   return _db;
 }

@@ -326,7 +326,7 @@ function createClaudeClient(
             tool.inputChunks.join("") || "{}"
           ) as unknown;
           await onToolStart?.(tool.name, input);
-          const result = executeTool(tool.name, input);
+          const result = await executeTool(tool.name, input);
           await onToolResult?.(tool.name, result);
           toolResults.push({
             type: "tool_result",
@@ -567,7 +567,7 @@ function createOpenAICompatClient(
         for (const tool of sortedTools) {
           const input = JSON.parse(tool.argChunks.join("") || "{}") as unknown;
           await onToolStart?.(tool.name, input);
-          const result = executeTool(tool.name, input);
+          const result = await executeTool(tool.name, input);
           await onToolResult?.(tool.name, result);
           history.push({
             role: "tool",
