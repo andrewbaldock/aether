@@ -19,6 +19,11 @@ import {
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  // Optional transcript stand-in for a user turn. When present, `content` is what
+  // the model sees while `displayText` is what gets persisted/shown — letting the
+  // UI send a long fill instruction without surfacing it in the conversation. The
+  // model never receives this field (the SDK mappers project to {role, content}).
+  displayText?: string;
 }
 
 export interface LlmClient {

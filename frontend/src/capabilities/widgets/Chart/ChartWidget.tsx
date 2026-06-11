@@ -16,9 +16,12 @@ import {
   YAxis,
 } from "recharts";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
+import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { WithContextMenu } from "../ContextMenu";
+import { useFillFromConversation } from "../useFillFromConversation";
+import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
 import type { ChartSpec } from "./types";
 import { useChartState } from "./useChartState";
@@ -66,14 +69,26 @@ export function ChartWidget(_props: { widget: Widget }) {
   const { entries } = useChartState();
   const bus = useAgentEvents();
   const busy = useAgentBusy();
+  const { messages } = useSessionContext();
+  const fill = useFillFromConversation({
+    hasContent: entries.length > 0,
+    gentlePrompt:
+      "Looking back at what we've already discussed, chart it now if anything quantitative has come up. This is about the conversation so far, not future messages — if there's genuinely nothing chart-worthy yet, just say so briefly.",
+    forcedPrompt:
+      "Call the render_chart tool right now to visualize the most chart-worthy numbers from our conversation so far.",
+    displayText: "Update the Chart from our conversation.",
+  });
 
   if (entries.length === 0) {
     if (busy) return <WidgetLoading label="Drawing a chart…" />;
     return (
-      <div className="flex h-full items-center justify-center bg-surface p-8 text-center text-sm text-content-subtle">
-        Ask for something quantitative — a trend or a comparison — and it'll be
-        charted here.
-      </div>
+      <WidgetEmptyState
+        invitation="Ask for something quantitative — a trend or a comparison — and it'll be charted here."
+        hasConversation={messages.length > 0}
+        canUpdate={fill.canUpdate}
+        onUpdate={fill.onUpdate}
+        onReset={fill.reset}
+      />
     );
   }
 

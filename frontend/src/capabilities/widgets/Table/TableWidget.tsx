@@ -9,9 +9,12 @@ import {
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
+import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { WithContextMenu } from "../ContextMenu";
+import { useFillFromConversation } from "../useFillFromConversation";
+import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
 import type { TableSpec } from "./types";
 import { useTableState } from "./useTableState";
@@ -23,16 +26,29 @@ import { useTableState } from "./useTableState";
 export function TableWidget(_props: { widget: Widget }) {
   const { entries } = useTableState();
   const busy = useAgentBusy();
+  const { messages } = useSessionContext();
+  const fill = useFillFromConversation({
+    hasContent: entries.length > 0,
+    gentlePrompt:
+      "Looking back at what we've already discussed, build a table now summarizing the key points. This is about the conversation so far, not future messages — if there's genuinely nothing tabular to capture yet, just say so briefly.",
+    forcedPrompt:
+      "Call the render_table tool right now to capture the most table-worthy information from our conversation so far.",
+    displayText: "Update the Table from our conversation.",
+  });
 
   if (entries.length === 0) {
     // Working a turn → show the loading spinner even if no table ends up landing
-    // this turn. Idle and empty → the invitation to ask for one.
+    // this turn. Idle and empty → the invitation (plus an Update button once a
+    // conversation exists to fill from).
     if (busy) return <WidgetLoading label="Building a table…" />;
     return (
-      <div className="flex h-full items-center justify-center bg-surface p-8 text-center text-sm text-content-subtle">
-        Ask for something tabular — a comparison or a structured list — and
-        it'll appear here.
-      </div>
+      <WidgetEmptyState
+        invitation="Ask for something tabular — a comparison or a structured list — and it'll appear here."
+        hasConversation={messages.length > 0}
+        canUpdate={fill.canUpdate}
+        onUpdate={fill.onUpdate}
+        onReset={fill.reset}
+      />
     );
   }
 

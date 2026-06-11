@@ -348,10 +348,13 @@ app.post("/api/chat", async (c) => {
             // Message persistence is the critical path. If it fails, warn the
             // client after [DONE] so the turn isn't silently lost on reload.
             try {
+              // Persist the transcript stand-in when the client sent one, so a
+              // verbose fill instruction never reappears on reload — the model
+              // already received the full `content` for this turn.
               await saveMessage(
                 persistSession,
                 "user",
-                lastUserMessage.content
+                lastUserMessage.displayText ?? lastUserMessage.content
               );
               await saveMessage(persistSession, "assistant", assistantText);
             } catch (err) {
@@ -430,11 +433,12 @@ function isChatMessageArray(value: unknown): value is ChatMessage[] {
     value.length > 0 &&
     value.every((m): m is ChatMessage => {
       if (m == null || typeof m !== "object") return false;
-      const { role, content } = m as Record<string, unknown>;
+      const { role, content, displayText } = m as Record<string, unknown>;
       return (
         (role === "user" || role === "assistant") &&
         typeof content === "string" &&
-        content.length > 0
+        content.length > 0 &&
+        (displayText === undefined || typeof displayText === "string")
       );
     })
   );

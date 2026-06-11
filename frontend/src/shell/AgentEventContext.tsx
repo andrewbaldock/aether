@@ -28,9 +28,11 @@ export type AgentEvent =
   | { type: "done" }
   | { type: "error"; message: string }
   | { type: "idle" }
-  // Frontend-only: the graph widget asks the chat to send a follow-up turn (the
-  // "Explore further" node action). ChatPanel subscribes and calls sendMessage.
-  | { type: "explore_request"; prompt: string };
+  // Frontend-only: a widget asks the chat to send a follow-up turn — the
+  // "Explore further" node/row actions, and the empty-panel "Update" fills.
+  // ChatPanel subscribes and calls sendMessage. `displayText`, when set, is the
+  // terse transcript stand-in for a long fill instruction the user shouldn't read.
+  | { type: "explore_request"; prompt: string; displayText?: string };
 
 type Listener = (event: AgentEvent) => void;
 

@@ -1,6 +1,9 @@
 import { ThinkingGlyph } from "../../../brand/ThinkingGlyph";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
+import { useSessionContext } from "../../../shell/SessionContext";
 import type { Widget } from "../../registry";
+import { useFillFromConversation } from "../useFillFromConversation";
+import { WidgetEmptyState } from "../WidgetEmptyState";
 import { ForceGraph } from "./ForceGraph";
 import { GraphLoading } from "./GraphLoading";
 import { NodeDetail } from "./NodeDetail";
@@ -24,7 +27,16 @@ export function KnowledgeGraphWidget(_props: { widget: Widget }) {
     removeNode,
   } = useKnowledgeGraphState();
   const bus = useAgentEvents();
+  const { messages } = useSessionContext();
   const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
+  const fill = useFillFromConversation({
+    hasContent: nodes.length > 0,
+    gentlePrompt:
+      "Looking back at what we've already discussed, map out the key entities now and how they connect. This is about the conversation so far, not future messages — if there's genuinely nothing to map yet, just say so briefly.",
+    forcedPrompt:
+      "Call the build_knowledge_graph tool right now to extract the entities and relationships from our conversation so far.",
+    displayText: "Update the Knowledge Graph from our conversation.",
+  });
 
   // "Explore further" — ask the chat (via the bus) to dig into this node and how
   // it connects to the rest of the graph. ChatPanel turns this into a real turn.
@@ -43,10 +55,13 @@ export function KnowledgeGraphWidget(_props: { widget: Widget }) {
           isAwaitingGraph ? (
             <GraphLoading />
           ) : (
-            <div className="flex h-full items-center justify-center p-8 text-center text-sm text-content-subtle">
-              Start chatting — entities will appear here as the conversation
-              unfolds.
-            </div>
+            <WidgetEmptyState
+              invitation="Start chatting — entities will appear here as the conversation unfolds."
+              hasConversation={messages.length > 0}
+              canUpdate={fill.canUpdate}
+              onUpdate={fill.onUpdate}
+              onReset={fill.reset}
+            />
           )
         ) : (
           <div className="relative h-full">

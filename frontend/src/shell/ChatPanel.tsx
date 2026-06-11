@@ -28,16 +28,6 @@ import { useChat } from "./useChat";
 import { useIsMobile } from "./useIsMobile";
 import { useWaitingMessage } from "./useWaitingMessage";
 
-// The render-tool capability ids, in catalog order, used to surface the right
-// view when a tool result lands. (The Knowledge Graph has its own richer
-// open/loading logic.)
-const RENDER_TOOL_IDS: Record<string, string> = {
-  render_table: TABLE_WIDGET.id,
-  render_chart: CHART_WIDGET.id,
-  render_timeline: TIMELINE_WIDGET.id,
-  render_images: IMAGES_WIDGET.id,
-};
-
 // Seed for a new conversation's model (until its session row exists). undefined
 // means "no explicit choice yet" — the backend uses its default.
 const LAST_MODEL_KEY = "aether-last-model";
@@ -112,6 +102,12 @@ export function ChatPanel() {
   // sees the latest value.
   const activeIdRef = useRef(activeId);
   activeIdRef.current = activeId;
+  // Whether the user is currently parked on a data capability (table/chart/
+  // timeline/images/graph). Read via a ref for the same reason as the others: a
+  // turn that starts must not yank the user off a capability they're actively
+  // watching just to surface the graph.
+  const isCapabilityViewRef = useRef(false);
+  isCapabilityViewRef.current = CAPABILITIES.some((c) => c.id === activeId);
   const isMobile = useIsMobile();
   const updateSession = useUpdateSession(userId);
   const bus = useAgentEvents();
@@ -132,12 +128,18 @@ export function ChatPanel() {
   // already restored, so restore runs once per switch and active-view SAVES
   // (below) don't fire mid-restore.
   const restoredSessionRef = useRef<string | null>(null);
+  // Last-seen content counts per capability, for detecting genuinely-new content
+  // (vs. a tool that returned nothing). Reset on session switch so the next
+  // conversation's hydration establishes a fresh baseline rather than reading as
+  // growth. `restore` owns the initial glow set; this ref handles live growth.
+  const prevCountsRef = useRef<Record<string, number>>({});
 
   // On session switch: reset to home base so the previous conversation's view
   // doesn't bleed in, and arm restore for the new session. Keyed on sessionId.
   // biome-ignore lint/correctness/useExhaustiveDependencies: sessionId is the trigger, not a value the effect reads
   useEffect(() => {
     restoredSessionRef.current = null;
+    prevCountsRef.current = {};
     reset();
   }, [sessionId, reset]);
 
@@ -193,52 +195,62 @@ export function ChatPanel() {
     return () => clearTimeout(timer);
   }, [sessionId, activeId, updateSession]);
 
-  // Surface the Knowledge Graph view at the right moments so its "mapping…"
-  // loading state and the resulting graph are actually on-screen:
-  //   • request_start — activate the graph as the turn begins, so the loading
-  //     animation is visible the whole time the model works.
-  //   • tool_result — belt-and-braces when graph data arrives.
-  // If the user has the help/settings page open, don't yank them off it — just
-  // flag the graph as unseen so its chip pulses.
+  // Surface the Knowledge Graph view so its "mapping…" animation is on-screen
+  // while the model works: on request_start, jump to the graph.
+  // Don't yank the user off a page they're deliberately on: a utility view
+  // (help/settings) OR another data capability they're already watching (e.g.
+  // they hit "Update" on the Images tab — they expect to stay there and see its
+  // own loading state). The pink "unseen" glow is handled separately, keyed on
+  // content actually arriving (see below) — never on the bare turn/tool event,
+  // so a tool that returns nothing usable never lights up an empty tab.
   useEffect(() => {
     const unsubscribe = bus.subscribe((event) => {
-      const helpOnTop = helpOnTopRef.current;
-      if (event.type === "request_start") {
-        if (!helpOnTop) activate(KNOWLEDGE_GRAPH_WIDGET.id);
-        else markUnseen(KNOWLEDGE_GRAPH_WIDGET.id);
-      } else if (
-        event.type === "tool_result" &&
-        event.tool === "build_knowledge_graph"
-      ) {
-        if (helpOnTop || activeIdRef.current !== KNOWLEDGE_GRAPH_WIDGET.id) {
-          markUnseen(KNOWLEDGE_GRAPH_WIDGET.id);
-        }
-      }
+      if (event.type !== "request_start") return;
+      const stay = helpOnTopRef.current || isCapabilityViewRef.current;
+      if (!stay) activate(KNOWLEDGE_GRAPH_WIDGET.id);
     });
     return unsubscribe;
-  }, [bus, activate, markUnseen]);
+  }, [bus, activate]);
 
-  // Surface render-tool views (table/chart/timeline/images) when their spec
-  // lands. If that view is already active, nothing to do (it updates live); else
-  // flag it unseen so its chip pulses.
+  // Glow a capability's chip only when its content actually grows while the user
+  // is looking elsewhere. Keying on the live counts (not the tool_result event)
+  // means an empty/invalid spec — which fires a tool_result but parses to nothing
+  // — never lights up a tab the user can't fill. The baseline (reset per session
+  // above) means hydration on conversation-open doesn't read as fresh growth;
+  // `restore` is what glows already-present, unseen content on open.
   useEffect(() => {
-    const unsubscribe = bus.subscribe((event) => {
-      if (event.type !== "tool_result") return;
-      const id = RENDER_TOOL_IDS[event.tool];
-      if (!id) return;
-      if (helpOnTopRef.current || activeIdRef.current !== id) {
+    const counts: Record<string, number> = {
+      [KNOWLEDGE_GRAPH_WIDGET.id]: graphNodes.length,
+      [TABLE_WIDGET.id]: tableEntries.length,
+      [CHART_WIDGET.id]: chartEntries.length,
+      [TIMELINE_WIDGET.id]: timelineEntries.length,
+      [IMAGES_WIDGET.id]: imageEntries.length,
+    };
+    const prev = prevCountsRef.current;
+    for (const [id, n] of Object.entries(counts)) {
+      // (prev[id] ?? n): first run after mount/restore establishes the baseline
+      // without glowing. Growth beyond it = genuinely new content.
+      if (n > (prev[id] ?? n) && activeIdRef.current !== id) {
         markUnseen(id);
       }
-    });
-    return unsubscribe;
-  }, [bus, markUnseen]);
+    }
+    prevCountsRef.current = counts;
+  }, [
+    graphNodes,
+    tableEntries,
+    chartEntries,
+    timelineEntries,
+    imageEntries,
+    markUnseen,
+  ]);
 
-  // "Explore further" from a graph node: the widget emits an explore_request on
-  // the bus; here we turn it into a real chat turn (only when not mid-stream).
+  // "Explore further" / empty-panel "Update": a widget emits an explore_request
+  // on the bus; here we turn it into a real chat turn (only when not mid-stream).
+  // displayText, when present, is the terse transcript stand-in for the prompt.
   useEffect(() => {
     const unsubscribe = bus.subscribe((event) => {
       if (event.type === "explore_request" && !isLoading) {
-        sendMessage(event.prompt);
+        sendMessage(event.prompt, event.displayText);
       }
     });
     return unsubscribe;

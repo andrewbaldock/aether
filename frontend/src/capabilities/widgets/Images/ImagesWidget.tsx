@@ -1,7 +1,10 @@
 import { useAgentEvents } from "../../../shell/AgentEventContext";
+import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { WithContextMenu } from "../ContextMenu";
+import { useFillFromConversation } from "../useFillFromConversation";
+import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
 import type { ImageItem, ImagesSpec } from "./types";
 import { useImagesState } from "./useImagesState";
@@ -9,14 +12,26 @@ import { useImagesState } from "./useImagesState";
 export function ImagesWidget(_props: { widget: Widget }) {
   const { entries } = useImagesState();
   const busy = useAgentBusy();
+  const { messages } = useSessionContext();
+  const fill = useFillFromConversation({
+    hasContent: entries.length > 0,
+    gentlePrompt:
+      "Looking back at what we've already discussed, search the web now for images relevant to it and show them here. This is about the conversation so far, not future messages — if there's genuinely nothing worth illustrating yet, just say so briefly.",
+    forcedPrompt:
+      "Call the render_images tool right now to find and display images related to our conversation so far.",
+    displayText: "Update the Images from our conversation.",
+  });
 
   if (entries.length === 0) {
     if (busy) return <WidgetLoading label="Searching for images…" />;
     return (
-      <div className="flex h-full items-center justify-center bg-surface p-8 text-center text-sm text-content-subtle">
-        Ask to see photos or pictures of something — I'll search the web and lay
-        the results out here as a gallery.
-      </div>
+      <WidgetEmptyState
+        invitation="Ask to see photos or pictures of something — I'll search the web and lay the results out here as a gallery."
+        hasConversation={messages.length > 0}
+        canUpdate={fill.canUpdate}
+        onUpdate={fill.onUpdate}
+        onReset={fill.reset}
+      />
     );
   }
 
