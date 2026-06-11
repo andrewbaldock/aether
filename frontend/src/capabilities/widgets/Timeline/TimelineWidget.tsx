@@ -1,13 +1,17 @@
 import { useAgentEvents } from "../../../shell/AgentEventContext";
+import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { WithContextMenu } from "../ContextMenu";
+import { WidgetLoading } from "../WidgetLoading";
 import type { TimelineItem, TimelineSpec } from "./types";
 import { useTimelineState } from "./useTimelineState";
 
 export function TimelineWidget(_props: { widget: Widget }) {
   const { entries } = useTimelineState();
+  const busy = useAgentBusy();
 
   if (entries.length === 0) {
+    if (busy) return <WidgetLoading label="Laying out a timeline…" />;
     return (
       <div className="flex h-full items-center justify-center bg-surface p-8 text-center text-sm text-content-subtle">
         Ask about something chronological — a history, a sequence, or a schedule

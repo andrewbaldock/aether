@@ -10,35 +10,33 @@ import { Sidebar, SidebarToggleIcon } from "./Sidebar";
 // Single-column mobile layout (< md). One surface at a time:
 //   • chat is the default full-screen view, with a slim top bar
 //   • the sidebar is an off-canvas drawer over the chat
-//   • the capability widget (knowledge graph / agent diagram) is a full-screen
-//     overlay, opened by the same controls that drive the desktop column
+//   • the capability column (graph / table / chart / … with its chip toolbar) is
+//     a full-screen overlay, reached from the "Canvas" button in the top bar
 //
 // The desktop three-zone shell in Shell.tsx is left entirely untouched; this is
 // rendered instead of it when useIsMobile() is true.
 export function MobileShell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { messages } = useSessionContext();
-  const { isOpen: capabilityOpen, openTick } = useCapabilities();
+  const { openTick } = useCapabilities();
 
   // Mobile shows one surface at a time. The phone ALWAYS opens to the chatbox —
-  // the capability widget lives in a full-screen overlay that NEVER appears on
-  // load. It surfaces only on a real signal, decided WITHOUT racing mount timing:
-  //   • an explicit open/activate gesture (help "?", the "Graph" button, the
-  //     graph-mode toggle, a future tool) — tracked by the store's `openTick`,
-  //     which bumps on `open`/`activate` but NOT on the background `ensure(KG)`
-  //     that merely mounts an empty KG tab when graph mode is on; and
+  // the capability column lives in a full-screen overlay that NEVER appears on
+  // load. The "Canvas" button in the top bar opens it on demand; from inside, the
+  // chip toolbar switches between capabilities and "← Chat" returns.
+  //
+  // It also auto-surfaces on a real signal, decided WITHOUT racing mount timing:
+  //   • an explicit activate gesture (a chip, the help "?", a future tool) —
+  //     tracked by the store's `openTick`, which bumps on `activate` but NOT on
+  //     the silent restore that runs on conversation load; and
   //   • a graph actually arriving (KG node count crosses 0 → >0), so the user
   //     watches their first graph build even if it wasn't an explicit tap.
-  // "← Chat" hides the overlay (widgets survive); "Graph"/"?" bring it back.
-  //
-  // `hasGraph` also gates the "View graph" top-bar button. The overlay render is
-  // NOT gated on hasGraph (Welcome must show with no graph).
   const { nodes } = useKnowledgeGraphState();
   const hasGraph = nodes.length > 0;
   const [showOverlay, setShowOverlay] = useState(false);
 
-  // Explicit open/activate gesture → surface. Skip tick 0 (the initial render);
-  // only an actual bump past mount counts.
+  // Explicit activate gesture → surface. Skip tick 0 (the initial render); only
+  // an actual bump past mount counts.
   const prevTick = useRef(openTick);
   useEffect(() => {
     if (openTick !== prevTick.current) {
@@ -77,20 +75,18 @@ export function MobileShell() {
         <div className="pointer-events-none absolute left-1/2 -translate-x-1/2">
           <Wordmark height={24} compact={!started} />
         </div>
-        {/* Once a graph (or any widget) exists, give a way back INTO it from chat.
-            Hidden until then, so the empty-state chat stays clean. Pairs with the
-            overlay's "← Chat" for the back-and-forth. */}
-        {hasGraph && capabilityOpen && (
-          <button
-            type="button"
-            onClick={() => setShowOverlay(true)}
-            aria-label="View graph"
-            className="ml-auto flex h-11 items-center gap-1.5 rounded-md px-3 text-sm text-content-muted hover:bg-elevated hover:text-content"
-          >
-            <GraphTabIcon />
-            Graph
-          </button>
-        )}
+        {/* Always-available way into the capability column (graph + tools). The
+            chip toolbar lives inside the overlay; this just opens it. Pairs with
+            the overlay's "← Chat" for the back-and-forth. */}
+        <button
+          type="button"
+          onClick={() => setShowOverlay(true)}
+          aria-label="Open canvas"
+          className="ml-auto flex h-11 items-center gap-1.5 rounded-md px-3 text-sm text-content-muted hover:bg-elevated hover:text-content"
+        >
+          <GraphTabIcon />
+          Canvas
+        </button>
       </div>
 
       {/* Chat fills the remaining height. min-h-0 lets its internal scroll
@@ -122,10 +118,10 @@ export function MobileShell() {
         />
       </div>
 
-      {/* Capability widget as a full-screen overlay. Only ever shown once a graph
-          exists AND the user hasn't hidden it; "← Chat" hides it (widgets survive)
-          and "Graph" in the chat top bar brings it back. */}
-      {capabilityOpen && showOverlay && (
+      {/* Capability column as a full-screen overlay. Shown when the user opens it
+          ("Canvas") or an activate gesture / first graph surfaces it; "← Chat"
+          hides it (the column state survives) and "Canvas" brings it back. */}
+      {showOverlay && (
         <div className="absolute inset-0 z-40 flex flex-col bg-surface">
           <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface-raised px-2 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
             <button

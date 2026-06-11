@@ -42,6 +42,14 @@ explicitly asked. Leave the working tree clean and ready; summarize what to test
 `bun run check`, `bun run typecheck`, and (frontend) `bun run build` should pass. Actually run
 them; don't assume.
 
+## Always build mobile-first
+
+Design and build every UI change **mobile-first**: start from the small-screen
+(<`md`) layout and behaviour, then layer desktop on top with responsive
+overrides. Touch targets must be tap-friendly (≥44px), every hover-only
+affordance needs a touch equivalent, and nothing should rely on a pointer. Test
+the phone path first, not as an afterthought.
+
 ## Proactive practices
 
 - **Seek meaningful unit tests.** Look for opportunities to add unit tests that help future devs

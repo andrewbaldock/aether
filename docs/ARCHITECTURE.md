@@ -211,17 +211,21 @@ runs inside; it is the platform's primary surface.
 - **Sidebar** — resizable, collapsible. Logo + nav (top), conversation history (list).
 - **Chat (body)** — message transcript + composer. Full width when alone; narrows when the
   capability column opens.
-- **Capability column** — hosts widgets. **Tabbed** (multiple widgets coexist). **Fullscreen-
-  capable** (expands over the chat for an immersive moment, then restores). Opened/closed by the
-  **agent or the user**; resizable, closable.
+- **Capability column** — hosts widgets behind a **fixed chip toolbar**. The chip set is
+  constant (Knowledge Graph + Table + Chart + Timeline + Images, plus right-pinned gear/Settings
+  and help/Welcome). It is **always present** — the Knowledge Graph is "home base" and never turns
+  off — so the column can't launch collapsed or off-screen. **Fullscreen-capable** (expands over
+  the chat, then restores). Resizable. Width is **device-local chrome**: it lives only in
+  localStorage (clamped to a safe band), never in conversation state.
 
-**Three states**
+**Two states** (the column is always present; there is no chat-only state)
 ```
-1. CHAT ONLY          2. SPLIT                    3. CAPABILITY FULLSCREEN
-┌────┬──────────┐     ┌────┬─────┬──────────┐     ┌────┬───────────────────┐
-│ SB │  chat    │     │ SB │chat │[tab|tab] │     │ SB │ [tab | tab | tab] │
-│    │          │  →  │    │     │ widget   │  →  │    │   widget          │
-└────┴──────────┘     └────┴─────┴──────────┘     └────┴───────────────────┘
+1. SPLIT                                  2. CAPABILITY FULLSCREEN
+┌────┬─────┬──────────────────┐           ┌────┬───────────────────────────┐
+│ SB │chat │[◆ ▦ ◔ ⋯][⚙ ?]    │           │ SB │ [◆ ▦ ◔ ⋯][⚙ ?]            │
+│    │     │ active widget    │     →     │    │   active widget           │
+└────┴─────┴──────────────────┘           └────┴───────────────────────────┘
+   chips: unfilled=no content · filled=has content · ring=active · pink dot=unseen
 ```
 
 Panel resize/collapse is handled by **`react-resizable-panels`** (resizable, collapsible panel
@@ -234,40 +238,46 @@ groups) rather than hand-rolled drag math.
 > - `onResize(size)` — hands you both `{ asPercentage, inPixels }`; pick the right one.
 > - **`panel.resize(x)` — a bare number is read as PIXELS, not percent.** Storing a percent and
 >   calling `resize(32)` opens the panel to 32 *pixels* (an invisible sliver), not 32%.
-> - `panel.collapse()` saves the current size into an internal `expandToSize`, then applies
->   `collapsedSize`. `panel.expand()` restores `expandToSize ?? minSize`, but **only if still
->   collapsed** (it's a no-op otherwise). collapse/expand/resize all commit synchronously through
->   the same applier, so `expand()` then `resize("N%")` in one tick lands N% in a single
->   flex-basis transition — which is exactly how the capability column slides open to its saved width.
 >
 > **Rule: always pass units as explicit strings (`"32%"`, `"240px"`), never bare numbers** — even
 > though numbers typecheck fine. This px-vs-% confusion is what made capability-panel resize
-> persistence fail repeatedly; the bug compiles clean and only shows up at runtime. See
-> `frontend/src/shell/Shell.tsx`.
+> persistence fail repeatedly; the bug compiles clean and only shows up at runtime. The column is
+> now **always present** (no collapse/expand imperative calls): it just mounts at a clamped,
+> localStorage-or-default width via `defaultSize`. See `frontend/src/shell/Shell.tsx`.
 
 ## The capability registry — the first platform seam
 
-The capability column is not a fixed slot; it is a small managed system that **both the agent
-and the user act on**. The shared state is the **capability registry**:
+The capability column is a small managed system that **both the agent and the user act on**. Two
+pieces:
 
 ```
             ┌─────────────────────────────┐
-  agent  ──▶│   capability registry       │◀──  user
-  (tools)   │   [{ id, type, title,       │     (open/close tabs,
-            │      state, active }]        │      resize, fullscreen)
+  agent  ──▶│   capability store          │◀──  user
+  (tools)   │   { activeId, unseen[],     │     (tap a chip, resize,
+            │     isFullscreen }          │      fullscreen, help/gear)
             └─────────────────────────────┘
                          │
                          ▼
-            Capability column renders tabs + the active widget
+   Fixed chip toolbar (catalog.tsx) + the renderer for the active id
 ```
 
-- The agent's tools address the column: *open a widget, update widget N, bring one forward.*
-- Each **widget type** (a 3dverse scene, a data view, …) is a **plugin** that registers a
-  renderer keyed by `type`. The registry and the column don't know what's inside a widget — they
-  only know `{ id, type, title, state }` and hand `state` to the matching renderer.
+- **The capability set is fixed**, not a per-conversation open/close tab lifecycle. `catalog.tsx`
+  lists every capability; the toolbar always renders one chip each. The store tracks only *which*
+  view is active, which capabilities have **unseen** content (the pink glow), and fullscreen.
+  Whether a chip is "filled" (has content) is read **live** from each widget's state provider
+  (`useCapabilityContent`), never stored.
+- **Renderers are plugins keyed by `type`.** Each widget registers a renderer (`registerRenderer`)
+  against a `type` that equals its id; the column hands a `{ id, type, title, state }` descriptor
+  to the matching renderer. The shell never knows what's inside a widget.
+- **The agent drives content, not tabs.** Tool results flow into the per-widget state providers
+  (mounted at the app root so they never miss a payload). When new content lands on a non-active
+  capability, ChatPanel flags it `unseen`; the chip glows until the user opens it.
+- **Restore on load** sets the active view (remembered per-conversation in `ui_state.activeWidget`,
+  falling back to home base) and glows every content-bearing capability the user isn't already on.
+  Column **width is never** part of this — it's device-local localStorage chrome, so a shared link
+  opened on another browser inherits the active view but not this machine's sizing.
 
-This is where **conversation, capabilities, and visuals meet** — designing it well *is* designing
-the platform. New experiences plug in by registering a renderer; nothing in the shell changes.
+New experiences plug in by adding a catalog entry + registering a renderer; nothing else changes.
 
 ---
 

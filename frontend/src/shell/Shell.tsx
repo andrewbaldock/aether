@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
+import { useEffect, useState } from "react";
+import { Group, Panel, Separator } from "react-resizable-panels";
 import { useCapabilities } from "../capabilities/useCapabilities";
 import { GraphPersistenceBridge } from "../capabilities/widgets/KnowledgeGraph/GraphPersistenceBridge";
 import { WidgetPersistenceBridge } from "../capabilities/widgets/WidgetPersistenceBridge";
@@ -17,12 +17,32 @@ const handle =
 
 const SIDEBAR_COLLAPSED_KEY = "aether-sidebar-collapsed";
 const SIDEBAR_WIDTH = 240; // px — fixed so the wordmark never gets cramped
-const CAPABILITY_SIZE_KEY = "aether-capability-size";
-const CAPABILITY_DEFAULT_SIZE = 32; // percent
 
+// The capability column width is chrome, not conversation state: it lives ONLY
+// in localStorage, keyed per device, and NEVER travels with a shared/loaded
+// conversation. (Conversation ui_state stores the active VIEW, never sizing — a
+// link opened on another browser must not inherit this machine's column width.)
+const CAPABILITY_SIZE_KEY = "aether-capability-size";
+const CAPABILITY_DEFAULT_SIZE = 36; // percent — a comfortable default on desktop
+// Clamp range. Both panels have their own minSize too, but a localStorage value
+// outside this band (corrupt, or saved on a very different viewport) could push
+// the column off-screen or crush the chat — so we sanitise on read.
+const CAPABILITY_MIN_SIZE = 20;
+const CAPABILITY_MAX_SIZE = 60;
+
+// Resolve the column's start width. With no usable localStorage value (first
+// visit, or a browser that blocked it) we fall back to a safe default; any saved
+// value is clamped into a sane band so the column is always clearly on-screen.
 function readCapabilitySize(): number {
-  const saved = Number(localStorage.getItem(CAPABILITY_SIZE_KEY));
-  return saved > 0 ? saved : CAPABILITY_DEFAULT_SIZE;
+  let saved = NaN;
+  try {
+    saved = Number(localStorage.getItem(CAPABILITY_SIZE_KEY));
+  } catch {
+    // localStorage can throw (private mode, blocked storage) — fall through to
+    // the safe default rather than crash the shell.
+  }
+  if (!Number.isFinite(saved) || saved <= 0) return CAPABILITY_DEFAULT_SIZE;
+  return Math.min(CAPABILITY_MAX_SIZE, Math.max(CAPABILITY_MIN_SIZE, saved));
 }
 
 // Hydrates the active session from the URL on first mount. Must live inside
@@ -55,10 +75,8 @@ export function Shell() {
 
 function ShellInner() {
   const isMobile = useIsMobile();
-  const { isOpen, isFullscreen } = useCapabilities();
+  const { isFullscreen } = useCapabilities();
 
-  const capabilityRef = usePanelRef();
-  const capabilityMounted = useRef(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true"
   );
@@ -69,22 +87,11 @@ function ShellInner() {
 
   const toggleSidebar = () => setSidebarCollapsed((c) => !c);
 
-  useEffect(() => {
-    const panel = capabilityRef.current;
-    if (!panel) return;
-    if (!capabilityMounted.current) {
-      capabilityMounted.current = true;
-      if (!isOpen) panel.collapse();
-      return;
-    }
-    if (isOpen) {
-      panel.expand();
-      panel.resize(`${readCapabilitySize()}%`);
-    } else {
-      panel.collapse();
-    }
-  }, [isOpen, capabilityRef]);
-
+  // The capability column is ALWAYS present now (the Knowledge Graph is home
+  // base — it never turns off), so there's no open/collapse machinery: the
+  // column simply opens at a safe, clamped, localStorage-or-default width. This
+  // is what makes the third column reliably visible — it can no longer launch
+  // collapsed or be pushed off-screen by stale conversation state.
   const savedCapabilitySize = readCapabilitySize();
 
   // Mobile gets a single-column, view-switched layout. Branch here — after all
@@ -100,12 +107,18 @@ function ShellInner() {
         </div>
       )}
 
-      <Group orientation="horizontal" className="min-w-0 flex-1">
+      <Group
+        // Remount the group when fullscreen toggles so the panels re-derive their
+        // sizes from defaultSize (the chat panel is removed/added by isFullscreen).
+        key={isFullscreen ? "fullscreen" : "split"}
+        orientation="horizontal"
+        className="min-w-0 flex-1"
+      >
         {!isFullscreen && (
           <>
             <Panel
               id="chat"
-              defaultSize={isOpen ? "50%" : "82%"}
+              defaultSize={`${100 - savedCapabilitySize}%`}
               minSize="30%"
               style={{ overflow: "hidden" }}
             >
@@ -117,13 +130,9 @@ function ShellInner() {
 
         <Panel
           id="capability"
-          panelRef={capabilityRef}
-          defaultSize={savedCapabilitySize}
+          defaultSize={isFullscreen ? "100%" : `${savedCapabilitySize}%`}
           minSize="20%"
-          collapsible
-          collapsedSize={0}
           style={{
-            transition: "flex-basis 280ms cubic-bezier(0.4, 0, 0.2, 1)",
             // react-resizable-panels sets `overflow: auto` inline on the Panel
             // element; that produced a spurious horizontal scrollbar across the
             // graph column. The widget manages its own width, so clip the x-axis.
@@ -131,10 +140,14 @@ function ShellInner() {
           }}
           onResize={(size) => {
             if (size.asPercentage && size.asPercentage > 0) {
-              localStorage.setItem(
-                CAPABILITY_SIZE_KEY,
-                String(size.asPercentage)
-              );
+              try {
+                localStorage.setItem(
+                  CAPABILITY_SIZE_KEY,
+                  String(size.asPercentage)
+                );
+              } catch {
+                // Storage blocked — fine; the width just won't persist.
+              }
             }
           }}
         >

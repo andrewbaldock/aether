@@ -6,13 +6,12 @@ import { Tooltip } from "./Tooltip";
 // desktop and the slim top bar on mobile — the persistent way back to the intro
 // after its one-time first-arrival auto-open.
 export function HelpButton({ className }: { className?: string }) {
-  const { open, activate } = useCapabilities();
+  const { activate } = useCapabilities();
   return (
     <Tooltip label="What is Aether?" side="bottom" className={className}>
       <button
         type="button"
         onClick={(e) => {
-          open(WELCOME_WIDGET);
           activate(WELCOME_WIDGET.id);
           e.currentTarget.blur();
         }}

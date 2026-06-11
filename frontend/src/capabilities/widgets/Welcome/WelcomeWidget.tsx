@@ -1,9 +1,9 @@
 import { Code, Network, Wrench } from "lucide-react";
+import { CASE_STUDY_URL, REPO_URL, SITE_URL } from "../../../lib/links";
 import type { Widget } from "../../registry";
+import { useCapabilities } from "../../useCapabilities";
 import { AgentDiagramWidget } from "../AgentDiagram/AgentDiagramWidget";
 import { HEALTH_WIDGET } from "../Health";
-import { CASE_STUDY_URL, REPO_URL, SITE_URL } from "../../../lib/links";
-import { useCapabilities } from "../../useCapabilities";
 
 // "Welcome to Aether" — the first-arrival explainer. It frames the live agent
 // diagram (the same viz the eyeball reveals) with a short pitch and callouts for
@@ -11,7 +11,7 @@ import { useCapabilities } from "../../useCapabilities";
 // and the tools the agent can reach for. The diagram itself is the real runtime
 // component, so this dogfoods the platform rather than drawing a static picture.
 export function WelcomeWidget(_props: { widget: Widget }) {
-  const { open } = useCapabilities();
+  const { activate } = useCapabilities();
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-surface">
       <div className="mx-auto w-full max-w-2xl px-6 py-8">
@@ -102,7 +102,8 @@ export function WelcomeWidget(_props: { widget: Widget }) {
             ·
           </span>
           <button
-            onClick={() => open(HEALTH_WIDGET)}
+            type="button"
+            onClick={() => activate(HEALTH_WIDGET.id)}
             className="transition-colors hover:text-content-muted"
           >
             System health →
