@@ -26,7 +26,11 @@ interface UseChatOptions {
 }
 
 export interface UseChatResult {
-  sendMessage: (text: string) => Promise<void>;
+  // `text` is sent to the model; `displayText`, when given, is what's shown in the
+  // transcript instead (e.g. a terse "Update the Timeline" bubble standing in for a
+  // long fill instruction the user shouldn't have to read). The model never sees
+  // displayText; the transcript never shows the verbose text.
+  sendMessage: (text: string, displayText?: string) => Promise<void>;
   // Cancels any in-flight stream and invalidates its late writes. Called when
   // the user switches or starts a conversation so a previous turn can't bleed
   // tokens into the new view.
@@ -89,7 +93,7 @@ export function useChat({
     if (wasInFlight) bus.emit({ type: "idle" });
   }, [bus]);
 
-  async function sendMessage(text: string) {
+  async function sendMessage(text: string, displayText?: string) {
     // Supersede any in-flight stream so its late writes are dropped.
     abortRef.current?.abort();
     const epoch = ++epochRef.current;
@@ -103,9 +107,12 @@ export function useChat({
     // append the user message + assistant placeholder.
     const isFirstTurn = messagesRef.current.length === 0;
 
+    // What the transcript shows. The full `text` still goes to the model below
+    // (see the request body); displayText only swaps the on-screen bubble.
+    const shownText = displayText ?? text;
     const next: Message[] = [
       ...messagesRef.current,
-      { id: crypto.randomUUID(), role: "user", text },
+      { id: crypto.randomUUID(), role: "user", text: shownText },
     ];
     onMessagesChange(next);
     setIsLoading(true);
@@ -144,11 +151,20 @@ export function useChat({
       // auto-assigned title. Guard against a superseded stream firing stale.
       if (isFirstTurn && epoch === epochRef.current) refreshSessions();
 
+      // The model sees the full instruction for this turn even when the transcript
+      // shows a terser stand-in. Every prior message uses its stored text; only the
+      // just-added user turn swaps in the real `text`, plus displayText so the
+      // backend persists the stand-in (not the verbose prompt) for reload.
+      const wireMessages = next.map((m, i) =>
+        i === next.length - 1 && displayText
+          ? { role: m.role, content: text, displayText }
+          : { role: m.role, content: m.text }
+      );
       const requestInit: RequestInit = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: next.map((m) => ({ role: m.role, content: m.text })),
+          messages: wireMessages,
           sessionId: resolvedSessionId,
           userId,
           graphMode: currentGraphMode,

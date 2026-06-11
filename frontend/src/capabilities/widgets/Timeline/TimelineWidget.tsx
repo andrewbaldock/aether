@@ -1,7 +1,10 @@
 import { useAgentEvents } from "../../../shell/AgentEventContext";
+import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { WithContextMenu } from "../ContextMenu";
+import { useFillFromConversation } from "../useFillFromConversation";
+import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
 import type { TimelineItem, TimelineSpec } from "./types";
 import { useTimelineState } from "./useTimelineState";
@@ -9,14 +12,26 @@ import { useTimelineState } from "./useTimelineState";
 export function TimelineWidget(_props: { widget: Widget }) {
   const { entries } = useTimelineState();
   const busy = useAgentBusy();
+  const { messages } = useSessionContext();
+  const fill = useFillFromConversation({
+    hasContent: entries.length > 0,
+    gentlePrompt:
+      "Looking back at what we've already discussed, build a timeline now from any events or dates that have come up. This is about the conversation so far, not future messages — if there's genuinely nothing chronological to lay out yet, just say so briefly.",
+    forcedPrompt:
+      "Call the render_timeline tool right now to lay out the most timeline-worthy events from our conversation so far.",
+    displayText: "Update the Timeline from our conversation.",
+  });
 
   if (entries.length === 0) {
     if (busy) return <WidgetLoading label="Laying out a timeline…" />;
     return (
-      <div className="flex h-full items-center justify-center bg-surface p-8 text-center text-sm text-content-subtle">
-        Ask about something chronological — a history, a sequence, or a schedule
-        — and it'll be laid out here as a timeline.
-      </div>
+      <WidgetEmptyState
+        invitation="Ask about something chronological — a history, a sequence, or a schedule — and it'll be laid out here as a timeline."
+        hasConversation={messages.length > 0}
+        canUpdate={fill.canUpdate}
+        onUpdate={fill.onUpdate}
+        onReset={fill.reset}
+      />
     );
   }
 
