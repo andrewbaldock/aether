@@ -47,10 +47,14 @@ export function CapabilityColumn() {
 
   return (
     <div className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-surface">
-      {/* Capability toolbar. Horizontally scrollable so it never clips chips on a
-          narrow column; chips are tap-sized on mobile. */}
-      <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
-        <div className="flex flex-1 items-center gap-1 overflow-x-auto">
+      {/* Capability toolbar. A container so the chips react to the column's own
+          width (it resizes independently of the viewport): as it narrows the
+          left chips drop their text (icon-only), and slimmer still they wrap to
+          a second row while the right cluster stays pinned top-right. Chips are
+          tap-sized on mobile. `items-start` keeps the right cluster top-aligned
+          when the left group grows to two rows. */}
+      <div className="@container flex items-start gap-1 border-b border-border px-2 py-1.5">
+        <div className="flex flex-1 flex-wrap items-center gap-1">
           {CAPABILITIES.map((cap) => (
             <CapabilityChip
               key={cap.id}
@@ -158,6 +162,12 @@ function CapabilityChip({
   // view). Active never uses a ring — it gets a stronger border, plus a slightly
   // darker fill ONLY when the chip has content; an empty active chip stays hollow
   // (stronger border alone), so "active" never implies "has content".
+  //
+  // Every chip keeps the same 1px border (so layout never shifts). The active
+  // chip thickens to a visible 2px edge via an INSET box-shadow painted just
+  // inside that 1px border — box-shadow takes no space, so the chip's size and
+  // its alignment with neighbours are unaffected. (Tailwind's border-2 + negative
+  // margin looked off against the flex gap / scroll container, hence the shadow.)
   const base =
     "relative flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors max-md:h-11 max-md:min-w-11 max-md:justify-center max-md:px-3";
   let tone: string;
@@ -174,6 +184,12 @@ function CapabilityChip({
       "border-border text-content-muted hover:bg-elevated hover:text-content";
   }
 
+  // Inset shadow ring that thickens the active chip's 1px border to a crisp 2px
+  // without changing its box size. Uses the same theme token as the border color.
+  const activeRing = active
+    ? { boxShadow: "inset 0 0 0 1px var(--content-subtle)" }
+    : undefined;
+
   const button = (
     <button
       type="button"
@@ -184,11 +200,14 @@ function CapabilityChip({
       aria-label={cap.title}
       aria-pressed={active}
       className={`${base} ${tone}`}
+      style={activeRing}
     >
       {cap.icon}
       {!iconOnly && (
-        // Icon-only on mobile keeps the toolbar compact; the label shows ≥ md.
-        <span className="max-md:hidden">{cap.title}</span>
+        // Icon-only on mobile, and icon-only once the toolbar container itself
+        // gets narrow enough that the left chips would collide with the right
+        // cluster (@max-[640px]). The label shows otherwise.
+        <span className="max-md:hidden @max-[640px]:hidden">{cap.title}</span>
       )}
       {/* New-content glow. Positioned top-right so it reads even when the chip
           is icon-only on mobile. */}
