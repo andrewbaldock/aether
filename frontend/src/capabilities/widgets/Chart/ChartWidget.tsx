@@ -16,8 +16,10 @@ import {
   YAxis,
 } from "recharts";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
+import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { WithContextMenu } from "../ContextMenu";
+import { WidgetLoading } from "../WidgetLoading";
 import type { ChartSpec } from "./types";
 import { useChartState } from "./useChartState";
 
@@ -63,8 +65,10 @@ function seriesColor(color: string | undefined, index: number): string {
 export function ChartWidget(_props: { widget: Widget }) {
   const { entries } = useChartState();
   const bus = useAgentEvents();
+  const busy = useAgentBusy();
 
   if (entries.length === 0) {
+    if (busy) return <WidgetLoading label="Drawing a chart…" />;
     return (
       <div className="flex h-full items-center justify-center bg-surface p-8 text-center text-sm text-content-subtle">
         Ask for something quantitative — a trend or a comparison — and it'll be

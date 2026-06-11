@@ -6,39 +6,44 @@ import {
   useMemo,
   useReducer,
 } from "react";
-import type { Widget } from "./registry";
+import { KNOWLEDGE_GRAPH_ID } from "./catalog";
 
-// The capability column's shared state. Both the agent (via tools, later) and the user
-// (clicks) drive these same actions — this is the platform's first plugin seam.
+// The capability column's shared state.
+//
+// Every capability is ALWAYS available (see catalog.ts) — there is no open/close
+// tab lifecycle. The store tracks only:
+//   • which capability is the active view (`activeId`),
+//   • which capabilities have new, unviewed content (`unseen` → pink glow),
+//   • fullscreen, and
+//   • `openTick`, an explicit-intent counter the mobile shell watches to surface
+//     its full-screen overlay.
+//
+// The Knowledge Graph is "home base": it is the default active view and the
+// fallback whenever nothing else is selected. Activating any capability (or the
+// Welcome page) is always allowed — empty capabilities just show their own
+// empty-state. Content lives in the per-widget providers, not here.
 interface CapabilityState {
-  widgets: Widget[];
-  activeId: string | null;
+  activeId: string;
   isFullscreen: boolean;
-  // Increments on every EXPLICIT open/activate (a user or agent gesture to bring
-  // a widget forward), but NOT on `ensure` (a silent background mount). Lets the
-  // mobile shell surface its full-screen overlay on real intent without racing
-  // mount timing or diffing activeId. Pure signal; desktop ignores it.
+  // Bumped on every EXPLICIT activate (a user/agent gesture to bring a view
+  // forward). The mobile shell surfaces its overlay on this; pure restore on
+  // conversation load deliberately does NOT bump it.
   openTick: number;
-  // Widget ids that have received new content the user hasn't looked at yet — a
-  // tab updated in the background (or while another tab / the help page was on
-  // top). The tab bar shows a glowing dot for each. Cleared when the tab becomes
-  // active; never set for the already-active tab (you're looking at it).
+  // Capability ids that received new content the user hasn't looked at yet. The
+  // toolbar shows a pink glow for each. Cleared when the capability is activated;
+  // never set for the already-active one (you're looking at it).
   unseen: string[];
 }
 
 type Action =
-  | { type: "open"; widget: Widget }
-  | { type: "ensure"; widget: Widget }
-  | { type: "close"; id: string }
   | { type: "activate"; id: string }
   | { type: "markUnseen"; id: string }
   | { type: "setFullscreen"; value: boolean }
-  | { type: "restore"; widgets: Widget[]; activeId: string | null }
-  | { type: "closeAll" };
+  | { type: "restore"; activeId: string; unseen: string[] }
+  | { type: "reset" };
 
 const initialState: CapabilityState = {
-  widgets: [],
-  activeId: null,
+  activeId: KNOWLEDGE_GRAPH_ID,
   isFullscreen: false,
   openTick: 0,
   unseen: [],
@@ -46,53 +51,16 @@ const initialState: CapabilityState = {
 
 function reducer(state: CapabilityState, action: Action): CapabilityState {
   switch (action.type) {
-    case "open": {
-      const exists = state.widgets.some((w) => w.id === action.widget.id);
-      return {
-        ...state,
-        widgets: exists ? state.widgets : [...state.widgets, action.widget],
-        activeId: action.widget.id,
-        openTick: state.openTick + 1,
-        // Opening a tab means viewing it — clear its unseen flag.
-        unseen: state.unseen.filter((id) => id !== action.widget.id),
-      };
-    }
-    // Add the widget so it's mounted and ready, but DON'T activate or surface it.
-    // Used for "prepare in the background" cases (e.g. graph mode is on, so mount
-    // the KG tab before data arrives) — on mobile, activating would force the
-    // full-screen overlay open over an empty widget.
-    case "ensure": {
-      const exists = state.widgets.some((w) => w.id === action.widget.id);
-      if (exists) return state;
-      return {
-        ...state,
-        widgets: [...state.widgets, action.widget],
-        // Keep activeId as-is; if nothing was active, fall back to this one so
-        // the column isn't blank, but don't steal focus from an active tab.
-        activeId: state.activeId ?? action.widget.id,
-      };
-    }
-    case "close": {
-      const widgets = state.widgets.filter((w) => w.id !== action.id);
-      const wasActive = state.activeId === action.id;
-      return {
-        ...state,
-        widgets,
-        activeId: wasActive ? (widgets.at(-1)?.id ?? null) : state.activeId,
-        isFullscreen: widgets.length === 0 ? false : state.isFullscreen,
-        unseen: state.unseen.filter((id) => id !== action.id),
-      };
-    }
     case "activate":
       return {
         ...state,
         activeId: action.id,
         openTick: state.openTick + 1,
-        // Viewing a tab clears its unseen flag.
+        // Viewing a capability clears its unseen flag.
         unseen: state.unseen.filter((id) => id !== action.id),
       };
-    // Flag a tab as having new, unviewed content. No-op if it's the active tab
-    // (the user is already looking at it) or already flagged.
+    // Flag a capability as having new, unviewed content. No-op if it's the active
+    // view (already looking at it) or already flagged.
     case "markUnseen": {
       if (action.id === state.activeId || state.unseen.includes(action.id))
         return state;
@@ -100,22 +68,19 @@ function reducer(state: CapabilityState, action: Action): CapabilityState {
     }
     case "setFullscreen":
       return { ...state, isFullscreen: action.value };
-    // Rehydrate the whole column from a saved conversation in one shot: set the
-    // open tabs and the active tab atomically. Deliberately does NOT bump
-    // openTick — the mobile shell surfaces its full-screen overlay on openTick,
-    // and loading a conversation is not "intent" to pop it open. (Doing this as
-    // ensure()×N + activate() would bump openTick on the activate and yank the
-    // mobile overlay up on every load.) Starts with a clean unseen/fullscreen
-    // slate; nothing is "unseen" on a fresh load.
+    // Rehydrate from a saved conversation in one shot: set the active view and the
+    // unseen set atomically. Deliberately does NOT bump openTick — loading a
+    // conversation is not "intent" to pop the mobile overlay open. Fullscreen
+    // resets so a fresh load never lands in full-page mode.
     case "restore":
       return {
         ...state,
-        widgets: action.widgets,
         activeId: action.activeId,
-        unseen: [],
+        unseen: action.unseen,
         isFullscreen: false,
       };
-    case "closeAll":
+    // Back to home base, clean slate (used when switching to an empty session).
+    case "reset":
       return initialState;
     default:
       return state;
@@ -123,15 +88,11 @@ function reducer(state: CapabilityState, action: Action): CapabilityState {
 }
 
 interface CapabilityContextValue extends CapabilityState {
-  open: (widget: Widget) => void;
-  ensure: (widget: Widget) => void;
-  close: (id: string) => void;
   activate: (id: string) => void;
   markUnseen: (id: string) => void;
   setFullscreen: (value: boolean) => void;
-  restore: (widgets: Widget[], activeId: string | null) => void;
-  closeAll: () => void;
-  isOpen: boolean;
+  restore: (activeId: string, unseen: string[]) => void;
+  reset: () => void;
 }
 
 const CapabilityContext = createContext<CapabilityContextValue | null>(null);
@@ -139,18 +100,6 @@ const CapabilityContext = createContext<CapabilityContextValue | null>(null);
 export function CapabilityProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  const open = useCallback(
-    (widget: Widget) => dispatch({ type: "open", widget }),
-    []
-  );
-  const ensure = useCallback(
-    (widget: Widget) => dispatch({ type: "ensure", widget }),
-    []
-  );
-  const close = useCallback(
-    (id: string) => dispatch({ type: "close", id }),
-    []
-  );
   const activate = useCallback(
     (id: string) => dispatch({ type: "activate", id }),
     []
@@ -164,36 +113,22 @@ export function CapabilityProvider({ children }: { children: ReactNode }) {
     []
   );
   const restore = useCallback(
-    (widgets: Widget[], activeId: string | null) =>
-      dispatch({ type: "restore", widgets, activeId }),
+    (activeId: string, unseen: string[]) =>
+      dispatch({ type: "restore", activeId, unseen }),
     []
   );
-  const closeAll = useCallback(() => dispatch({ type: "closeAll" }), []);
+  const reset = useCallback(() => dispatch({ type: "reset" }), []);
 
   const value = useMemo<CapabilityContextValue>(
     () => ({
       ...state,
-      open,
-      ensure,
-      close,
       activate,
       markUnseen,
       setFullscreen,
       restore,
-      closeAll,
-      isOpen: state.widgets.length > 0,
+      reset,
     }),
-    [
-      state,
-      open,
-      ensure,
-      close,
-      activate,
-      markUnseen,
-      setFullscreen,
-      restore,
-      closeAll,
-    ]
+    [state, activate, markUnseen, setFullscreen, restore, reset]
   );
 
   return (

@@ -8,7 +8,6 @@ Known rough edges, not yet fixed. Tagged `website:` for the portfolio site; unta
 - **No mobile portrait layout** — on portrait/mobile, the conversation and capability columns should stack vertically instead of sitting side by side.
 - **incomplete mobile affordance** scan for all hover-only controls that need mobile equivalents.  No way to rename or delete conversations on mobiel for example.
 - **Resize handle not discoverable** — the column resize needs a visible handle on hover.
-- **Toolbar needs a rethink** — to be addressed as part of the unified-canvas project (bigsail).
 - **Help panel animation only works if already open** — opening the Welcome/help panel mid-query skips its open animation; it only animates correctly when opened before asking a question.
 
 ## Website

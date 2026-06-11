@@ -1,13 +1,17 @@
 import { useAgentEvents } from "../../../shell/AgentEventContext";
+import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { WithContextMenu } from "../ContextMenu";
+import { WidgetLoading } from "../WidgetLoading";
 import type { ImageItem, ImagesSpec } from "./types";
 import { useImagesState } from "./useImagesState";
 
 export function ImagesWidget(_props: { widget: Widget }) {
   const { entries } = useImagesState();
+  const busy = useAgentBusy();
 
   if (entries.length === 0) {
+    if (busy) return <WidgetLoading label="Searching for images…" />;
     return (
       <div className="flex h-full items-center justify-center bg-surface p-8 text-center text-sm text-content-subtle">
         Ask to see photos or pictures of something — I'll search the web and lay

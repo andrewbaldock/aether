@@ -9,8 +9,10 @@ import {
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
+import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { WithContextMenu } from "../ContextMenu";
+import { WidgetLoading } from "../WidgetLoading";
 import type { TableSpec } from "./types";
 import { useTableState } from "./useTableState";
 
@@ -20,8 +22,12 @@ import { useTableState } from "./useTableState";
 // The `widget` prop is unused; state is live.
 export function TableWidget(_props: { widget: Widget }) {
   const { entries } = useTableState();
+  const busy = useAgentBusy();
 
   if (entries.length === 0) {
+    // Working a turn → show the loading spinner even if no table ends up landing
+    // this turn. Idle and empty → the invitation to ask for one.
+    if (busy) return <WidgetLoading label="Building a table…" />;
     return (
       <div className="flex h-full items-center justify-center bg-surface p-8 text-center text-sm text-content-subtle">
         Ask for something tabular — a comparison or a structured list — and
