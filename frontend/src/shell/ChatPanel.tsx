@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ThinkingGlyph } from "../brand/ThinkingGlyph";
 import { Wordmark } from "../brand/Wordmark";
-import { CAPABILITIES } from "../capabilities/catalog";
+import { CAPABILITIES, HOME_BASE_ID } from "../capabilities/catalog";
 import { useCapabilities } from "../capabilities/useCapabilities";
 import { CHART_WIDGET } from "../capabilities/widgets/Chart";
 import { useChartState } from "../capabilities/widgets/Chart/useChartState";
@@ -157,11 +157,14 @@ export function ChatPanel() {
     if (chartEntries.length > 0) withContent.push(CHART_WIDGET.id);
     if (timelineEntries.length > 0) withContent.push(TIMELINE_WIDGET.id);
     if (imageEntries.length > 0) withContent.push(IMAGES_WIDGET.id);
-    // The remembered view, but only if it still has content; else home base.
+    // The remembered view, but only if it still has content; else home base
+    // (Tiles). Tiles itself isn't in withContent (that lists the five data
+    // capabilities), so a remembered Tiles view falls through to the home-base
+    // default below — which is Tiles. Either way we land on Tiles by default.
     const restoreActiveId =
       savedActiveWidget && withContent.includes(savedActiveWidget)
         ? savedActiveWidget
-        : KNOWLEDGE_GRAPH_WIDGET.id;
+        : HOME_BASE_ID;
     // Glow every content-bearing capability except the one we're landing on.
     const unseen = withContent.filter((id) => id !== restoreActiveId);
     restore(restoreActiveId, unseen);
@@ -195,19 +198,20 @@ export function ChatPanel() {
     return () => clearTimeout(timer);
   }, [sessionId, activeId, updateSession]);
 
-  // Surface the Knowledge Graph view so its "mapping…" animation is on-screen
-  // while the model works: on request_start, jump to the graph.
-  // Don't yank the user off a page they're deliberately on: a utility view
-  // (help/settings) OR another data capability they're already watching (e.g.
-  // they hit "Update" on the Images tab — they expect to stay there and see its
-  // own loading state). The pink "unseen" glow is handled separately, keyed on
-  // content actually arriving (see below) — never on the bare turn/tool event,
-  // so a tool that returns nothing usable never lights up an empty tab.
+  // Surface the home-base Tiles canvas while the model works: on request_start,
+  // jump to Tiles. Tiles mirrors every capability (including the knowledge graph's
+  // "mapping…" state) as live cards, so it's always the view we want to show as an
+  // answer composes. Don't yank the user off a page they're deliberately on: a
+  // utility view (help/settings) OR another data capability they're already
+  // watching (e.g. they hit "Update" on the Images tab — they expect to stay there
+  // and see its own loading state). The pink "unseen" glow is handled separately,
+  // keyed on content actually arriving (see below) — never on the bare turn/tool
+  // event, so a tool that returns nothing usable never lights up an empty tab.
   useEffect(() => {
     const unsubscribe = bus.subscribe((event) => {
       if (event.type !== "request_start") return;
       const stay = helpOnTopRef.current || isCapabilityViewRef.current;
-      if (!stay) activate(KNOWLEDGE_GRAPH_WIDGET.id);
+      if (!stay) activate(HOME_BASE_ID);
     });
     return unsubscribe;
   }, [bus, activate]);

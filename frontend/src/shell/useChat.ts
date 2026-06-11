@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import type { CompositionPlan } from "../capabilities/widgets/Bigsail/plan";
 import { useAgentEvents } from "./AgentEventContext";
 import { parseSseChunk } from "./parseSseChunk";
 
@@ -232,6 +233,7 @@ export function useChat({
             result?: string;
             iteration?: number;
             label?: string;
+            plan?: CompositionPlan;
           };
 
           if (event.type === "text" && event.content) {
@@ -269,6 +271,10 @@ export function useChat({
             updateAssistant((m) => ({ ...m, toolActivity: undefined }));
           } else if (event.type === "loop_start") {
             bus.emit({ type: "loop_start", iteration: event.iteration ?? 0 });
+          } else if (event.type === "plan" && event.plan) {
+            // The planner's abstract composition plan. BigsailPlanProvider stores
+            // the latest; the canvas consumes it to order cards / draw edges.
+            bus.emit({ type: "plan", plan: event.plan });
           } else if (event.type === "warning") {
             // The turn streamed fine but couldn't be persisted. Surface it
             // without stripping the assistant message — it's on screen, just

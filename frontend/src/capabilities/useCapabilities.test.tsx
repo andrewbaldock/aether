@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { KNOWLEDGE_GRAPH_ID } from "./catalog";
+import { HOME_BASE_ID } from "./catalog";
 import { CapabilityProvider, useCapabilities } from "./useCapabilities";
 
 function setup() {
@@ -8,9 +8,9 @@ function setup() {
 }
 
 describe("useCapabilities", () => {
-  it("defaults to the Knowledge Graph home base, no unseen, not fullscreen", () => {
+  it("defaults to the Bigsail home base, no unseen, not fullscreen", () => {
     const { result } = setup();
-    expect(result.current.activeId).toBe(KNOWLEDGE_GRAPH_ID);
+    expect(result.current.activeId).toBe(HOME_BASE_ID);
     expect(result.current.unseen).toEqual([]);
     expect(result.current.isFullscreen).toBe(false);
   });
@@ -30,8 +30,8 @@ describe("useCapabilities", () => {
 
   it("markUnseen is a no-op for the active view and dedupes", () => {
     const { result } = setup();
-    // KG is active by default — flagging it does nothing.
-    act(() => result.current.markUnseen(KNOWLEDGE_GRAPH_ID));
+    // Home base (Bigsail) is active by default — flagging it does nothing.
+    act(() => result.current.markUnseen(HOME_BASE_ID));
     expect(result.current.unseen).toEqual([]);
 
     act(() => result.current.markUnseen("chart"));
@@ -55,7 +55,7 @@ describe("useCapabilities", () => {
     act(() => result.current.markUnseen("chart"));
     act(() => result.current.setFullscreen(true));
     act(() => result.current.reset());
-    expect(result.current.activeId).toBe(KNOWLEDGE_GRAPH_ID);
+    expect(result.current.activeId).toBe(HOME_BASE_ID);
     expect(result.current.unseen).toEqual([]);
     expect(result.current.isFullscreen).toBe(false);
   });

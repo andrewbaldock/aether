@@ -76,7 +76,15 @@ function cellText(value: unknown): string {
   return String(value);
 }
 
-function SpecTable({ spec, title }: { spec: TableSpec; title?: string }) {
+// Self-contained single-spec table (sortable, with per-row explore menu). Used by
+// the Table tab and by BigsailCard. Pure spec → JSX; the canonical renderer.
+export function SpecTable({
+  spec,
+  title,
+}: {
+  spec: TableSpec;
+  title?: string;
+}) {
   const bus = useAgentEvents();
   const [sorting, setSorting] = useState<SortingState>([]);
 

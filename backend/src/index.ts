@@ -412,6 +412,14 @@ app.post("/api/chat", async (c) => {
           await stream.writeSSE({
             data: JSON.stringify({ type: "status", message }),
           });
+        },
+        async (plan) => {
+          // The planner's abstract composition plan for this turn (capabilities +
+          // relationships, never coordinates). Bigsail consumes it to order cards
+          // and draw flowchart edges; a future superskill can too.
+          await stream.writeSSE({
+            data: JSON.stringify({ type: "plan", plan }),
+          });
         }
       );
     } catch (err) {

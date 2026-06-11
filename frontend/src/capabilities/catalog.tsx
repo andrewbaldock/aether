@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { BIGSAIL_WIDGET } from "./widgets/Bigsail";
 import { CHART_WIDGET } from "./widgets/Chart";
 import { IMAGES_WIDGET } from "./widgets/Images";
 import { KNOWLEDGE_GRAPH_WIDGET } from "./widgets/KnowledgeGraph";
@@ -7,8 +8,9 @@ import { TIMELINE_WIDGET } from "./widgets/Timeline";
 
 // The fixed set of capabilities. Unlike the old open/close tab lifecycle, every
 // capability is ALWAYS available: the toolbar renders one chip per entry, in this
-// order, in every conversation. The Knowledge Graph is "home base" — it is always
-// first and is the default active view.
+// order, in every conversation. Bigsail — the zoom/pan canvas that mirrors every
+// other capability as live cards — is "home base": it is always first and is the
+// default active view. (The Knowledge Graph used to hold that role; it's now 2nd.)
 //
 // A descriptor is pure presentation (id/title/icon/blurb). Whether a capability
 // "has content", is "active", or has "unseen" updates is computed live in the
@@ -24,7 +26,25 @@ export interface Capability {
 
 export const KNOWLEDGE_GRAPH_ID = KNOWLEDGE_GRAPH_WIDGET.id;
 
+// The default landing view: Bigsail is "home base" (first chip, default active).
+export const HOME_BASE_ID = BIGSAIL_WIDGET.id;
+
 export const CAPABILITIES: Capability[] = [
+  {
+    // Internal id stays "bigsail"; the user-facing label is "Tiles" (placeholder
+    // name — pending a final brand name).
+    id: BIGSAIL_WIDGET.id,
+    title: "Tiles",
+    icon: <BigsailIcon />,
+    blurb: (
+      <>
+        A living canvas: every table, chart, timeline, gallery, and the
+        knowledge graph this conversation produces appears here together as
+        interactive cards you can drag, resize, and rearrange. This is home base
+        — it's always first.
+      </>
+    ),
+  },
   {
     id: KNOWLEDGE_GRAPH_WIDGET.id,
     title: "Knowledge Graph",
@@ -33,8 +53,7 @@ export const CAPABILITIES: Capability[] = [
       <>
         As we talk I extract the people, places, and ideas and map them as a
         live force-directed graph beside the chat. Click a node to get its
-        Wikipedia summary; drag to rearrange. This is home base — it's always
-        here.
+        Wikipedia summary; drag to rearrange.
       </>
     ),
   },
@@ -85,6 +104,26 @@ export const CAPABILITIES: Capability[] = [
     ),
   },
 ];
+
+// A canvas-of-cards glyph: overlapping framed rectangles. Marks Bigsail.
+function BigsailIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="5" width="10" height="8" rx="1.5" />
+      <rect x="11" y="11" width="10" height="8" rx="1.5" />
+    </svg>
+  );
+}
 
 // A node-link glyph: connected circles. Marks the Knowledge Graph.
 function GraphIcon() {

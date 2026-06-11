@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
 } from "react";
+import type { CompositionPlan } from "../capabilities/widgets/Bigsail/plan";
 
 // The agent's runtime events, normalised for the frontend. These mirror the SSE
 // wire events the backend emits (text / tool_start / tool_result / loop_start /
@@ -25,6 +26,11 @@ export type AgentEvent =
   | { type: "tool_start"; tool: string; input: unknown }
   | { type: "tool_result"; tool: string; result: string }
   | { type: "loop_start"; iteration: number }
+  // The backend planner's abstract composition plan for this turn — which
+  // capabilities participate and how they relate (never coordinates). Emitted
+  // pre-loop on complex turns. BigsailPlanProvider stores the latest; the canvas
+  // consumes it to order cards and draw flowchart edges.
+  | { type: "plan"; plan: CompositionPlan }
   | { type: "done" }
   | { type: "error"; message: string }
   | { type: "idle" }

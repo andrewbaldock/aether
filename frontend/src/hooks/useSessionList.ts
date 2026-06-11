@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
+import type { TilesLayoutItem } from "../capabilities/widgets/Bigsail/tilesLayout";
 import { apiFetch } from "../lib/queryClient";
 
 export interface Session {
@@ -10,8 +11,12 @@ export interface Session {
   // The Claude model last selected for this conversation; null = server default.
   model: string | null;
   // Frontend-owned per-conversation UI memory (e.g. which capability tab was
-  // last on top). Open-ended; null = nothing remembered.
-  ui_state: { activeWidget?: string | null } | null;
+  // last on top, and the Tiles canvas arrangement). Open-ended; null = nothing
+  // remembered.
+  ui_state: {
+    activeWidget?: string | null;
+    tilesLayout?: TilesLayoutItem[];
+  } | null;
   created_at: string;
   updated_at: string;
 }

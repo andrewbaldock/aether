@@ -44,7 +44,9 @@ export function TimelineWidget(_props: { widget: Widget }) {
   );
 }
 
-function SpecTimeline({ spec }: { spec: TimelineSpec }) {
+// Self-contained single-spec timeline (chronological, swimlanes, explore menu).
+// Used by the Timeline tab and BigsailCard. Pure spec → JSX; canonical renderer.
+export function SpecTimeline({ spec }: { spec: TimelineSpec }) {
   const bus = useAgentEvents();
   // Ground each entry's explore prompt in the timeline title when present.
   const titleCtx = spec.title ? ` in the "${spec.title}" timeline` : "";

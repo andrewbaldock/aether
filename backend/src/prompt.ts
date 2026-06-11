@@ -20,7 +20,14 @@ it's a sequence of dated events, call render_timeline. When the subject is somet
 people would want to see — a place, a person, a movement, art, an object — call
 search_images to fetch real photos, then render_images to lay them out as a gallery.
 A single answer can use several of these at once. Emit compact specs — only the rows,
-points, events, or images that matter — and still give a short text reply alongside.`;
+points, events, or images that matter — and still give a short text reply alongside.
+
+For verifiable structured facts — populations, dates, quantities, members of a
+group, works by a creator — prefer real data over recall: call wikidata_query (a
+keyless SPARQL endpoint for entities, dates, and attributes) or world_bank (keyless
+economic/development time series — population, GDP, life expectancy, CO2, etc.
+across years) to FETCH the data, then render it with render_table / render_chart /
+render_timeline. Don't recall figures you can look up.`;
 
 // Appended only when Knowledge Graph mode is on. Mirrors buildTools — the gated
 // behaviour and the gated guidance travel together.
