@@ -254,6 +254,34 @@ body {
   }
 }
 
+/* ── Bigsail loading ─────────────────────────────────────────────────────────
+   Cards drifting into formation while the first answer composes. Each placeholder
+   card floats up and fades in on a staggered delay, reading as "the canvas is
+   assembling". Pure CSS; brand neons on the borders. */
+@keyframes bigsail-card-drift {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0.35;
+    transform: translateY(-6px) scale(1);
+  }
+}
+.bigsail-loading-card {
+  animation: bigsail-card-drift 2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bigsail-loading-card {
+    animation: none;
+    opacity: 0.5;
+  }
+}
+
 /* Unseen-content indicator on a capability tab: a small dot that pulses its glow
    so a tab updated in the background catches the eye. Pink to match the brand
    accent (the send button / loading border). */

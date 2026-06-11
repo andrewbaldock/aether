@@ -14,3 +14,4 @@ Known rough edges, not yet fixed. Tagged `website:` for the portfolio site; unta
 
 - **Resume copy/paste spacing** — selecting and pasting resume text produces weird spacing.
 - **Needs better marketing assets** — better screenshots, updated copy, GIFs, and screen captures of the mobile experience in action.
+- case study needs my name on it

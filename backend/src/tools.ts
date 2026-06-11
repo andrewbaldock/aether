@@ -365,6 +365,63 @@ const RENDER_TOOLS: ToolDefinition[] = [
   RENDER_IMAGES_TOOL,
 ];
 
+// --- Open-data tools -------------------------------------------------------
+// Keyless data sources that return real structured facts the model then renders
+// (two-step, like search_images → render_images): the model calls one of these
+// to GET data, then calls render_table / render_chart / render_timeline with the
+// rows. This keeps facts grounded in real data instead of the model recalling
+// them. Each slots in behind executeTool exactly like search_images, mirroring
+// its fetch discipline (timeout, descriptive User-Agent, hard result cap,
+// length-capped values — every row re-enters the model's context next iteration).
+
+export const WIKIDATA_QUERY_TOOL: ToolDefinition = {
+  name: "wikidata_query",
+  description:
+    "Run a SPARQL query against Wikidata and get back real structured facts (entities, dates, quantities, relationships) as rows. Use this for verifiable data — populations, dates, members of a group, works by a creator — instead of recalling figures yourself. Then render the rows with render_table / render_chart / render_timeline. Keep SELECT projections small and always set a LIMIT.",
+  input_schema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description:
+          "a complete SPARQL SELECT query for the Wikidata Query Service. Use rdfs:label with a SERVICE wikibase:label clause for human-readable names; always include a LIMIT.",
+      },
+      limit: {
+        type: "number",
+        description: "max rows to return, 1-50 (default 25)",
+      },
+    },
+    required: ["query"],
+  },
+};
+
+export const WORLD_BANK_TOOL: ToolDefinition = {
+  name: "world_bank",
+  description:
+    "Fetch real economic/development time series from the keyless World Bank Open Data API — population, GDP, life expectancy, CO2, etc. — for one or more countries across years. Returns clean {country, year, value} rows ideal for render_chart / render_timeline / render_table. Use for any quantitative country/economic question instead of recalling figures.",
+  input_schema: {
+    type: "object",
+    properties: {
+      countries: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          'ISO country codes (alpha-2 or alpha-3), e.g. ["FR","DE","ES"] or ["FRA","DEU"]. Required.',
+      },
+      indicator: {
+        type: "string",
+        description:
+          "World Bank indicator code. Common ones: SP.POP.TOTL (population), NY.GDP.MKTP.CD (GDP US$), NY.GDP.PCAP.CD (GDP per capita), SP.DYN.LE00.IN (life expectancy), EN.ATM.CO2E.PC (CO2 per capita). Default SP.POP.TOTL.",
+      },
+      start: { type: "number", description: "start year (default 2010)" },
+      end: { type: "number", description: "end year (default latest)" },
+    },
+    required: ["countries"],
+  },
+};
+
+const DATA_TOOLS: ToolDefinition[] = [WIKIDATA_QUERY_TOOL, WORLD_BANK_TOOL];
+
 // Anthropic server-side web search. Runs on Anthropic's infrastructure — the host
 // never calls executeTool() for it. Gated to Claude only (OpenAI-compat providers
 // can't use Anthropic server-side tools). max_uses=3 caps spend per turn; real
@@ -381,7 +438,11 @@ export function buildTools(opts: {
   graphMode: boolean;
   provider?: Provider;
 }): ToolDefinition[] {
-  const tools: ToolDefinition[] = [...BASE_TOOLS, ...RENDER_TOOLS];
+  const tools: ToolDefinition[] = [
+    ...BASE_TOOLS,
+    ...DATA_TOOLS,
+    ...RENDER_TOOLS,
+  ];
   if (opts.graphMode) tools.push(BUILD_KNOWLEDGE_GRAPH_TOOL);
   if (opts.provider === "claude") tools.push(WEB_SEARCH_TOOL);
   return tools;
@@ -415,6 +476,8 @@ const TOOL_STATUS_LABELS: Record<string, string> = {
   get_current_datetime: "Checking the time",
   search_images: "Searching for images",
   web_search: "Searching the web",
+  wikidata_query: "Querying Wikidata",
+  world_bank: "Fetching World Bank data",
   build_knowledge_graph: "Mapping the knowledge graph",
   render_table: "Building a table",
   render_chart: "Building a chart",
@@ -457,6 +520,10 @@ export async function executeTool(
       return new Date().toISOString();
     case "search_images":
       return searchImages(input, sessionId);
+    case "wikidata_query":
+      return wikidataQuery(input);
+    case "world_bank":
+      return worldBank(input);
     case "render_images":
       // Fire Unsplash photographer-credit pings for the photos actually being
       // rendered (API-terms compliance), then echo like the other render tools.
@@ -473,6 +540,60 @@ export async function executeTool(
     default:
       throw new Error(`Unknown tool: "${name}"`);
   }
+}
+
+// --- Self-correction: degenerate-result detection --------------------------
+// Promotes the frontend's empty-panel escalation (useFillFromConversation) into
+// the agent loop: detect when a render/data tool produced nothing usable so the
+// loop can prompt the model to re-derive or bow out — once, in the same turn,
+// instead of shipping an empty widget and waiting for a human to click Update.
+// Pure + unit-testable; defensive about the model-supplied (or fetch-returned)
+// shape — anything unparseable is treated as NOT degenerate (don't false-positive
+// a healthy turn into a retry).
+export function isDegenerate(toolName: string, resultJson: string): boolean {
+  let data: unknown;
+  try {
+    data = JSON.parse(resultJson);
+  } catch {
+    return false;
+  }
+  if (data == null || typeof data !== "object") return false;
+  const obj = data as Record<string, unknown>;
+
+  // A tool that returned an explicit error is its own signal — the loop already
+  // surfaces those; don't double-handle as "degenerate".
+  if (typeof obj.error === "string") return false;
+
+  const emptyArray = (v: unknown): boolean =>
+    !Array.isArray(v) || v.length === 0;
+
+  switch (toolName) {
+    case "render_table":
+      return emptyArray(obj.rows);
+    case "render_chart":
+      // Degenerate if there's no data OR no series to plot.
+      return emptyArray(obj.data) || emptyArray(obj.series);
+    case "render_timeline":
+      return emptyArray(obj.items);
+    case "render_images":
+      return emptyArray(obj.images);
+    case "wikidata_query":
+      return emptyArray(obj.rows);
+    case "world_bank":
+      return emptyArray(obj.rows);
+    default:
+      return false;
+  }
+}
+
+// The corrective directive appended to a degenerate tool_result so the model
+// self-heals on the next iteration. Terse — it re-enters context.
+export function correctionDirective(toolName: string): string {
+  return (
+    `\n\n[system] That ${toolName} call produced no usable rows/data. ` +
+    `Either re-derive it correctly from the conversation, switch to a more fitting ` +
+    `capability, or briefly tell the user there's nothing to show and don't render an empty widget.`
+  );
 }
 
 // Pull the image urls out of a render_images input and fire the Unsplash
@@ -739,4 +860,196 @@ async function searchImages(
 
   const results = interleave(commonsResults, unsplashResults).slice(0, limit);
   return JSON.stringify({ query, results });
+}
+
+// --- wikidata_query --------------------------------------------------------
+// Keyless SPARQL against the Wikidata Query Service. Mirrors the search_images
+// fetch discipline: AbortSignal timeout, a descriptive User-Agent (WDQS requires
+// one and blocks generic agents), the JSON results Accept header, a hard row cap,
+// and length-capped cell values so a stray long literal can't blow the token
+// budget. Returns flattened {var: value} rows the model then feeds to a render
+// tool — the same two-step shape as search_images → render_images.
+
+const DATA_TOOL_TIMEOUT_MS = 6000;
+const WIKIDATA_ENDPOINT = "https://query.wikidata.org/sparql";
+// WDQS, like Commons, asks for a descriptive User-Agent with contact info.
+const DATA_TOOL_USER_AGENT = COMMONS_USER_AGENT;
+// Cap any single cell so a verbose label/description can't dominate context.
+const MAX_CELL_LEN = 200;
+
+function capCell(value: string): string {
+  return value.length > MAX_CELL_LEN
+    ? `${value.slice(0, MAX_CELL_LEN - 1)}…`
+    : value;
+}
+
+type SparqlBinding = Record<string, { value?: string } | undefined>;
+
+async function wikidataQuery(input: unknown): Promise<string> {
+  const { query, limit } = (input ?? {}) as {
+    query?: string;
+    limit?: number;
+  };
+  if (!query || typeof query !== "string") {
+    return JSON.stringify({
+      error: "wikidata_query requires a SPARQL `query` string.",
+    });
+  }
+  const cap = Math.min(50, Math.max(1, Math.round(limit ?? 25)));
+
+  const url = new URL(WIKIDATA_ENDPOINT);
+  url.searchParams.set("query", query);
+  url.searchParams.set("format", "json");
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: {
+        Accept: "application/sparql-results+json",
+        "User-Agent": DATA_TOOL_USER_AGENT,
+      },
+      signal: AbortSignal.timeout(DATA_TOOL_TIMEOUT_MS),
+    });
+  } catch (err) {
+    return JSON.stringify({
+      error: `Wikidata query failed (${String(err)}). Tell the user and offer to try again.`,
+    });
+  }
+  if (!res.ok) {
+    // A 400 is usually a malformed SPARQL query — surface that so the model can
+    // fix and retry rather than silently giving up.
+    return JSON.stringify({
+      error: `Wikidata returned ${res.status}. ${
+        res.status === 400
+          ? "The SPARQL query was likely malformed — revise it."
+          : "Tell the user and offer to try again."
+      }`,
+    });
+  }
+
+  const data = (await res.json()) as {
+    head?: { vars?: string[] };
+    results?: { bindings?: SparqlBinding[] };
+  };
+  const vars = data.head?.vars ?? [];
+  const bindings = data.results?.bindings ?? [];
+  if (bindings.length === 0) {
+    return JSON.stringify({ vars, rows: [] });
+  }
+
+  // Flatten each binding to a plain {var: value} object; drop Wikidata's
+  // datatype/xml:lang metadata (the model only needs the value).
+  const rows = bindings.slice(0, cap).map((b) => {
+    const row: Record<string, string> = {};
+    for (const v of vars) {
+      const cell = b[v]?.value;
+      if (cell !== undefined) row[v] = capCell(cell);
+    }
+    return row;
+  });
+  return JSON.stringify({ vars, rows });
+}
+
+// --- world_bank ------------------------------------------------------------
+// Keyless World Bank Open Data: economic/development indicator time series per
+// country. Same fetch discipline as wikidata (timeout, User-Agent, capped rows).
+// Returns flat {country, code, year, value} rows the model feeds straight to
+// render_chart / render_timeline / render_table. (Replaced the now-deprecated
+// REST Countries API — Wikidata covers country attributes; this covers numeric
+// time series, which is the higher-value chart/timeline fodder.)
+
+const WORLD_BANK_BASE = "https://api.worldbank.org/v2";
+const DEFAULT_INDICATOR = "SP.POP.TOTL"; // total population
+const WORLD_BANK_MAX_ROWS = 500;
+
+// One observation from the World Bank v2 JSON (the response is [meta, data[]]).
+type WbObservation = {
+  country?: { id?: string; value?: string };
+  countryiso3code?: string;
+  date?: string;
+  value?: number | null;
+  indicator?: { value?: string };
+};
+
+async function worldBank(input: unknown): Promise<string> {
+  const { countries, indicator, start, end } = (input ?? {}) as {
+    countries?: unknown;
+    indicator?: unknown;
+    start?: unknown;
+    end?: unknown;
+  };
+  const codes = Array.isArray(countries)
+    ? countries
+        .filter((c): c is string => typeof c === "string" && c.trim() !== "")
+        .map((c) => c.trim())
+    : [];
+  if (codes.length === 0) {
+    return JSON.stringify({
+      error: "world_bank requires a `countries` array of ISO codes.",
+    });
+  }
+  const ind =
+    typeof indicator === "string" && indicator.trim()
+      ? indicator.trim()
+      : DEFAULT_INDICATOR;
+  const startYear = typeof start === "number" ? Math.round(start) : 2010;
+  const endYear =
+    typeof end === "number" ? Math.round(end) : new Date().getFullYear();
+
+  // Semicolon-joined country codes is the World Bank multi-country syntax.
+  const url = new URL(
+    `${WORLD_BANK_BASE}/country/${codes.join(";")}/indicator/${encodeURIComponent(ind)}`
+  );
+  url.searchParams.set("format", "json");
+  url.searchParams.set("date", `${startYear}:${endYear}`);
+  url.searchParams.set("per_page", String(WORLD_BANK_MAX_ROWS));
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": DATA_TOOL_USER_AGENT,
+      },
+      signal: AbortSignal.timeout(DATA_TOOL_TIMEOUT_MS),
+    });
+  } catch (err) {
+    return JSON.stringify({
+      error: `World Bank query failed (${String(err)}). Tell the user and offer to try again.`,
+    });
+  }
+  if (!res.ok) {
+    return JSON.stringify({
+      error: `World Bank returned ${res.status}. Check the indicator/country codes.`,
+    });
+  }
+
+  // The API returns [paginationMeta, observations]. A bad indicator/code returns
+  // a message object in element 0 with no data array.
+  const body = (await res.json()) as unknown;
+  if (!Array.isArray(body) || body.length < 2 || !Array.isArray(body[1])) {
+    return JSON.stringify({
+      error:
+        "World Bank returned no data — the indicator or country codes may be invalid.",
+    });
+  }
+  const observations = body[1] as WbObservation[];
+  const indicatorName = observations[0]?.indicator?.value ?? ind;
+
+  // Flatten to compact rows, dropping null values (years with no datum), newest
+  // last. Cap defensively (per_page already bounds it).
+  const rows = observations
+    .filter((o) => o.value !== null && o.value !== undefined)
+    .slice(0, WORLD_BANK_MAX_ROWS)
+    .map((o) => ({
+      country: o.country?.value,
+      code: o.countryiso3code,
+      year: o.date,
+      value: o.value,
+    }));
+
+  if (rows.length === 0) {
+    return JSON.stringify({ indicator: indicatorName, rows: [] });
+  }
+  return JSON.stringify({ indicator: indicatorName, rows });
 }

@@ -58,12 +58,14 @@ interface ForceGraphProps {
   links: GraphLink[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  // Editing + persistence hooks from the graph provider.
-  onReportPositions: (positions: Map<string, NodePosition>) => void;
-  onPin: (id: string, x: number, y: number) => void;
-  onUnpin: (id: string) => void;
-  onRemove: (id: string) => void;
-  onExplore: (node: GraphNode) => void;
+  // Editing + persistence hooks from the graph provider. Optional so the graph can
+  // also render read-only (e.g. as a Bigsail card), where there's no provider to
+  // persist positions or wire pin/remove/explore into.
+  onReportPositions?: (positions: Map<string, NodePosition>) => void;
+  onPin?: (id: string, x: number, y: number) => void;
+  onUnpin?: (id: string) => void;
+  onRemove?: (id: string) => void;
+  onExplore?: (node: GraphNode) => void;
 }
 
 // d3-force simulation rendered as SVG. The simulation mutates node x/y in place;
@@ -103,7 +105,7 @@ export function ForceGraph({
     for (const n of simNodes.current) {
       map.set(n.id, { x: n.x, y: n.y, fx: n.fx ?? null, fy: n.fy ?? null });
     }
-    onReportPositions(map);
+    onReportPositions?.(map);
   }, [onReportPositions]);
 
   // Reconcile incoming nodes/links into the simulation's mutable arrays, then
@@ -382,7 +384,7 @@ export function ForceGraph({
       const y = node.y ?? 0;
       node.fx = x;
       node.fy = y;
-      onPin(node.id, x, y);
+      onPin?.(node.id, x, y);
     } else {
       // No real movement — treat as a select toggle, and drop the transient pin.
       node.fx = null;
@@ -557,7 +559,7 @@ export function ForceGraph({
           <button
             type="button"
             onClick={() => {
-              onExplore(menuNode);
+              onExplore?.(menuNode);
               setMenu(null);
             }}
             className="block w-full px-3 py-1.5 text-left text-sm text-content hover:bg-elevated"
@@ -568,7 +570,7 @@ export function ForceGraph({
             <button
               type="button"
               onClick={() => {
-                onUnpin(menuNode.id);
+                onUnpin?.(menuNode.id);
                 setMenu(null);
               }}
               className="block w-full px-3 py-1.5 text-left text-sm text-content hover:bg-elevated"
@@ -579,7 +581,7 @@ export function ForceGraph({
           <button
             type="button"
             onClick={() => {
-              onRemove(menuNode.id);
+              onRemove?.(menuNode.id);
               setMenu(null);
             }}
             className="block w-full px-3 py-1.5 text-left text-sm text-danger-content hover:bg-elevated"

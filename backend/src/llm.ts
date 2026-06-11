@@ -1,13 +1,21 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { DEFAULT_MODEL, type Provider, providerForModel } from "./models";
+import { type CompositionPlan, planPreamble, planTurn } from "./planner";
 import { buildSystemPrompt } from "./prompt";
 import {
   buildTools,
+  correctionDirective,
   executeTool,
+  isDegenerate,
   type ToolDefinition,
   toOpenAITools,
 } from "./tools";
+
+// Per-turn cap on in-loop self-corrections. One graded retry on a degenerate
+// render is plenty for the demo (and never past MAX_ITERATIONS); more would risk
+// ping-ponging on a genuinely empty answer. Env-overridable like the other caps.
+const MAX_CORRECTIONS = Number(process.env.LLM_MAX_CORRECTIONS) || 1;
 
 // The LLM connector — a Platform seam. The route calls `createClient().complete()`
 // and never names a provider. The factory picks the client from the chosen model's
@@ -43,7 +51,12 @@ export interface LlmClient {
     // loop would otherwise be silent (before the first call, on loop re-entry,
     // while wrapping up). Cosmetic — it carries no tool semantics and is
     // superseded the moment a token / tool_start / tool_result arrives.
-    onStatus?: (message: string) => Promise<void>
+    onStatus?: (message: string) => Promise<void>,
+    // Fired once, pre-loop, when the planner produces an abstract composition plan
+    // for this turn (complex turns only). Carries WHICH capabilities + how they
+    // relate — never coordinates. The host forwards it as the `plan` SSE event;
+    // Bigsail consumes it. Absent on simple turns (the planner is gated).
+    onPlan?: (plan: CompositionPlan) => Promise<void>
   ): Promise<void>;
 }
 
@@ -183,7 +196,8 @@ function createClaudeClient(
       onToolStart,
       onToolResult,
       onLoopStart,
-      onStatus
+      onStatus,
+      onPlan
     ) {
       // The agent loop: call the API, handle tool_use if the model requests it,
       // feed results back, and repeat until the model produces a terminal response.
@@ -192,10 +206,32 @@ function createClaudeClient(
         content: m.content,
       }));
 
+      // Conditional planner pre-pass (gated): on a complex turn, decompose the
+      // request into an abstract composition plan, emit it (→ `plan` SSE / Bigsail),
+      // and fold a short preamble into the conversation so the loop is STEERED by
+      // it. Best-effort — null on simple turns or any failure → plain ReAct.
+      // Appended to the conversation prefix ONCE here (not per iteration), so the
+      // cached system/tools prefix is untouched and the preamble rides the
+      // conversation cache on iterations 2+.
+      const lastUser = [...messages].reverse().find((m) => m.role === "user");
+      if (lastUser) {
+        const plan = await planTurn(lastUser.content);
+        if (plan) {
+          await onPlan?.(plan);
+          history.push({
+            role: "user",
+            content: planPreamble(plan),
+          });
+        }
+      }
+
       // Counts trips through the loop. Iteration 1 is the initial call; every
       // increment past that means tool results were fed back and we're calling
       // the model again.
       let iteration = 0;
+
+      // In-loop self-correction counter for this turn (see MAX_CORRECTIONS).
+      let correctionCount = 0;
 
       // Per-turn token totals across every loop iteration. The point of logging
       // these is to make prompt caching *visible*: on iteration 1 the prefix is
@@ -351,10 +387,26 @@ function createClaudeClient(
           await onToolStart?.(tool.name, input);
           const result = await executeTool(tool.name, input, sessionId);
           await onToolResult?.(tool.name, result);
+          // Self-correction: if the result is degenerate (empty rows/data/items)
+          // and we haven't already corrected this turn, append a corrective
+          // directive to the tool_result content the MODEL sees (not the one the
+          // frontend parsed) so it self-heals on the next iteration. Bounded by
+          // MAX_CORRECTIONS and, transitively, MAX_ITERATIONS.
+          let modelResult = result;
+          if (
+            correctionCount < MAX_CORRECTIONS &&
+            isDegenerate(tool.name, result)
+          ) {
+            correctionCount++;
+            modelResult = result + correctionDirective(tool.name);
+            console.log(
+              `[self-correct] iter=${iteration} tool=${tool.name} degenerate → corrective retry ${correctionCount}/${MAX_CORRECTIONS}`
+            );
+          }
           toolResults.push({
             type: "tool_result",
             tool_use_id: tool.id,
-            content: result,
+            content: modelResult,
           });
         }
 
@@ -456,14 +508,30 @@ function createOpenAICompatClient(
       onToolStart,
       onToolResult,
       onLoopStart,
-      onStatus
+      onStatus,
+      onPlan
     ) {
       // The agent loop — identical control flow to the Claude client, parsing
       // OpenAI chunk deltas instead of Anthropic stream events.
       const history: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
         messages.map((m) => ({ role: m.role, content: m.content }));
 
+      // Conditional planner pre-pass (gated), same as the Claude client. The plan
+      // is appended to history as an extra user message; there's no prompt cache
+      // here, so this just steers the model. The planner itself always runs on
+      // Haiku, so non-Claude conversations still get planning + the `plan` event.
+      const lastUser = [...messages].reverse().find((m) => m.role === "user");
+      if (lastUser) {
+        const plan = await planTurn(lastUser.content);
+        if (plan) {
+          await onPlan?.(plan);
+          history.push({ role: "user", content: planPreamble(plan) });
+        }
+      }
+
       let iteration = 0;
+      // In-loop self-correction counter for this turn (see MAX_CORRECTIONS).
+      let correctionCount = 0;
 
       while (true) {
         iteration++;
@@ -601,10 +669,22 @@ function createOpenAICompatClient(
           await onToolStart?.(tool.name, input);
           const result = await executeTool(tool.name, input, sessionId);
           await onToolResult?.(tool.name, result);
+          // Self-correction, same as the Claude client (see there for rationale).
+          let modelResult = result;
+          if (
+            correctionCount < MAX_CORRECTIONS &&
+            isDegenerate(tool.name, result)
+          ) {
+            correctionCount++;
+            modelResult = result + correctionDirective(tool.name);
+            console.log(
+              `[self-correct] iter=${iteration} tool=${tool.name} degenerate → corrective retry ${correctionCount}/${MAX_CORRECTIONS}`
+            );
+          }
           history.push({
             role: "tool",
             tool_call_id: tool.id,
-            content: result,
+            content: modelResult,
           });
         }
         // Continue the loop — call the API again with the updated history.

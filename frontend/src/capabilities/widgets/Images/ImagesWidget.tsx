@@ -87,7 +87,9 @@ function Attribution({ img }: { img: ImageItem }) {
   return null;
 }
 
-function SpecImages({ spec }: { spec: ImagesSpec }) {
+// Self-contained single-spec gallery (masonry, attribution, explore menu). Used by
+// the Images tab and BigsailCard. Pure spec → JSX; canonical renderer.
+export function SpecImages({ spec }: { spec: ImagesSpec }) {
   const bus = useAgentEvents();
   // Ground each image's explore prompt in the gallery title when present.
   const titleCtx = spec.title ? ` from the "${spec.title}" gallery` : "";

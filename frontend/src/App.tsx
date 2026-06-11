@@ -7,6 +7,7 @@ import {
 // Importing a widget module registers its renderer against the capability registry.
 import "./capabilities/widgets/PlaceholderWidget";
 import "./capabilities/widgets/AgentDiagram";
+import "./capabilities/widgets/Bigsail";
 import "./capabilities/widgets/Chart";
 import "./capabilities/widgets/Health";
 import "./capabilities/widgets/Images";
@@ -15,6 +16,7 @@ import "./capabilities/widgets/Settings";
 import "./capabilities/widgets/Table";
 import "./capabilities/widgets/Timeline";
 import "./capabilities/widgets/Welcome";
+import { BigsailPlanProvider } from "./capabilities/widgets/Bigsail/BigsailPlanProvider";
 import { ChartProvider } from "./capabilities/widgets/Chart/useChartState";
 import { ImagesProvider } from "./capabilities/widgets/Images/useImagesState";
 import { KnowledgeGraphProvider } from "./capabilities/widgets/KnowledgeGraph/useKnowledgeGraphState";
@@ -58,26 +60,31 @@ export default function App() {
       <RadixTooltip.Provider delayDuration={300} skipDelayDuration={150}>
         <BackendStatusBanner />
         <AgentEventProvider>
-          {/* Subscribes to the bus at the root so the graph never misses a
+          {/* Stores the latest composition plan from the bus so Bigsail (which
+            mounts late) never misses one. Mounted at the root like the render-tool
+            providers; the only new provider Bigsail needs. */}
+          <BigsailPlanProvider>
+            {/* Subscribes to the bus at the root so the graph never misses a
             build_knowledge_graph payload — the widget can mount after the first
             one arrives. */}
-          <KnowledgeGraphProvider>
-            {/* Latest-wins render-tool providers — each stores the most recent
+            <KnowledgeGraphProvider>
+              {/* Latest-wins render-tool providers — each stores the most recent
                 spec from its tool_result and is mounted at the root so it never
                 misses one (the widget tab mounts only after the spec lands). */}
-            <TableProvider>
-              <ChartProvider>
-                <TimelineProvider>
-                  <ImagesProvider>
-                    <CapabilityProvider>
-                      <FirstArrivalWelcome />
-                      <Shell />
-                    </CapabilityProvider>
-                  </ImagesProvider>
-                </TimelineProvider>
-              </ChartProvider>
-            </TableProvider>
-          </KnowledgeGraphProvider>
+              <TableProvider>
+                <ChartProvider>
+                  <TimelineProvider>
+                    <ImagesProvider>
+                      <CapabilityProvider>
+                        <FirstArrivalWelcome />
+                        <Shell />
+                      </CapabilityProvider>
+                    </ImagesProvider>
+                  </TimelineProvider>
+                </ChartProvider>
+              </TableProvider>
+            </KnowledgeGraphProvider>
+          </BigsailPlanProvider>
         </AgentEventProvider>
       </RadixTooltip.Provider>
     </ThemeProvider>

@@ -177,7 +177,10 @@ export function ChartWidget(_props: { widget: Widget }) {
 // muted content tone.
 const AXIS_COLOR = "currentColor";
 
-function SpecChart({ spec }: { spec: ChartSpec }) {
+// The bare recharts node for one chart spec. Caller supplies the sizing wrapper
+// (ResponsiveContainer) and optional title — the ChartWidget tab does, and so does
+// BigsailCard. Pure spec → JSX; this is the canonical single-spec renderer.
+export function SpecChart({ spec }: { spec: ChartSpec }) {
   const common = {
     data: spec.data,
   };

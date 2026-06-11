@@ -6,7 +6,7 @@ import {
   useMemo,
   useReducer,
 } from "react";
-import { KNOWLEDGE_GRAPH_ID } from "./catalog";
+import { HOME_BASE_ID } from "./catalog";
 
 // The capability column's shared state.
 //
@@ -18,10 +18,10 @@ import { KNOWLEDGE_GRAPH_ID } from "./catalog";
 //   • `openTick`, an explicit-intent counter the mobile shell watches to surface
 //     its full-screen overlay.
 //
-// The Knowledge Graph is "home base": it is the default active view and the
-// fallback whenever nothing else is selected. Activating any capability (or the
-// Welcome page) is always allowed — empty capabilities just show their own
-// empty-state. Content lives in the per-widget providers, not here.
+// Bigsail is "home base": it is the default active view and the fallback whenever
+// nothing else is selected. Activating any capability (or the Welcome page) is
+// always allowed — empty capabilities just show their own empty-state. Content
+// lives in the per-widget providers, not here.
 interface CapabilityState {
   activeId: string;
   isFullscreen: boolean;
@@ -43,7 +43,7 @@ type Action =
   | { type: "reset" };
 
 const initialState: CapabilityState = {
-  activeId: KNOWLEDGE_GRAPH_ID,
+  activeId: HOME_BASE_ID,
   isFullscreen: false,
   openTick: 0,
   unseen: [],
