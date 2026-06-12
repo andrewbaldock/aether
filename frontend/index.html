@@ -16,13 +16,28 @@
     <script>
       (() => {
         try {
+          const el = document.documentElement;
           let t = localStorage.getItem("aether-theme");
           if (t !== "light" && t !== "dark") {
             t = window.matchMedia("(prefers-color-scheme: dark)").matches
               ? "dark"
               : "light";
           }
-          if (t === "dark") document.documentElement.classList.add("dark");
+          if (t === "dark") el.classList.add("dark");
+
+          // Typography prefs — mirrors useAppearance.tsx (TEXT_SIZE_PX/FONT_STACK).
+          // Seeded pre-paint so text size and body font don't flash on load.
+          const sizes = { xs: 14, sm: 15, md: 16, lg: 18 };
+          const s = localStorage.getItem("aether-text-size");
+          if (sizes[s]) el.style.fontSize = sizes[s] + "px";
+
+          const fonts = {
+            inter: '"Inter", ui-sans-serif, system-ui, sans-serif',
+            georgia: 'Georgia, Cambria, "Times New Roman", Times, serif',
+            lora: '"Lora", Georgia, Cambria, "Times New Roman", Times, serif',
+          };
+          const f = localStorage.getItem("aether-font-face");
+          if (fonts[f]) el.style.setProperty("--font-body", fonts[f]);
         } catch {}
       })();
     </script>
@@ -30,7 +45,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@700&family=Space+Grotesk:wght@500;600;700&family=Grenze+Gotisch:wght@500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@700&family=Space+Grotesk:wght@500;600;700&family=Grenze+Gotisch:wght@500;600;700&family=Inter:wght@400;500;600&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap"
       rel="stylesheet"
     />
   </head>

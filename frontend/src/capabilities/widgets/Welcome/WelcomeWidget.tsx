@@ -1,9 +1,8 @@
 import { Code, Network, Wrench } from "lucide-react";
 import { CASE_STUDY_URL, REPO_URL, SITE_URL } from "../../../lib/links";
+import { AdminTabs } from "../../../shell/AdminTabs";
 import type { Widget } from "../../registry";
-import { useCapabilities } from "../../useCapabilities";
 import { AgentDiagramWidget } from "../AgentDiagram/AgentDiagramWidget";
-import { HEALTH_WIDGET } from "../Health";
 
 // "Welcome to Aether" — the first-arrival explainer. It frames the live agent
 // diagram (the same viz the eyeball reveals) with a short pitch and callouts for
@@ -11,10 +10,12 @@ import { HEALTH_WIDGET } from "../Health";
 // and the tools the agent can reach for. The diagram itself is the real runtime
 // component, so this dogfoods the platform rather than drawing a static picture.
 export function WelcomeWidget(_props: { widget: Widget }) {
-  const { activate } = useCapabilities();
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-surface">
       <div className="mx-auto w-full max-w-2xl px-6 py-8">
+        <div className="mb-6">
+          <AdminTabs />
+        </div>
         <h1 className="font-display text-2xl font-semibold text-content">
           Welcome to Aether
         </h1>
@@ -98,16 +99,6 @@ export function WelcomeWidget(_props: { widget: Widget }) {
             <Code className="h-3 w-3" aria-hidden />
             GitHub
           </a>
-          <span aria-hidden className="text-content-faint">
-            ·
-          </span>
-          <button
-            type="button"
-            onClick={() => activate(HEALTH_WIDGET.id)}
-            className="transition-colors hover:text-content-muted"
-          >
-            System health →
-          </button>
         </footer>
       </div>
     </div>

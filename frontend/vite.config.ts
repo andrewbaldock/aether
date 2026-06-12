@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5174,
+    allowedHosts: ["aether-dev"],
     proxy: {
       "/api": "http://localhost:8000",
     },

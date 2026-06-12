@@ -8,7 +8,7 @@ import { rememberUnsplashDownload, triggerUnsplashDownloads } from "./unsplash";
 // Per-conversation cap on searches that actually return Unsplash photos. Once a
 // conversation hits this, further searches fall back to Wikimedia-only (silently).
 // Curbs real Unsplash usage per conversation, on top of the app-wide hourly limit.
-const MAX_UNSPLASH_SEARCHES_PER_CONVERSATION = 3;
+const MAX_UNSPLASH_SEARCHES_PER_CONVERSATION = 6;
 
 // ToolDefinition covers both regular tools (name/description/input_schema) and
 // Anthropic server-side tools like WebSearchTool20260209. Using ToolUnion keeps
@@ -288,6 +288,12 @@ export const RENDER_TIMELINE_TOOL: ToolDefinition = {
             start: { type: "string", description: "ISO date/datetime" },
             end: { type: "string", description: "optional ISO end (a range)" },
             group: { type: "string", description: "optional group id" },
+            icon: {
+              type: "string",
+              enum: [...ICON_VOCABULARY],
+              description:
+                "Optional. The single best-matching icon for THIS specific event, chosen ONLY from the allowed list — e.g. 'Swords' for a battle, 'Rocket' for a launch, 'Crown' for a coronation, 'BookOpen' for a publication, 'Flag' for a founding/declaration, 'Lightbulb' for an invention. Do NOT invent icon names outside the list. Omit if none fits well — a generic dot is shown.",
+            },
           },
           required: ["id", "content", "start"],
         },
@@ -395,6 +401,32 @@ export const WIKIDATA_QUERY_TOOL: ToolDefinition = {
   },
 };
 
+export const WIKIDATA_SEARCH_TOOL: ToolDefinition = {
+  name: "wikidata_search",
+  description:
+    "Resolve a name into its Wikidata entity or property ID (Q-number / P-number). ALWAYS call this FIRST to get the real IDs, then use them in wikidata_query — never guess or recall Q/P ids from memory, they're frequently wrong and a wrong id silently returns zero rows. Returns candidates each with a disambiguating description; pick the one whose description matches what you mean (e.g. 'Douglas Adams' the author Q42, not the engineer). Set type:'property' to look up a predicate like 'date of birth' (P569).",
+  input_schema: {
+    type: "object",
+    properties: {
+      search: {
+        type: "string",
+        description: "the name or label to look up, e.g. 'Douglas Adams' or 'date of birth'",
+      },
+      type: {
+        type: "string",
+        enum: ["item", "property"],
+        description:
+          "'item' for entities (people, places, things — Q-numbers), 'property' for predicates (P-numbers). Default 'item'.",
+      },
+      limit: {
+        type: "number",
+        description: "max candidates to return, 1-10 (default 5)",
+      },
+    },
+    required: ["search"],
+  },
+};
+
 export const WORLD_BANK_TOOL: ToolDefinition = {
   name: "world_bank",
   description:
@@ -420,7 +452,57 @@ export const WORLD_BANK_TOOL: ToolDefinition = {
   },
 };
 
-const DATA_TOOLS: ToolDefinition[] = [WIKIDATA_QUERY_TOOL, WORLD_BANK_TOOL];
+export const WIKIPEDIA_SUMMARY_TOOL: ToolDefinition = {
+  name: "wikipedia_summary",
+  description:
+    "Fetch the lead summary (and thumbnail) of one or more Wikipedia articles by exact title from the keyless Wikipedia REST API. Returns {title, description, extract, thumbnail, url} per article — real, sourced prose, not recall. Use it to enrich entities you're already discussing: flesh out a knowledge-graph node, source a table's description column, or ground a short text answer. Pass the EXACT article titles (the same value you'd set as a node's wikipediaTitle).",
+  input_schema: {
+    type: "object",
+    properties: {
+      titles: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          'Exact Wikipedia article titles, e.g. ["Aleister Crowley","Hermeticism"]. 1-10 titles.',
+      },
+    },
+    required: ["titles"],
+  },
+};
+
+export const OPENALEX_TOOL: ToolDefinition = {
+  name: "openalex_search",
+  description:
+    "Search the keyless OpenAlex scholarly graph for real works (papers/books) or authors and get back citation-ranked results. Returns clean rows ({title, authors, year, citations, venue, url} for works; {name, works_count, cited_by_count, top_concepts, url} for authors) — ideal for render_table / render_chart (rank by citations) / render_timeline (by year). Use for any 'most influential / most cited / key works on X' question instead of recalling figures.",
+  input_schema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "what to search for, e.g. 'hermeticism' or 'Carl Jung'",
+      },
+      entity: {
+        type: "string",
+        enum: ["works", "authors"],
+        description:
+          "search scholarly 'works' (papers/books) or 'authors' (people). Default works.",
+      },
+      count: {
+        type: "number",
+        description: "how many results, 1-25 (default 12)",
+      },
+    },
+    required: ["query"],
+  },
+};
+
+const DATA_TOOLS: ToolDefinition[] = [
+  WIKIDATA_SEARCH_TOOL,
+  WIKIDATA_QUERY_TOOL,
+  WORLD_BANK_TOOL,
+  WIKIPEDIA_SUMMARY_TOOL,
+  OPENALEX_TOOL,
+];
 
 // Anthropic server-side web search. Runs on Anthropic's infrastructure — the host
 // never calls executeTool() for it. Gated to Claude only (OpenAI-compat providers
@@ -476,8 +558,11 @@ const TOOL_STATUS_LABELS: Record<string, string> = {
   get_current_datetime: "Checking the time",
   search_images: "Searching for images",
   web_search: "Searching the web",
+  wikidata_search: "Looking up Wikidata ids",
   wikidata_query: "Querying Wikidata",
   world_bank: "Fetching World Bank data",
+  wikipedia_summary: "Reading Wikipedia",
+  openalex_search: "Searching scholarly works",
   build_knowledge_graph: "Mapping the knowledge graph",
   render_table: "Building a table",
   render_chart: "Building a chart",
@@ -498,9 +583,11 @@ export function toolStatusLabel(name: string, input?: unknown): string {
   const subject =
     obj && typeof obj.query === "string" && obj.query.trim()
       ? obj.query.trim()
-      : obj && typeof obj.title === "string" && obj.title.trim()
-        ? obj.title.trim()
-        : null;
+      : obj && typeof obj.search === "string" && obj.search.trim()
+        ? obj.search.trim()
+        : obj && typeof obj.title === "string" && obj.title.trim()
+          ? obj.title.trim()
+          : null;
 
   if (!subject) return `${base}…`;
   // Search tools read naturally with "for"; the rest don't take a subject suffix.
@@ -527,13 +614,19 @@ export function toolResultStatus(name: string, resultJson: string): string | nul
     Array.isArray(arr) ? arr.length : null;
 
   let n: number | null = null;
-  if (name === "wikidata_query") {
+  if (name === "wikidata_search") {
+    const obj = data as Record<string, unknown>;
+    n = count(obj?.results) ?? count(data);
+  } else if (name === "wikidata_query") {
     // SPARQL result: { rows: [...] } (or a bare array).
     const obj = data as Record<string, unknown>;
     n = count(obj?.rows) ?? count(data);
   } else if (name === "world_bank") {
     const obj = data as Record<string, unknown>;
     n = count(obj?.series) ?? count(obj?.rows) ?? count(data);
+  } else if (name === "wikipedia_summary" || name === "openalex_search") {
+    const obj = data as Record<string, unknown>;
+    n = count(obj?.rows) ?? count(data);
   } else if (name === "search_images") {
     const obj = data as Record<string, unknown>;
     n = count(obj?.images) ?? count(obj?.results) ?? count(data);
@@ -554,10 +647,16 @@ export async function executeTool(
       return new Date().toISOString();
     case "search_images":
       return searchImages(input, sessionId);
+    case "wikidata_search":
+      return wikidataSearch(input);
     case "wikidata_query":
       return wikidataQuery(input);
     case "world_bank":
       return worldBank(input);
+    case "wikipedia_summary":
+      return wikipediaSummary(input);
+    case "openalex_search":
+      return openalexSearch(input);
     case "render_images":
       // Fire Unsplash photographer-credit pings for the photos actually being
       // rendered (API-terms compliance), then echo like the other render tools.
@@ -615,6 +714,10 @@ export function isDegenerate(toolName: string, resultJson: string): boolean {
       return emptyArray(obj.rows);
     case "world_bank":
       return emptyArray(obj.rows);
+    case "wikipedia_summary":
+      return emptyArray(obj.rows);
+    case "openalex_search":
+      return emptyArray(obj.rows);
     default:
       return false;
   }
@@ -668,6 +771,11 @@ type ImageResult = {
   credit?: string;
   href?: string;
   source: "wikimedia" | "unsplash";
+  // "photo" for raster photographs, "document" for SVG diagrams, infographics,
+  // scanned pages, charts, etc. The model curates on this: render the genuine
+  // photos AND any document that's genuinely interesting/relevant, dropping only
+  // boring chart/document noise. Unsplash is always photos; only Commons varies.
+  kind?: "photo" | "document";
 };
 
 // extmetadata / HTML-bearing values: strip tags, decode the handful of entities
@@ -699,6 +807,7 @@ type CommonsPage = {
   imageinfo?: Array<{
     thumburl?: string;
     url?: string;
+    mime?: string;
     descriptionurl?: string;
     extmetadata?: {
       ObjectName?: CommonsExtMeta;
@@ -707,6 +816,16 @@ type CommonsPage = {
     };
   }>;
 };
+
+// Commons File: namespace hosts SVG diagrams, scanned pages, and infographics
+// alongside real photos. We DON'T filter these out — an interesting, relevant
+// document can be exactly what an abstract/technical query wants. Instead we tag
+// each result's `kind` (photo vs document) from its MIME and let the model curate:
+// keep the genuine photos AND any worthwhile document, drop only boring chart noise.
+// Raster MIME types we treat as photographs; everything else (svg+xml, pdf, tiff…)
+// is a "document". (Audio/video can't render in a gallery, so those we do drop.)
+const COMMONS_PHOTO_MIME = /^image\/(jpeg|png|webp|gif)$/;
+const COMMONS_RENDERABLE_MIME = /^(image\/|application\/pdf)/;
 
 async function searchCommons(
   query: string,
@@ -720,7 +839,7 @@ async function searchCommons(
   url.searchParams.set("gsrnamespace", "6"); // File: namespace
   url.searchParams.set("gsrlimit", String(limit));
   url.searchParams.set("prop", "imageinfo");
-  url.searchParams.set("iiprop", "url|extmetadata");
+  url.searchParams.set("iiprop", "url|mime|extmetadata");
   url.searchParams.set("iiurlwidth", "800"); // generate an 800px thumb to display
   url.searchParams.set(
     "iiextmetadatafilter",
@@ -741,6 +860,13 @@ async function searchCommons(
       const info = p.imageinfo?.[0];
       const url = info?.thumburl ?? info?.url;
       if (!url) return null;
+      // Drop only what can't render in a gallery (audio/video); keep photos AND
+      // documents (SVG/PDF/etc.), tagging `kind` so the model can curate. A
+      // missing MIME is rare; assume photo so we don't lose a usable result.
+      const mime = info?.mime;
+      if (mime && !COMMONS_RENDERABLE_MIME.test(mime)) return null;
+      const kind: ImageResult["kind"] =
+        mime && !COMMONS_PHOTO_MIME.test(mime) ? "document" : "photo";
       const meta = info?.extmetadata;
       return {
         url,
@@ -749,6 +875,7 @@ async function searchCommons(
         credit: stripHtml(meta?.Artist?.value),
         href: info?.descriptionurl,
         source: "wikimedia",
+        kind,
       };
     })
     .filter((r): r is ImageResult => r !== null);
@@ -826,6 +953,7 @@ async function searchUnsplash(
         // "on Unsplash" attribution link.
         href: p.links?.html,
         source: "unsplash",
+        kind: "photo", // Unsplash is always photographs
       };
     })
     .filter((r): r is ImageResult => r !== null);
@@ -919,6 +1047,78 @@ function capCell(value: string): string {
 
 type SparqlBinding = Record<string, { value?: string } | undefined>;
 
+// --- wikidata_search -------------------------------------------------------
+// Name → Q/P id resolver over the wbsearchentities API. The model must call this
+// before wikidata_query so it writes SPARQL with real, verified ids instead of
+// recalled ones (the silent-zero-rows trap). Note the host is www.wikidata.org
+// (the wiki API), NOT query.wikidata.org (the SPARQL endpoint). Same fetch
+// discipline as wikidataQuery (timeout, descriptive User-Agent, capped cells).
+const WIKIDATA_SEARCH_ENDPOINT = "https://www.wikidata.org/w/api.php";
+
+interface WbSearchHit {
+  id?: string;
+  label?: string;
+  description?: string;
+}
+
+async function wikidataSearch(input: unknown): Promise<string> {
+  const { search, type, limit } = (input ?? {}) as {
+    search?: string;
+    type?: string;
+    limit?: number;
+  };
+  if (!search || typeof search !== "string") {
+    return JSON.stringify({
+      error: "wikidata_search requires a `search` string.",
+    });
+  }
+  const cap = Math.min(10, Math.max(1, Math.round(limit ?? 5)));
+  const entityType = type === "property" ? "property" : "item";
+
+  const url = new URL(WIKIDATA_SEARCH_ENDPOINT);
+  url.searchParams.set("action", "wbsearchentities");
+  url.searchParams.set("search", search);
+  url.searchParams.set("language", "en");
+  url.searchParams.set("type", entityType);
+  url.searchParams.set("limit", String(cap));
+  url.searchParams.set("format", "json");
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": DATA_TOOL_USER_AGENT,
+      },
+      signal: AbortSignal.timeout(DATA_TOOL_TIMEOUT_MS),
+    });
+  } catch (err) {
+    return JSON.stringify({
+      error: `Wikidata search failed (${String(err)}). Tell the user and offer to try again.`,
+    });
+  }
+  if (!res.ok) {
+    return JSON.stringify({
+      error: `Wikidata search returned ${res.status}. Tell the user and offer to try again.`,
+    });
+  }
+
+  const data = (await res.json()) as { search?: WbSearchHit[] };
+  const results = (data.search ?? [])
+    .map((h) => {
+      if (!h.id) return null;
+      const row: { id: string; label?: string; description?: string } = {
+        id: h.id,
+      };
+      if (h.label) row.label = capCell(h.label);
+      if (h.description) row.description = capCell(h.description);
+      return row;
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+
+  return JSON.stringify({ results });
+}
+
 async function wikidataQuery(input: unknown): Promise<string> {
   const { query, limit } = (input ?? {}) as {
     query?: string;
@@ -968,7 +1168,13 @@ async function wikidataQuery(input: unknown): Promise<string> {
   const vars = data.head?.vars ?? [];
   const bindings = data.results?.bindings ?? [];
   if (bindings.length === 0) {
-    return JSON.stringify({ vars, rows: [] });
+    // Valid query, no matches — almost always a wrong Q/P id. Point the model at
+    // the resolver instead of letting it read this as "nothing exists" and recall.
+    return JSON.stringify({
+      vars,
+      rows: [],
+      hint: "The query was valid but matched nothing — a Q-id or P-id is probably wrong. Call wikidata_search to get the correct ids, then retry. Don't fall back to recalled facts.",
+    });
   }
 
   // Flatten each binding to a plain {var: value} object; drop Wikidata's
@@ -1086,4 +1292,182 @@ async function worldBank(input: unknown): Promise<string> {
     return JSON.stringify({ indicator: indicatorName, rows: [] });
   }
   return JSON.stringify({ indicator: indicatorName, rows });
+}
+
+// --- wikipedia_summary -----------------------------------------------------
+// Keyless Wikipedia REST summary endpoint: the lead paragraph + thumbnail of an
+// article by exact title. Enriches entities we already store a wikipediaTitle for
+// (KG nodes, table descriptions) with real sourced prose instead of recall. Same
+// fetch discipline as the other data tools; titles fetched in parallel, each
+// failure isolated so one bad title doesn't sink the batch. Returns {rows:[...]}.
+
+const WIKIPEDIA_SUMMARY_BASE =
+  "https://en.wikipedia.org/api/rest_v1/page/summary";
+const MAX_WIKIPEDIA_TITLES = 10;
+
+type WikipediaSummaryResponse = {
+  title?: string;
+  description?: string;
+  extract?: string;
+  thumbnail?: { source?: string };
+  content_urls?: { desktop?: { page?: string } };
+};
+
+async function fetchOneWikipediaSummary(
+  title: string
+): Promise<Record<string, string> | null> {
+  // The REST path takes the title URL-encoded, with spaces as underscores.
+  const slug = encodeURIComponent(title.trim().replace(/\s+/g, "_"));
+  let res: Response;
+  try {
+    res = await fetch(`${WIKIPEDIA_SUMMARY_BASE}/${slug}`, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": DATA_TOOL_USER_AGENT,
+      },
+      signal: AbortSignal.timeout(DATA_TOOL_TIMEOUT_MS),
+    });
+  } catch {
+    return null; // network/timeout — skip this title, keep the rest
+  }
+  if (!res.ok) return null; // 404 (no such article) etc. — skip silently
+  const data = (await res.json()) as WikipediaSummaryResponse;
+  if (!data.extract) return null; // disambiguation/empty pages carry no extract
+  const row: Record<string, string> = {
+    title: data.title ?? title,
+    extract: capCell(data.extract),
+  };
+  if (data.description) row.description = capCell(data.description);
+  if (data.thumbnail?.source) row.thumbnail = data.thumbnail.source;
+  if (data.content_urls?.desktop?.page) row.url = data.content_urls.desktop.page;
+  return row;
+}
+
+async function wikipediaSummary(input: unknown): Promise<string> {
+  const { titles } = (input ?? {}) as { titles?: unknown };
+  const list = Array.isArray(titles)
+    ? titles
+        .filter((t): t is string => typeof t === "string" && t.trim() !== "")
+        .map((t) => t.trim())
+        .slice(0, MAX_WIKIPEDIA_TITLES)
+    : [];
+  if (list.length === 0) {
+    return JSON.stringify({
+      error: "wikipedia_summary requires a `titles` array of article titles.",
+    });
+  }
+  const settled = await Promise.all(list.map(fetchOneWikipediaSummary));
+  const rows = settled.filter(
+    (r): r is Record<string, string> => r !== null
+  );
+  return JSON.stringify({ rows });
+}
+
+// --- openalex_search -------------------------------------------------------
+// Keyless OpenAlex scholarly graph: citation-ranked works or authors for a query.
+// Great fodder for "most influential / most cited / key works on X" — rows feed
+// straight into render_table / render_chart (by citations) / render_timeline (by
+// year). Same fetch discipline; results are flattened to compact, capped rows.
+// OpenAlex asks for a contact email in the query (the "polite pool") — we send the
+// project contact, same spirit as the User-Agent on the other tools.
+
+const OPENALEX_BASE = "https://api.openalex.org";
+const OPENALEX_CONTACT = "baldrocks-aether@example.com"; // polite-pool contact
+const OPENALEX_MAX_RESULTS = 25;
+
+type OpenAlexWork = {
+  display_name?: string;
+  publication_year?: number;
+  cited_by_count?: number;
+  authorships?: Array<{ author?: { display_name?: string } }>;
+  primary_location?: { source?: { display_name?: string } };
+  id?: string;
+};
+type OpenAlexAuthor = {
+  display_name?: string;
+  works_count?: number;
+  cited_by_count?: number;
+  x_concepts?: Array<{ display_name?: string }>;
+  id?: string;
+};
+
+async function openalexSearch(input: unknown): Promise<string> {
+  const { query, entity, count } = (input ?? {}) as {
+    query?: unknown;
+    entity?: unknown;
+    count?: unknown;
+  };
+  if (typeof query !== "string" || !query.trim()) {
+    return JSON.stringify({
+      error: "openalex_search requires a `query` string.",
+    });
+  }
+  const kind = entity === "authors" ? "authors" : "works";
+  const cap = Math.min(
+    OPENALEX_MAX_RESULTS,
+    Math.max(1, Math.round(typeof count === "number" ? count : 12))
+  );
+
+  const url = new URL(`${OPENALEX_BASE}/${kind}`);
+  url.searchParams.set("search", query.trim());
+  url.searchParams.set("per_page", String(cap));
+  url.searchParams.set("sort", "cited_by_count:desc"); // most influential first
+  url.searchParams.set("mailto", OPENALEX_CONTACT);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": DATA_TOOL_USER_AGENT,
+      },
+      signal: AbortSignal.timeout(DATA_TOOL_TIMEOUT_MS),
+    });
+  } catch (err) {
+    return JSON.stringify({
+      error: `OpenAlex search failed (${String(err)}). Tell the user and offer to try again.`,
+    });
+  }
+  if (!res.ok) {
+    return JSON.stringify({
+      error: `OpenAlex returned ${res.status}. Try a simpler query.`,
+    });
+  }
+
+  const body = (await res.json()) as { results?: unknown };
+  const results = Array.isArray(body.results) ? body.results : [];
+
+  const rows =
+    kind === "works"
+      ? (results as OpenAlexWork[]).map((w) => ({
+          title: capCell(w.display_name ?? "Untitled"),
+          authors: capCell(
+            (w.authorships ?? [])
+              .map((a) => a.author?.display_name)
+              .filter((n): n is string => !!n)
+              .slice(0, 5)
+              .join(", ")
+          ),
+          year: w.publication_year ?? null,
+          citations: w.cited_by_count ?? 0,
+          venue: w.primary_location?.source?.display_name
+            ? capCell(w.primary_location.source.display_name)
+            : undefined,
+          url: w.id,
+        }))
+      : (results as OpenAlexAuthor[]).map((a) => ({
+          name: capCell(a.display_name ?? "Unknown"),
+          works_count: a.works_count ?? 0,
+          cited_by_count: a.cited_by_count ?? 0,
+          top_concepts: capCell(
+            (a.x_concepts ?? [])
+              .map((c) => c.display_name)
+              .filter((n): n is string => !!n)
+              .slice(0, 4)
+              .join(", ")
+          ),
+          url: a.id,
+        }));
+
+  return JSON.stringify({ entity: kind, rows });
 }

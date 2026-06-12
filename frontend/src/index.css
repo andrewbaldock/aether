@@ -125,6 +125,21 @@ body {
   margin: 0;
   /* Flash guard now follows the token; .dark is set pre-paint (see index.html). */
   background-color: var(--surface);
+  /* User-selectable body font (Settings → Font). --font-body is set on <html>
+     by useAppearance / the index.html pre-paint script; unset falls back to the
+     system sans stack, so the default experience is unchanged. The brand font
+     (font-display) is deliberately not affected. */
+  font-family: var(
+    --font-body,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif
+  );
 }
 
 /* ── Agent-loop diagram animations ──────────────────────────────────────────

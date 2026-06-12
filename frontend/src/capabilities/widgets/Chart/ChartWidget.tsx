@@ -73,7 +73,7 @@ export function ChartWidget(_props: { widget: Widget }) {
   const fill = useFillFromConversation({
     hasContent: entries.length > 0,
     gentlePrompt:
-      "Looking back at what we've already discussed, chart it now if anything quantitative has come up. This is about the conversation so far, not future messages — if there's genuinely nothing chart-worthy yet, just say so briefly.",
+      "Build the best chart you can about what we've been discussing. Visualize the quantitative shape of the subject — trends, distributions, or comparisons — and broaden from what was literally said: chart the real numbers the topic involves, fetching figures from your data sources if needed rather than only plotting numbers someone typed. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call render_chart now. Only skip if the subject genuinely has no quantitative dimension at all.",
     forcedPrompt:
       "Call the render_chart tool right now to visualize the most chart-worthy numbers from our conversation so far.",
     displayText: "Update the Chart from our conversation.",
