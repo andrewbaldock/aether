@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import type { CompositionPlan } from "../capabilities/widgets/Bigsail/plan";
+import type { CompositionPlan } from "../lib/composition";
 import { useAgentEvents } from "./AgentEventContext";
 import { parseSseChunk } from "./parseSseChunk";
 

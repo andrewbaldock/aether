@@ -8,17 +8,13 @@
 // pure glue: the grid config, the template, and the merge that preserves the user's
 // saved arrangement while auto-placing new cards.
 
+import type { TilesLayoutItem } from "../../../lib/composition";
 import type { Card, CardCapability } from "./cards";
 
-// One placed card in grid units. Mirrors the backend UiState.tilesLayout shape
-// and GridStack's serialized node ({id,x,y,w,h}).
-export interface TilesLayoutItem {
-  id: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
+// The persisted grid-item shape lives in the neutral lib/composition module (the
+// session hooks read it too, without depending on this widget); re-exported here so
+// the Bigsail-local import path still resolves.
+export type { TilesLayoutItem };
 
 // The grid is always this many columns wide. Cards are fractions of it.
 export const GRID_COLUMNS = 24;
@@ -141,13 +137,28 @@ export function autoLayout(cards: Card[], stacked: boolean): PlacedCard[] {
     out.push({ card: kgCard, x: 0, y, w: HALF_W, h: SLOT_H, autoPlace: true });
   }
   if (timelineCard) {
-    out.push({ card: timelineCard, x: HALF_W, y, w: HALF_W, h: SLOT_H, autoPlace: true });
+    out.push({
+      card: timelineCard,
+      x: HALF_W,
+      y,
+      w: HALF_W,
+      h: SLOT_H,
+      autoPlace: true,
+    });
   }
   if (kgCard || timelineCard) y += SLOT_H;
 
   // 2. Table — full width.
-  if (tables.length > 0) {
-    out.push({ card: tables[0]!, x: 0, y, w: FULL_W, h: SLOT_H, autoPlace: true });
+  const tableCard = tables[0];
+  if (tableCard) {
+    out.push({
+      card: tableCard,
+      x: 0,
+      y,
+      w: FULL_W,
+      h: SLOT_H,
+      autoPlace: true,
+    });
     y += SLOT_H;
   }
 
@@ -156,9 +167,10 @@ export function autoLayout(cards: Card[], stacked: boolean): PlacedCard[] {
   y = stackFullWidth(charts, y, out);
 
   // 4. Images — full width.
-  if (images.length > 0) {
-    const h = imagesSlotH(images[0]!);
-    out.push({ card: images[0]!, x: 0, y, w: FULL_W, h, autoPlace: true });
+  const imagesCard = images[0];
+  if (imagesCard) {
+    const h = imagesSlotH(imagesCard);
+    out.push({ card: imagesCard, x: 0, y, w: FULL_W, h, autoPlace: true });
     y += h;
   }
 
@@ -203,15 +215,12 @@ export function placeCards(
   return cards.map((card) => {
     const s = savedById.get(card.id);
     if (s) {
-      // Clamp a saved width to the grid so a restored card never overflows.
-      return {
-        card,
-        x: s.x,
-        y: s.y,
-        w: Math.min(s.w, GRID_COLUMNS),
-        h: s.h,
-        autoPlace: false,
-      };
+      // Clamp a saved card to the grid so a restored card never overflows: width
+      // first, then x into [0, GRID_COLUMNS - w] so x + w can't exceed the grid
+      // (a stale/corrupt saved x like {x:20,w:12} would otherwise run off-grid).
+      const w = clamp(s.w, 1, GRID_COLUMNS);
+      const x = clamp(s.x, 0, GRID_COLUMNS - w);
+      return { card, x, y: s.y, w, h: s.h, autoPlace: false };
     }
     // A genuinely-new card on an existing saved arrangement: GridStack finds it a
     // gap (no explicit x/y). Default to a full-width standard slot.

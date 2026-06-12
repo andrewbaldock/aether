@@ -20,7 +20,9 @@ const EMPTY_SPEC = {} as CardSpec;
 // One skeleton per plan intent, in plan order. Ids are stable per (capability,
 // ordinal) so re-deriving the same plan yields the same skeleton ids — placement
 // stays put across renders. The ordinal disambiguates two intents of one type
-// (e.g. two charts).
+// (e.g. two charts). sizeHint is carried only so the skeleton satisfies the Card
+// type AND so an images skeleton gets a sensible default slot height — placeCards
+// is template-driven and ignores sizeHint for every other capability.
 export function planToSkeletons(plan: CompositionPlan | null): Card[] {
   if (!plan || plan.intents.length === 0) return [];
   const seen = new Map<CardCapability, number>();
@@ -40,9 +42,10 @@ export function planToSkeletons(plan: CompositionPlan | null): Card[] {
 // Merge real cards with plan skeletons so the canvas shows its final shape while
 // tools are still running. Rule: a real card SUPERSEDES a pending skeleton of the
 // same capability (one-for-one, in arrival order), and any skeleton with no real
-// counterpart yet stays as a shimmer. Real cards keep their order first (so the
-// masonry matches the un-planned path exactly once everything has landed), then
-// leftover skeletons fill in behind.
+// counterpart yet stays as a shimmer. Real cards come first, leftover skeletons
+// behind — but note final placement is template-driven (placeCards buckets by
+// capability into fixed slots), so this list order affects WHICH cards exist, not
+// where they land; reordering within a capability doesn't move anything.
 //
 //   plan: [table, chart, chart, kg]   real so far: [table, chart]
 //   → [realTable, realChart, skeletonChart, skeletonKg]

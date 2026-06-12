@@ -11,13 +11,20 @@ function Block({ className = "" }: { className?: string }) {
   return <div className={`tiles-skeleton-shimmer rounded ${className}`} />;
 }
 
+// Stable keys for the fixed-count decorative rows/tiles. These shimmer blocks are
+// static and never reorder, so a named key per slot is both stable and honest
+// (a bare array index would trip noArrayIndexKey for no real reason).
+const TABLE_ROWS = ["r0", "r1", "r2", "r3", "r4"];
+const TIMELINE_ROWS = ["t0", "t1", "t2"];
+const IMAGE_TILES = ["i0", "i1", "i2", "i3"];
+
 function TableSilhouette() {
   return (
     <div className="flex h-full flex-col gap-2 p-3">
       <Block className="h-4 w-1/3" />
       <div className="mt-1 flex flex-col gap-2">
-        {Array.from({ length: 5 }, (_, i) => (
-          <Block key={i} className="h-3 w-full" />
+        {TABLE_ROWS.map((k) => (
+          <Block key={k} className="h-3 w-full" />
         ))}
       </div>
     </div>
@@ -31,8 +38,8 @@ function ChartSilhouette() {
     <div className="flex h-full flex-col gap-2 p-3">
       <Block className="h-4 w-1/4" />
       <div className="flex min-h-0 flex-1 items-end gap-2">
-        {heights.map((h, i) => (
-          <Block key={i} className={`w-full ${h}`} />
+        {heights.map((h) => (
+          <Block key={h} className={`w-full ${h}`} />
         ))}
       </div>
     </div>
@@ -42,8 +49,8 @@ function ChartSilhouette() {
 function TimelineSilhouette() {
   return (
     <div className="flex h-full flex-col justify-center gap-4 p-4">
-      {Array.from({ length: 3 }, (_, i) => (
-        <div key={i} className="flex items-center gap-3">
+      {TIMELINE_ROWS.map((k) => (
+        <div key={k} className="flex items-center gap-3">
           <Block className="h-3 w-3 shrink-0 rounded-full" />
           <Block className="h-3 w-1/4" />
           <Block className="h-3 flex-1" />
@@ -64,9 +71,9 @@ function GraphSilhouette() {
   ];
   return (
     <div className="relative h-full w-full p-3">
-      {dots.map((pos, i) => (
+      {dots.map((pos) => (
         <div
-          key={i}
+          key={pos}
           className={`tiles-skeleton-shimmer absolute h-8 w-8 rounded-full ${pos}`}
         />
       ))}
@@ -77,8 +84,8 @@ function GraphSilhouette() {
 function ImagesSilhouette() {
   return (
     <div className="grid h-full grid-cols-2 gap-2 p-3">
-      {Array.from({ length: 4 }, (_, i) => (
-        <Block key={i} className="h-full w-full" />
+      {IMAGE_TILES.map((k) => (
+        <Block key={k} className="h-full w-full" />
       ))}
     </div>
   );

@@ -91,7 +91,13 @@ export function BigsailWidget(_props: { widget: Widget }) {
   const plan = useBigsailPlan();
   const planSkeletons = useMemo(() => planToSkeletons(plan), [plan]);
 
-  const DRIP_INTERVAL_MS = 10_000;
+  // One planned skeleton pops in per interval while we wait for the first real
+  // panel. Tuned so the full planned shape (1–4 slots) reveals within the typical
+  // pre-first-panel window: at 10s the drip was effectively invisible on a fast
+  // turn (phase 2 superseded it before the first skeleton appeared) and sluggish
+  // on a slow one (~40s for four slots). ~2.5s lands the whole shape in the first
+  // several seconds of spinner-only time, where it actually reads.
+  const DRIP_INTERVAL_MS = 2500;
   const [dripCount, setDripCount] = useState(0);
   const firstPanelArrived = realCards.length > 0;
   useEffect(() => {

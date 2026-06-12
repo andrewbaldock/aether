@@ -1,26 +1,13 @@
-// The abstract composition plan the backend planner emits over the new `plan` SSE
+// The abstract composition plan the backend planner emits over the `plan` SSE
 // event. It says WHICH capabilities participate and HOW they relate — never WHERE
 // (no coordinates, sizes, card ids, or Bigsail vocabulary). Bigsail is the first
-// consumer; any future consumer maps this to its own geometry. Mirrors the backend
-// CompositionPlan shape in backend/src/planner.ts.
-
-import type { CardCapability } from "./cards";
-
-export interface PlanIntent {
-  capability: CardCapability;
-  // Optional human-readable subject ("France/Germany/Spain populations"). Used to
-  // order/label cards; never required.
-  subject?: string;
-}
-
-export interface PlanRelationship {
-  // Indices into intents[]. Directed: from → to.
-  from: number;
-  to: number;
-  label?: string;
-}
-
-export interface CompositionPlan {
-  intents: PlanIntent[];
-  relationships: PlanRelationship[];
-}
+// consumer; any future consumer maps this to its own geometry.
+//
+// The canonical definitions now live in the neutral lib/composition module (so the
+// shell can type against them without depending on this widget); this file re-exports
+// them for the Bigsail-local import path. Mirrors backend/src/planner.ts.
+export type {
+  CompositionPlan,
+  PlanIntent,
+  PlanRelationship,
+} from "../../../lib/composition";

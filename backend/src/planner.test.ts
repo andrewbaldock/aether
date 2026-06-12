@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { CompositionPlan } from "./planner";
-import { mightNeedPlan, planPreamble } from "./planner";
+import { mightNeedPlan, parsePlan, planPreamble } from "./planner";
 
 describe("mightNeedPlan (router heuristic)", () => {
   it("skips short trivial turns", () => {
@@ -50,5 +50,54 @@ describe("planPreamble", () => {
       relationships: [],
     };
     expect(planPreamble(plan)).not.toContain("Relationships:");
+  });
+});
+
+describe("parsePlan", () => {
+  it("parses a clean JSON object", () => {
+    const plan = parsePlan(
+      '{"intents":[{"capability":"chart","subject":"populations"}],"relationships":[]}'
+    );
+    expect(plan).toEqual({
+      intents: [{ capability: "chart", subject: "populations" }],
+      relationships: [],
+    });
+  });
+
+  it("extracts JSON from a ```json fenced / prose-wrapped reply", () => {
+    const raw =
+      'Sure! Here is the plan:\n```json\n{"intents":[{"capability":"timeline"}],"relationships":[]}\n```';
+    expect(parsePlan(raw)).toEqual({
+      intents: [{ capability: "timeline" }],
+      relationships: [],
+    });
+  });
+
+  it("drops intents with an invalid capability but keeps the rest", () => {
+    const plan = parsePlan(
+      '{"intents":[{"capability":"3d-scene"},{"capability":"table"}],"relationships":[]}'
+    );
+    expect(plan).toEqual({
+      intents: [{ capability: "table" }],
+      relationships: [],
+    });
+  });
+
+  it("drops self-referential and out-of-range relationships", () => {
+    const plan = parsePlan(
+      '{"intents":[{"capability":"chart"},{"capability":"table"}],"relationships":[{"from":0,"to":0},{"from":0,"to":5},{"from":0,"to":1,"label":"summarizes"}]}'
+    );
+    expect(plan?.relationships).toEqual([
+      { from: 0, to: 1, label: "summarizes" },
+    ]);
+  });
+
+  it("returns null when intents is empty (nothing to compose)", () => {
+    expect(parsePlan('{"intents":[],"relationships":[]}')).toBeNull();
+  });
+
+  it("returns null on non-JSON instead of throwing", () => {
+    expect(parsePlan("I can't help with that.")).toBeNull();
+    expect(parsePlan("")).toBeNull();
   });
 });

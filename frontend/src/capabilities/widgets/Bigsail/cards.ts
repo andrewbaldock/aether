@@ -5,18 +5,16 @@
 // Spec* renderer. Bigsail "mirrors" the tabs: every spec that appears in a tab
 // also appears here as a live card.
 
+import type { Capability } from "../../../lib/composition";
 import type { ChartSpec } from "../Chart/types";
 import type { ImagesSpec } from "../Images/types";
 import type { GraphLink, GraphNode } from "../KnowledgeGraph/types";
 import type { TableSpec } from "../Table/types";
 import type { TimelineSpec } from "../Timeline/types";
 
-export type CardCapability =
-  | "table"
-  | "chart"
-  | "timeline"
-  | "knowledge-graph"
-  | "images";
+// Bigsail's name for the shared capability vocabulary (lib/composition.Capability).
+// Aliased rather than redefined so the protocol type and the card model can't drift.
+export type CardCapability = Capability;
 
 export interface SizeHint {
   w: number;

@@ -5,7 +5,7 @@ import {
   useMemo,
   useRef,
 } from "react";
-import type { CompositionPlan } from "../capabilities/widgets/Bigsail/plan";
+import type { CompositionPlan } from "../lib/composition";
 
 // The agent's runtime events, normalised for the frontend. These mirror the SSE
 // wire events the backend emits (text / tool_start / tool_result / loop_start /

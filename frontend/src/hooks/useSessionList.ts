@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import type { TilesLayoutItem } from "../capabilities/widgets/Bigsail/tilesLayout";
+import type { TilesLayoutItem } from "../lib/composition";
 import { apiFetch } from "../lib/queryClient";
 
 export interface Session {

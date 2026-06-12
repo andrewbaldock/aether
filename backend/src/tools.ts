@@ -1401,7 +1401,7 @@ async function wikipediaSummary(input: unknown): Promise<string> {
 // project contact, same spirit as the User-Agent on the other tools.
 
 const OPENALEX_BASE = "https://api.openalex.org";
-const OPENALEX_CONTACT = "baldrocks-aether@example.com"; // polite-pool contact
+const OPENALEX_CONTACT = "andrewbaldock3@gmail.com"; // polite-pool contact (reachable, per OpenAlex terms)
 const OPENALEX_MAX_RESULTS = 25;
 
 type OpenAlexWork = {

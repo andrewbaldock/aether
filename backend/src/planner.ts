@@ -106,7 +106,8 @@ Rules:
 
 // Validate + coerce the model's JSON into a CompositionPlan, dropping anything
 // malformed. Returns null if there's nothing usable (so callers skip the plan).
-function parsePlan(raw: string): CompositionPlan | null {
+// Exported for unit testing — the rest of the module reaches it via planTurn.
+export function parsePlan(raw: string): CompositionPlan | null {
   let data: unknown;
   try {
     // The model may wrap JSON in prose or a code fence despite instructions —
