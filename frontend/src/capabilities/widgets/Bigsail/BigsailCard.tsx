@@ -9,6 +9,7 @@ import type { TableSpec } from "../Table/types";
 import { SpecTimeline } from "../Timeline/TimelineWidget";
 import type { TimelineSpec } from "../Timeline/types";
 import type { Card, GraphCardSpec } from "./cards";
+import { SkeletonCard } from "./SkeletonCard";
 
 // One card's CONTENTS on the Tiles canvas. It renders the SAME shared Spec*
 // renderer the tab widgets use (the canonical single-spec components) — Bigsail
@@ -20,6 +21,10 @@ import type { Card, GraphCardSpec } from "./cards";
 // tanstack-table measure against real DOM.
 
 function CardBody({ card }: { card: Card }) {
+  // A planned-but-not-yet-filled card: shimmer in its capability's silhouette
+  // until its tool_result lands and a real card supersedes it.
+  if (card.placeholder) return <SkeletonCard type={card.capabilityType} />;
+
   switch (card.capabilityType) {
     case "chart": {
       const spec = card.spec as ChartSpec;
@@ -67,16 +72,25 @@ function CardBody({ card }: { card: Card }) {
       );
     case "knowledge-graph": {
       const spec = card.spec as GraphCardSpec;
-      // The live force graph as one card. Its own d3-zoom handles in-card pan/zoom;
-      // gestures starting inside .bigsail-card are excluded from the canvas zoom.
+      // The live force graph as one card, titled with the conversation so it reads
+      // as "the graph of THIS conversation". Its own d3-zoom handles in-card
+      // pan/zoom; gestures starting inside .bigsail-card are excluded from the
+      // canvas zoom.
       return (
-        <div className="h-full">
-          <ForceGraph
-            nodes={spec.nodes}
-            links={spec.links}
-            selectedId={null}
-            onSelect={() => {}}
-          />
+        <div className="flex h-full flex-col">
+          {spec.title && (
+            <h2 className="shrink-0 px-3 pt-3 pb-1 font-display text-sm font-semibold text-content">
+              {spec.title}
+            </h2>
+          )}
+          <div className="min-h-0 flex-1">
+            <ForceGraph
+              nodes={spec.nodes}
+              links={spec.links}
+              selectedId={null}
+              onSelect={() => {}}
+            />
+          </div>
           {/* read-only: no pin/remove/explore/persistence wiring on the canvas */}
         </div>
       );

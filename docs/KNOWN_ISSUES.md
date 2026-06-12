@@ -10,6 +10,8 @@ Known rough edges, not yet fixed. Tagged `website:` for the portfolio site; unta
 - **Resize handle not discoverable** — the column resize needs a visible handle on hover.
 - **Help panel animation only works if already open** — opening the Welcome/help panel mid-query skips its open animation; it only animates correctly when opened before asking a question.
 
+'working' dialogs - mention what tool is being used at the moment
+
 ## Website
 
 - **Resume copy/paste spacing** — selecting and pasting resume text produces weird spacing.

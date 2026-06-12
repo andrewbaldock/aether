@@ -228,6 +228,120 @@ body {
   }
 }
 
+/* ── Tiles resize affordance ─────────────────────────────────────────────────
+   GridStack's default SE resize handle is a near-invisible 1px glyph — in dark
+   mode you're resizing blind. Give it a real, brand-tinted grip that brightens on
+   hover, and outline the whole card with a neon ring while it's actively being
+   resized or dragged so you can always see what you're manipulating. */
+.grid-stack .grid-stack-item > .ui-resizable-se {
+  width: 18px;
+  height: 18px;
+  right: 2px;
+  bottom: 2px;
+  /* Two stacked corner ticks → a visible "drag me" grip in the SE corner. */
+  background-image: linear-gradient(
+      135deg,
+      transparent 0 45%,
+      var(--neon-cyan, #16c2ff) 45% 55%,
+      transparent 55%
+    ),
+    linear-gradient(
+      135deg,
+      transparent 0 65%,
+      var(--neon-cyan, #16c2ff) 65% 75%,
+      transparent 75%
+    );
+  opacity: 0.55;
+  transform: none;
+  transition: opacity 120ms ease;
+}
+.grid-stack .grid-stack-item:hover > .ui-resizable-se {
+  opacity: 1;
+}
+/* While dragging or resizing, GridStack adds these classes — ring the live card. */
+.grid-stack .grid-stack-item.ui-resizable-resizing > .grid-stack-item-content,
+.grid-stack .grid-stack-item.ui-draggable-dragging > .grid-stack-item-content {
+  outline: 2px solid var(--neon-cyan, #16c2ff);
+  outline-offset: -1px;
+  box-shadow: 0 0 0 1px var(--neon-cyan, #16c2ff),
+    0 8px 28px rgb(0 0 0 / 0.45);
+}
+/* The placeholder GridStack drops where the card will land — make it readable. */
+.grid-stack .grid-stack-placeholder > .placeholder-content {
+  border: 2px dashed var(--neon-pink, #ff2e9a);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--neon-pink, #ff2e9a) 8%, transparent);
+}
+
+/* ── Tiles skeleton cards (drip feed) ────────────────────────────────────────
+   Placeholder cards painted from the composition plan BEFORE the tools return.
+   A diagonal sweep over a muted block reads as "loading fast"; the whole card
+   also fades+scales in on a per-index stagger (--i) so a multi-card answer
+   cascades into the canvas instead of popping at once. Pure illusion of speed. */
+@keyframes tiles-skeleton-sweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.tiles-skeleton-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    var(--elevated) 30%,
+    var(--surface) 50%,
+    var(--elevated) 70%
+  );
+  background-size: 200% 100%;
+  animation: tiles-skeleton-sweep 1.3s ease-in-out infinite;
+}
+@keyframes tiles-skeleton-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.tiles-skeleton-in {
+  animation: tiles-skeleton-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 80ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tiles-skeleton-shimmer,
+  .tiles-skeleton-in {
+    animation: none;
+  }
+}
+
+/* ── Staggered row/item reveal (drip feed) ───────────────────────────────────
+   When a real table/timeline spec lands, its rows/items cascade in a few ms
+   apart instead of snapping in all at once — reads as "streaming fast". Capped
+   delay (--i clamps in JS to the first ~24 rows) so a huge table doesn't ripple
+   for seconds. Reveal-only: no spec change, no effect on sort/interaction. */
+@keyframes drip-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.drip-row-in {
+  animation: drip-row-in 240ms ease-out backwards;
+  animation-delay: calc(var(--i, 0) * 22ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .drip-row-in {
+    animation: none;
+  }
+}
+
 /* ── Thinking glyph (䷸) ──────────────────────────────────────────────────────
    Reuses the Wordmark's scanline+glow. The scanlined layer scales on the X axis
    so the CRT bands grow and shrink horizontally — a live "breathing" pulse while

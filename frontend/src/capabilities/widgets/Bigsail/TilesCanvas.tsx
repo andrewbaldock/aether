@@ -6,6 +6,7 @@ import { BigsailCard } from "./BigsailCard";
 import type { Card } from "./cards";
 import {
   GRID_CELL_HEIGHT,
+  GRID_COLUMNS,
   GRID_MARGIN,
   type PlacedCard,
   type TilesLayoutItem,
@@ -24,9 +25,6 @@ import {
 
 interface TilesCanvasProps {
   placed: PlacedCard[];
-  // Live grid column count (derived from the panel width upstream). The grid
-  // re-columns when this changes so cards stay content-wide on resize.
-  columns: number;
   onLayoutChange: (layout: TilesLayoutItem[]) => void;
 }
 
@@ -43,11 +41,7 @@ function serialize(grid: GridStack): TilesLayoutItem[] {
     }));
 }
 
-export function TilesCanvas({
-  placed,
-  columns,
-  onLayoutChange,
-}: TilesCanvasProps) {
+export function TilesCanvas({ placed, onLayoutChange }: TilesCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<GridStack | null>(null);
   // cardId → the GridStack-created content element we portal React into.
@@ -58,17 +52,15 @@ export function TilesCanvas({
 
   const onChangeRef = useRef(onLayoutChange);
   onChangeRef.current = onLayoutChange;
-  // Initial column count, captured once for GridStack.init (changes are applied by
-  // the responsive effect below, not by re-initialising).
-  const initialColumnsRef = useRef(columns);
 
-  // Init GridStack once.
+  // Init GridStack once. The grid is always GRID_COLUMNS wide — responsiveness is
+  // the column WIDTH (the grid spans 100% of the panel), not a changing count.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const grid = GridStack.init(
       {
-        column: initialColumnsRef.current,
+        column: GRID_COLUMNS,
         cellHeight: GRID_CELL_HEIGHT,
         margin: GRID_MARGIN,
         float: false, // gravity packing → best-fit tiling
@@ -85,16 +77,6 @@ export function TilesCanvas({
       gridRef.current = null;
     };
   }, []);
-
-  // Responsive re-columning: when the panel width changes the column count, tell
-  // GridStack so it reflows existing cards to the new grid. "list" layout keeps the
-  // packed order rather than trying to preserve absolute x (which breaks at a
-  // different column count).
-  useEffect(() => {
-    const grid = gridRef.current;
-    if (!grid) return;
-    if (grid.getColumn() !== columns) grid.column(columns, "list");
-  }, [columns]);
 
   // Reconcile the card SET against GridStack imperatively. Add widgets GridStack
   // doesn't have, remove ones whose card is gone, and track each item's content
@@ -160,12 +142,25 @@ export function TilesCanvas({
     setPortals(nextPortals);
   }, [placed]);
 
+  // Stagger index per placeholder card, in placed order, so skeletons cascade in
+  // (the CSS uses --i to delay each one). Only placeholders get an index; real
+  // cards render with no entrance delay.
+  const skeletonIndex = new Map<string, number>();
+  let si = 0;
+  for (const p of placed) {
+    if (p.card.placeholder) skeletonIndex.set(p.card.id, si++);
+  }
+
   return (
     <div ref={containerRef} className="grid-stack h-full w-full overflow-auto">
       {[...portals].map(([id, host]) => {
         const card = cardById.current.get(id);
         if (!card) return null;
-        return createPortal(<CardShell card={card} />, host, id);
+        return createPortal(
+          <CardShell card={card} staggerIndex={skeletonIndex.get(id)} />,
+          host,
+          id
+        );
       })}
     </div>
   );
@@ -173,9 +168,27 @@ export function TilesCanvas({
 
 // One card's contents inside a GridStack item: a drag-handle strip on top (only
 // the handle starts a drag, so card contents stay interactive) + the live widget.
-function CardShell({ card }: { card: Card }) {
+// A placeholder (skeleton) card gets the staggered entrance class so a planned
+// answer cascades into the canvas; staggerIndex feeds the per-card --i delay.
+function CardShell({
+  card,
+  staggerIndex,
+}: {
+  card: Card;
+  staggerIndex?: number;
+}) {
+  const isSkeleton = card.placeholder === true;
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg">
+    <div
+      className={`flex h-full flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg ${
+        isSkeleton ? "tiles-skeleton-in" : ""
+      }`}
+      style={
+        isSkeleton
+          ? ({ "--i": staggerIndex ?? 0 } as React.CSSProperties)
+          : undefined
+      }
+    >
       <div
         className="bigsail-card-drag flex h-5 shrink-0 cursor-grab items-center justify-center bg-elevated/60 active:cursor-grabbing"
         title="Drag to rearrange"

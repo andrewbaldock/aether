@@ -1,8 +1,12 @@
-// The Tiles canvas layout model. Cards are placed on a GridStack grid (column +
-// row units, not pixels) so the arrangement is resolution-independent and
-// serializes cleanly to the conversation's ui_state. This module is the pure
-// glue: the grid config, the card→default-grid-size mapping, and the merge that
-// preserves the user's saved arrangement while auto-placing new cards.
+// The Tiles canvas layout model. Cards are placed on a FIXED 24-column GridStack
+// grid (column + row units, never pixels) so the arrangement is resolution-
+// independent and serializes cleanly to the conversation's ui_state. Responsiveness
+// is the column WIDTH (panelWidth / 24), not the column COUNT — everything grows and
+// shrinks with the panel/window. The default arrangement is a fixed ROLE-BASED
+// TEMPLATE (KG on top, Timeline + stacked Charts, then Table, then Images); the user
+// can drag/resize freely from there and that arrangement persists. This module is the
+// pure glue: the grid config, the template, and the merge that preserves the user's
+// saved arrangement while auto-placing new cards.
 
 import type { Card, CardCapability } from "./cards";
 
@@ -16,69 +20,42 @@ export interface TilesLayoutItem {
   h: number;
 }
 
-// Grid geometry. The column COUNT is derived from the live panel width (see
-// columnsForWidth) so each column lands near TARGET_COL_PX — that keeps cards
-// content-wide instead of clipping. Rows are a fixed pixel cellHeight; the margin
-// is the always-present gap between cards.
+// The grid is always this many columns wide. Cards are fractions of it.
+export const GRID_COLUMNS = 24;
+
+// Row geometry. Rows are a fixed pixel cellHeight; the margin is the always-present
+// gap between cards.
 export const GRID_CELL_HEIGHT = 28; // px per row unit (finer → tighter height fit)
-export const GRID_MARGIN = 12; // px gap around every card (no-overlap guarantee)
+export const GRID_MARGIN = 6; // px gap around every card (tight grid, no overlap)
 
-// Target on-screen column width. The grid uses as many columns as fit at roughly
-// this width, bounded by [MIN,MAX]_COLUMNS. ~90px gives fine-grained packing while
-// keeping per-type minimum widths (below) to a sane number of columns.
-const TARGET_COL_PX = 90;
-const MIN_COLUMNS = 4;
-const MAX_COLUMNS = 16;
+// Below this panel width there isn't room for two half-width cards side by side,
+// so every card collapses to full-width (24-col) stacked. Above it, cards reflow
+// to their true fractional layout. Tuned by eye.
+export const STACK_BREAKPOINT_PX = 560;
 
-// Pick a column count from the panel's pixel width so columns are ~TARGET_COL_PX
-// wide regardless of how wide/narrow the capability panel is. Falls back to a
-// reasonable default before the panel has measured.
-export function columnsForWidth(panelPx: number): number {
-  if (!panelPx || panelPx <= 0) return 12;
-  return clamp(Math.round(panelPx / TARGET_COL_PX), MIN_COLUMNS, MAX_COLUMNS);
-}
+// ── Fixed template geometry (grid units) ────────────────────────────────────
+// The canvas has ONE deterministic shape, mirroring the agreed layout:
+//   KG | Timeline    top row, side by side (each half width, standard height)
+//   Table           full width, standard height
+//   Chart           full width, standard height — charts carry dense x-axis labels,
+//                   so they always get the FULL 24 columns (never squeezed)
+//   Images          full width, standard height
+// The KG and Timeline anchor the top row together; Table, Chart(s), and Images then
+// stack full-width beneath. Standard slot height clears the 55px floor comfortably
+// and reads well. Widths are out of GRID_COLUMNS (24): full = 24, half = 12.
+const FULL_W = GRID_COLUMNS; // 24
+const HALF_W = GRID_COLUMNS / 2; // 12
+const SLOT_H = 10; // ~280px standard card — readable, above the 55px floor
 
-// Per-capability MINIMUM on-screen width (px). This is the real fix for clipping:
-// a table needs room for its columns, a timeline for its date+label rows, the
-// graph for its node labels. Cards are sized to the larger of this minimum and
-// their content-derived sizeHint, then converted to grid columns.
-const MIN_CARD_PX: Record<CardCapability, number> = {
-  table: 460,
-  chart: 380,
-  timeline: 520,
-  images: 320,
-  "knowledge-graph": 460,
-};
-
-// Convert a card's pixel sizeHint into grid units for the CURRENT grid (column
-// count + the pixel width each column occupies). Width honors the per-type minimum
-// so content never clips; both are clamped to the grid. DEFAULTS only — a saved
-// w/h (user resize) always wins downstream.
-export function defaultGridSize(
-  card: Card,
-  columns: number,
-  colWidthPx: number
-): { w: number; h: number } {
-  const wantPx = Math.max(card.sizeHint.w, MIN_CARD_PX[card.capabilityType]);
-  // px → columns (round up so we never under-size below the minimum), clamped so
-  // a card spans at most the full grid and at least ~3 columns.
-  const wCols = clamp(
-    Math.ceil(wantPx / Math.max(colWidthPx, 1)),
-    Math.min(3, columns),
-    columns
-  );
-  const h = clamp(Math.round(card.sizeHint.h / GRID_CELL_HEIGHT), 5, 30);
-  return { w: wCols, h };
-}
-
+// Per-capability default width for the FULL-WIDTH stacking path (skinny view and
+// overflow extras). Everything stacks full width there.
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
 }
 
 // A card with its resolved grid geometry. `autoPlace` is true when this card has
 // no saved position — in the auto-layout path we compute explicit x/y too (so the
-// row-fill arrangement is exact, not left to GridStack's packer); false when x/y
-// come from the user's saved arrangement.
+// row arrangement is exact); false when x/y come from the user's saved arrangement.
 export interface PlacedCard {
   card: Card;
   x?: number;
@@ -88,103 +65,136 @@ export interface PlacedCard {
   autoPlace: boolean;
 }
 
-// Greedy row-packer that FILLS the panel horizontally and squares the bottom.
-// Walks cards in order, packing each into the current row while its intrinsic
-// width fits; when a card won't fit, the current row is finalised and a new one
-// starts. Each finalised row is then:
-//   • STRETCHED to span the full column count — leftover columns are distributed
-//     across the row's cards so the right edge is flush (no ragged gap), and
-//   • HEIGHT-EQUALISED — every card in the row gets the row's tallest height, so
-//     each row band has a clean, square bottom edge and rows stack flush.
-// The result is a gapless, full-width, bottom-squared grid. Deterministic given
-// card order + column count → identical every render (and across devices).
-export function autoLayout(
+// Stack a list of cards full-width, one per row, starting at y. Returns the next
+// free y. Used for the skinny view and for overflow "extra" cards below the
+// template.
+function stackFullWidth(
   cards: Card[],
-  columns: number,
-  colWidthPx: number
-): PlacedCard[] {
-  // Resolve each card's intrinsic grid size first, capped to the grid width.
-  const sized = cards.map((card) => {
-    const { w, h } = defaultGridSize(card, columns, colWidthPx);
-    return { card, w: Math.min(w, columns), h };
-  });
-
-  const out: PlacedCard[] = [];
-  let y = 0;
-  let row: { card: Card; w: number; h: number }[] = [];
-  let rowW = 0;
-
-  const flush = () => {
-    if (row.length === 0) return;
-    // Distribute leftover columns across the row so it spans exactly `columns`.
-    // Hand out one extra column at a time, widest-first (a stable widest→narrowest
-    // queue), until none remain — proportional-ish fill without fractional columns.
-    let leftover = columns - rowW;
-    const widestFirst = [...row].sort((a, b) => b.w - a.w);
-    let i = 0;
-    while (leftover > 0 && widestFirst.length > 0) {
-      const target = widestFirst[i % widestFirst.length];
-      if (target) target.w += 1;
-      leftover--;
-      i++;
-    }
-    // Equalise heights so the row band squares off at the bottom. Cards keep their
-    // original left-to-right order (row), not the widest-first fill order.
-    const rowH = Math.max(...row.map((c) => c.h));
-    let x = 0;
-    for (const c of row) {
-      out.push({ card: c.card, x, y, w: c.w, h: rowH, autoPlace: true });
-      x += c.w;
-    }
-    y += rowH;
-    row = [];
-    rowW = 0;
-  };
-
-  for (const s of sized) {
-    if (rowW + s.w > columns && row.length > 0) flush();
-    row.push(s);
-    rowW += s.w;
+  startY: number,
+  out: PlacedCard[]
+): number {
+  let y = startY;
+  for (const card of cards) {
+    out.push({ card, x: 0, y, w: FULL_W, h: SLOT_H, autoPlace: true });
+    y += SLOT_H;
   }
-  flush();
+  return y;
+}
+
+// Place cards into the FIXED TEMPLATE.
+//   • stacked → skinny viewport: every card is full-width, stacked top to bottom.
+//     The saved arrangement is NOT consulted here (it's preserved in the DB and
+//     reappears when the panel widens).
+//   • not stacked → the template: a top row of KG (half) + Timeline (half) side by
+//     side, then Table (full), Chart(s) (full — never squeezed), and Images (full)
+//     stacked beneath. The FIRST KG/timeline/table/images card fills its slot;
+//     charts ALL stack full-width; any EXTRA cards of the other types stack
+//     full-width below the whole template. A missing capability's slot simply
+//     collapses (no gap). Deterministic → identical every render and device.
+//     Drag/resize still apply afterwards (GridStack); this is just the default the
+//     user starts from and "Reset layout" returns to.
+export function autoLayout(cards: Card[], stacked: boolean): PlacedCard[] {
+  const out: PlacedCard[] = [];
+
+  if (stacked) {
+    stackFullWidth(cards, 0, out);
+    return out;
+  }
+
+  // Bucket cards by capability, preserving arrival order within each type.
+  const by = (cap: CardCapability) =>
+    cards.filter((c) => c.capabilityType === cap);
+  const kg = by("knowledge-graph");
+  const timelines = by("timeline");
+  const charts = by("chart");
+  const tables = by("table");
+  const images = by("images");
+
+  let y = 0;
+
+  // 1. Top row: KG and Timeline side by side. Each takes half the width; the row
+  //    is one standard slot tall. If only one of them exists it still takes its
+  //    half (left), leaving a clean gap rather than reflowing — keeps the template
+  //    shape recognisable. If NEITHER exists the row collapses (no gap).
+  const kgCard = kg[0];
+  const timelineCard = timelines[0];
+  if (kgCard) {
+    out.push({ card: kgCard, x: 0, y, w: HALF_W, h: SLOT_H, autoPlace: true });
+  }
+  if (timelineCard) {
+    out.push({ card: timelineCard, x: HALF_W, y, w: HALF_W, h: SLOT_H, autoPlace: true });
+  }
+  if (kgCard || timelineCard) y += SLOT_H;
+
+  // 2. Table — full width.
+  if (tables.length > 0) {
+    out.push({ card: tables[0]!, x: 0, y, w: FULL_W, h: SLOT_H, autoPlace: true });
+    y += SLOT_H;
+  }
+
+  // 3. Charts — full width, stacked. Charts carry dense x-axis labels, so each one
+  //    always spans the full 24 columns rather than being squeezed into a half.
+  y = stackFullWidth(charts, y, out);
+
+  // 4. Images — full width.
+  if (images.length > 0) {
+    out.push({ card: images[0]!, x: 0, y, w: FULL_W, h: SLOT_H, autoPlace: true });
+    y += SLOT_H;
+  }
+
+  // 5. Everything the template didn't place — extra KGs/timelines/tables/images —
+  //    stacks full-width below, in the template's capability order so it stays
+  //    deterministic. (Charts are already all placed above.)
+  const placed = new Set(out.map((p) => p.card.id));
+  const extras = [
+    ...kg.slice(1),
+    ...timelines.slice(1),
+    ...tables.slice(1),
+    ...images.slice(1),
+  ].filter((c) => !placed.has(c.id));
+  stackFullWidth(extras, y, out);
+
   return out;
 }
 
 // Merge the saved layout with the current card set:
+//   • stacked (skinny) → ignore saved positions entirely and stack full-width. The
+//     saved "true" layout stays in the DB, so widening the panel reflows the cards
+//     back to it. This is what makes the collapse non-destructive.
 //   • ANY saved positions present → respect the user's arrangement: saved cards
-//     keep their x/y/w/h, and any card without a saved entry is auto-placed by
-//     GridStack into a gap (autoPlace, no explicit x/y).
-//   • NO saved positions → run the full-width, bottom-squared auto-layout so the
-//     default fills the panel cleanly.
+//     keep their x/y/h (width clamped to the grid), and any card without a saved
+//     entry is auto-placed by GridStack into a gap (autoPlace, no explicit x/y).
+//   • NO saved positions → run the full auto-layout so the default fills cleanly.
 // Deterministic ordering keeps placement stable across renders.
 export function placeCards(
   cards: Card[],
   saved: TilesLayoutItem[] | undefined,
-  columns: number,
-  colWidthPx: number
+  stacked: boolean
 ): PlacedCard[] {
+  if (stacked) return autoLayout(cards, true);
+
   const savedById = new Map((saved ?? []).map((s) => [s.id, s]));
   const hasSaved = savedById.size > 0;
 
   // Fresh conversation (nothing saved): compute the filled auto-layout.
-  if (!hasSaved) return autoLayout(cards, columns, colWidthPx);
+  if (!hasSaved) return autoLayout(cards, false);
 
   // Otherwise respect saved positions; auto-place only the genuinely-new cards.
   return cards.map((card) => {
     const s = savedById.get(card.id);
     if (s) {
-      // Clamp a saved width to the current grid (column count can change with the
-      // panel width) so a restored card never overflows the new grid.
+      // Clamp a saved width to the grid so a restored card never overflows.
       return {
         card,
         x: s.x,
         y: s.y,
-        w: Math.min(s.w, columns),
+        w: Math.min(s.w, GRID_COLUMNS),
         h: s.h,
         autoPlace: false,
       };
     }
-    const size = defaultGridSize(card, columns, colWidthPx);
-    return { card, w: size.w, h: size.h, autoPlace: true };
+    // A genuinely-new card on an existing saved arrangement: GridStack finds it a
+    // gap (no explicit x/y). Default to a full-width standard slot.
+    return { card, w: FULL_W, h: SLOT_H, autoPlace: true };
   });
 }
