@@ -8,14 +8,21 @@ import { WELCOME_WIDGET } from "../capabilities/widgets/Welcome";
 // between them directly, replacing the ad-hoc cross-links each page used to carry.
 // Each widget renders <AdminTabs /> at the top of its own scroll container, so the
 // bar travels with the active page rather than living in the shell chrome.
-const TABS = [
-  { id: WELCOME_WIDGET.id, label: "Welcome" },
-  { id: SETTINGS_WIDGET.id, label: "Settings" },
-  { id: HEALTH_WIDGET.id, label: "Health" },
-] as const;
+//
+// Built inside the component, not at module load: this file sits in an import
+// cycle (Welcome/index → WelcomeWidget → AdminTabs → Health/index), so reading
+// HEALTH_WIDGET.id at top level can hit the export's temporal dead zone and throw
+// "Cannot read properties of undefined (reading 'id')", white-screening the app.
+// Reading at render time runs after every module has finished initializing.
 
 export function AdminTabs() {
   const { activeId, activate } = useCapabilities();
+
+  const TABS = [
+    { id: WELCOME_WIDGET.id, label: "Welcome" },
+    { id: SETTINGS_WIDGET.id, label: "Settings" },
+    { id: HEALTH_WIDGET.id, label: "Health" },
+  ];
 
   return (
     <nav
