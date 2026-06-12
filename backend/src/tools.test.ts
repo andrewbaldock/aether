@@ -30,6 +30,25 @@ describe("isDegenerate", () => {
     expect(isDegenerate("world_bank", JSON.stringify({ rows: [] }))).toBe(true);
   });
 
+  it("still flags empty wikidata_query rows even with a recovery hint", () => {
+    // The zero-rows path now ships a `hint` pointing the model at wikidata_search;
+    // the extra key must not stop the empty result from being flagged degenerate.
+    expect(
+      isDegenerate(
+        "wikidata_query",
+        JSON.stringify({ vars: ["x"], rows: [], hint: "resolve the ids" })
+      )
+    ).toBe(true);
+  });
+
+  it("does NOT flag an empty wikidata_search result", () => {
+    // The resolver legitimately finds nothing sometimes — that's a normal lookup
+    // outcome, not a degenerate render, so it must never trigger a retry loop.
+    expect(
+      isDegenerate("wikidata_search", JSON.stringify({ results: [] }))
+    ).toBe(false);
+  });
+
   it("does NOT flag healthy results", () => {
     expect(
       isDegenerate("render_table", JSON.stringify({ rows: [{ a: 1 }] }))

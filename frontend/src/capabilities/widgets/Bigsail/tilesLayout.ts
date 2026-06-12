@@ -47,6 +47,25 @@ const FULL_W = GRID_COLUMNS; // 24
 const HALF_W = GRID_COLUMNS / 2; // 12
 const SLOT_H = 10; // ~280px standard card — readable, above the 55px floor
 
+// Images is the bottom slot and its gallery height varies with the image count, so
+// instead of the fixed SLOT_H it grows to fit its content (clamped). The card's
+// sizeHint.h (px, from sizeHintFor in cards.ts) is the content-derived height; we
+// convert px → grid rows and clamp so a small gallery stays compact and a big one
+// can't run away.
+const IMAGES_MIN_H = SLOT_H; // never shorter than a standard card
+const IMAGES_MAX_H = 30; // ~1000px ceiling — past this the card scrolls
+
+// Content height (px) → grid rows, accounting for the per-row margin. Inverse of
+// GridStack's own row geometry (h rows ≈ h*cellHeight + (h-1)*margin px).
+function pxToRows(px: number): number {
+  return Math.ceil((px + GRID_MARGIN) / (GRID_CELL_HEIGHT + GRID_MARGIN));
+}
+
+// The Images slot's height in grid rows: content-fit, clamped to [min, max].
+function imagesSlotH(card: Card): number {
+  return clamp(pxToRows(card.sizeHint.h), IMAGES_MIN_H, IMAGES_MAX_H);
+}
+
 // Per-capability default width for the FULL-WIDTH stacking path (skinny view and
 // overflow extras). Everything stacks full width there.
 function clamp(n: number, lo: number, hi: number): number {
@@ -138,8 +157,9 @@ export function autoLayout(cards: Card[], stacked: boolean): PlacedCard[] {
 
   // 4. Images — full width.
   if (images.length > 0) {
-    out.push({ card: images[0]!, x: 0, y, w: FULL_W, h: SLOT_H, autoPlace: true });
-    y += SLOT_H;
+    const h = imagesSlotH(images[0]!);
+    out.push({ card: images[0]!, x: 0, y, w: FULL_W, h, autoPlace: true });
+    y += h;
   }
 
   // 5. Everything the template didn't place — extra KGs/timelines/tables/images —

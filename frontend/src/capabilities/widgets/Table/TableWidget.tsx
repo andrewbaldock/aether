@@ -30,7 +30,7 @@ export function TableWidget(_props: { widget: Widget }) {
   const fill = useFillFromConversation({
     hasContent: entries.length > 0,
     gentlePrompt:
-      "Looking back at what we've already discussed, build a table now summarizing the key points. This is about the conversation so far, not future messages — if there's genuinely nothing tabular to capture yet, just say so briefly.",
+      "Build the best table you can about what we've been discussing. Capture the key items, options, or entities and their attributes as rows and columns — and broaden from what was literally said: structure the real comparison the subject invites, not only facts someone typed. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call render_table now. Only skip if the subject genuinely can't be organized into rows and columns at all.",
     forcedPrompt:
       "Call the render_table tool right now to capture the most table-worthy information from our conversation so far.",
     displayText: "Update the Table from our conversation.",

@@ -11,6 +11,11 @@ import {
 // Light/dark theme, persisted across reloads. The `.dark` class on <html> drives
 // every semantic colour token (see index.css). A pre-paint script in index.html
 // seeds that class so there's no flash; this provider keeps it in sync after mount.
+//
+// SCOPE (future): theme is a USER preference — when real accounts land (Google
+// sign-in, backlog) it moves to a user_preferences table and follows you across
+// devices, alongside font face (see useAppearance). localStorage today because
+// the only identity is a per-browser anonymous UUID, so there's nothing to sync to.
 type Theme = "light" | "dark";
 
 const STORAGE_KEY = "aether-theme";

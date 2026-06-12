@@ -23,11 +23,11 @@ import {
   MapPin,
   User,
 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 // Lazy per-icon loader: resolves a model-chosen icon by name on demand without
 // bundling all ~1500 icons. Unknown names render its fallback, so an invalid
 // model suggestion degrades gracefully.
-import { DynamicIcon, type IconName, iconNames } from "lucide-react/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DynamicIcon, resolveIconName } from "../lucideIcon";
 import { TYPE_COLOR } from "./colors";
 import { dedupeNodes, filterDanglingLinks } from "./sanitize";
 import type { GraphLink, GraphNode } from "./types";
@@ -613,30 +613,6 @@ const TYPE_ICON: Record<GraphNode["type"], LucideIcon> = {
   event: Calendar,
   concept: Lightbulb,
 };
-
-// "FlaskConical" → "flask-conical", "Building2" → "building-2"; lucide's dynamic
-// loader keys off kebab-case. A letter→digit boundary also gets a dash, matching
-// lucide's naming (Building2 is "building-2", not "building2").
-function toKebab(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
-    .replace(/([a-zA-Z])([0-9])/g, "$1-$2")
-    .toLowerCase();
-}
-
-// The set of real lucide icon names, for O(1) validation. The model frequently
-// guesses plausible-but-nonexistent names (e.g. "vinyl-record"); handing one to
-// DynamicIcon makes it attempt a dynamic import that rejects and logs a console
-// error before the fallback renders. Checking membership first means we only
-// ever lazy-load names that exist, and silently use the type icon otherwise.
-const VALID_ICON_NAMES = new Set<string>(iconNames);
-
-// Returns the kebab name if it's a real lucide icon, else null.
-function resolveIconName(icon: string): IconName | null {
-  const kebab = toKebab(icon);
-  return VALID_ICON_NAMES.has(kebab) ? (kebab as IconName) : null;
-}
 
 function NodeIcon({
   icon,

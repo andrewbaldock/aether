@@ -73,36 +73,47 @@ export function BigsailWidget(_props: { widget: Widget }) {
     [table, chart, timeline, images, nodes, links, graphTitle]
   );
 
-  // Drip feed: while a turn is in flight, paint skeleton cards from the planner's
-  // composition plan so the canvas shows its final shape BEFORE tools return. Each
-  // skeleton is superseded by the real card of the same capability the instant its
-  // tool_result lands (mergeWithSkeletons). Skeletons vanish once the turn settles
-  // (busy → false) or every planned capability has a real card. Saved arrangements
-  // never include skeletons (they only ride the live, un-persisted view).
+  // Skeleton lifecycle across a turn. The backend planner predicts which panels this
+  // turn will compose (planToSkeletons); that ordered set is the canvas's final
+  // shape. We reveal it in two phases:
+  //
+  //   1. DRIP (before the first real panel): the spinner animation plays and one
+  //      planned skeleton pops into its slot every DRIP_INTERVAL_MS — capped at the
+  //      planned count, so we never show more slots than the answer will have.
+  //   2. FULL (once the first real panel's data lands): the spinner stops and the
+  //      ENTIRE planned set shows at once — the arrived panel filled, the rest
+  //      shimmering — then each remaining skeleton is superseded in place by its
+  //      panel's data as it arrives (mergeWithSkeletons). The last extras vanish as
+  //      the final panel fills.
+  //
+  // A turn with no plan (a simple ask) has no skeletons: it's just spinner → panel.
+  // Skeletons never persist — persistLayout drops every skeleton:* id.
   const plan = useBigsailPlan();
+  const planSkeletons = useMemo(() => planToSkeletons(plan), [plan]);
+
+  const DRIP_INTERVAL_MS = 10_000;
+  const [dripCount, setDripCount] = useState(0);
+  const firstPanelArrived = realCards.length > 0;
+  useEffect(() => {
+    // Drip only while we're waiting for the first panel on a planned turn.
+    if (!busy || firstPanelArrived || planSkeletons.length === 0) {
+      setDripCount(0);
+      return;
+    }
+    const t = setInterval(() => {
+      setDripCount((n) => Math.min(n + 1, planSkeletons.length));
+    }, DRIP_INTERVAL_MS);
+    return () => clearInterval(t);
+  }, [busy, firstPanelArrived, planSkeletons.length]);
+
   const cards = useMemo(() => {
     if (!busy) return realCards;
-    return mergeWithSkeletons(realCards, planToSkeletons(plan));
-  }, [busy, realCards, plan]);
-
-  // Spinner floor: on a FRESH turn (the canvas was empty when the turn began),
-  // hold the BigsailLoading animation for a minimum window before the skeletons
-  // take over — the rectangles-into-formation spinner is the nicest first moment
-  // and the plan often lands within a few hundred ms, cutting it short. Once the
-  // window elapses (or the turn ends) we let the skeletons/content through. On a
-  // follow-up turn (content already present) there's no floor — we never flash the
-  // spinner over existing cards.
-  const SPINNER_FLOOR_MS = 1400;
-  const [spinnerHold, setSpinnerHold] = useState(false);
-  const wasBusy = useRef(false);
-  useEffect(() => {
-    const startedFresh = busy && !wasBusy.current && realCards.length === 0;
-    wasBusy.current = busy;
-    if (!startedFresh) return;
-    setSpinnerHold(true);
-    const t = setTimeout(() => setSpinnerHold(false), SPINNER_FLOOR_MS);
-    return () => clearTimeout(t);
-  }, [busy, realCards.length]);
+    // Phase 2: once the first panel lands, show the full planned set (real cards
+    // supersede their skeletons in place; the rest keep shimmering).
+    if (firstPanelArrived) return mergeWithSkeletons(realCards, planSkeletons);
+    // Phase 1: reveal only the dripped-in slice of the planned skeletons.
+    return planSkeletons.slice(0, dripCount);
+  }, [busy, realCards, firstPanelArrived, planSkeletons, dripCount]);
 
   // Merge the saved arrangement with the current card set: saved cards keep their
   // spot, new cards auto-place. Recompute when cards, the saved layout, or the
@@ -150,9 +161,11 @@ export function BigsailWidget(_props: { widget: Widget }) {
     setResetTick((t) => t + 1);
   }
 
-  // While the spinner floor is active, keep showing BigsailLoading even though
-  // skeleton cards already exist — let the opening animation breathe.
-  const hasContent = cards.length > 0 && !spinnerHold;
+  // The BigsailLoading animation overlays everything until the first real panel
+  // lands — for the first ~10s it plays alone, then over the skeletons as they drip
+  // in beneath it. It stops the instant a real panel arrives.
+  const waitingForFirstPanel = busy && realCards.length === 0;
+  const hasContent = cards.length > 0;
 
   return (
     <div ref={hostRef} className="relative h-full w-full bg-surface">
@@ -175,9 +188,7 @@ export function BigsailWidget(_props: { widget: Widget }) {
           placed={resetTick ? placeCards(cards, [], stacked) : placed}
           onLayoutChange={persistLayout}
         />
-      ) : busy ? (
-        <BigsailLoading />
-      ) : (
+      ) : !busy ? (
         <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
           <p className="font-display text-base font-semibold text-content">
             Your canvas is empty — for now.
@@ -187,6 +198,17 @@ export function BigsailWidget(_props: { widget: Widget }) {
               ? "Ask something rich — a comparison, a history, a set of facts — and everything I compose lands here as live, rearrangeable cards."
               : "Start a conversation. Tables, charts, timelines, images, and the knowledge graph all appear here together as a living canvas of cards you can drag and resize."}
           </p>
+        </div>
+      ) : null}
+
+      {/* Assembling-canvas animation, overlaid on the shimmering skeletons while
+          the first real panel is still composing — it rides ON TOP of the
+          skeletons (only a whisper of a backdrop so the placeholders pop in
+          visibly underneath), not a wash that hides them. Pointer-events off so
+          the cards underneath stay live. Clears the instant a real panel lands. */}
+      {waitingForFirstPanel && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+          <BigsailLoading />
         </div>
       )}
     </div>

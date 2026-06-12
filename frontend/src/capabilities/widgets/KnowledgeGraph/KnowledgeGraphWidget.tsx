@@ -32,7 +32,7 @@ export function KnowledgeGraphWidget(_props: { widget: Widget }) {
   const fill = useFillFromConversation({
     hasContent: nodes.length > 0,
     gentlePrompt:
-      "Looking back at what we've already discussed, map out the key entities now and how they connect. This is about the conversation so far, not future messages — if there's genuinely nothing to map yet, just say so briefly.",
+      "Build the best knowledge graph you can about what we've been discussing. Map the key entities in the subject and how they connect — and broaden from what was literally said: surface the real people, places, concepts, and organizations the topic involves, not only ones named outright. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call build_knowledge_graph now. Only skip if the subject genuinely has no entities or relationships to map at all.",
     forcedPrompt:
       "Call the build_knowledge_graph tool right now to extract the entities and relationships from our conversation so far.",
     displayText: "Update the Knowledge Graph from our conversation.",

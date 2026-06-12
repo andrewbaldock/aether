@@ -204,7 +204,7 @@ export function planPreamble(plan: CompositionPlan): string {
   const parts = plan.intents.map((it) =>
     it.subject ? `${it.capability} of ${it.subject}` : it.capability
   );
-  let text = `Composition plan for this turn: render ${parts.join(", then ")}.`;
+  let text = `Composition plan for this turn: compose ${parts.join(", then ")}.`;
   if (plan.relationships.length > 0) {
     const rels = plan.relationships
       .map((r) => {
@@ -215,7 +215,19 @@ export function planPreamble(plan: CompositionPlan): string {
       .join("; ");
     text += ` Relationships: ${rels}.`;
   }
+  // Directive, not advisory, and biased toward PRODUCING output (this is a live
+  // demo of what Aether can render): for each planned capability, design the best
+  // version from the material and call its render tool. If a literal subject comes
+  // back empty, BROADEN it and try again before giving up (no photos of "Mammon"?
+  // search "demon" / "occult art"). Skipping is the rare last resort — only after a
+  // broadened attempt truly yields nothing — and when you do skip, tell the user in
+  // ONE warm, plain sentence why (never silently, never apologetically).
   text +=
-    " Use the appropriate render tools to produce these; you may also add or omit one if the conversation calls for it.";
+    " For EACH capability above, design the best version from the material and call" +
+    " its render tool — producing output is the goal. If a search comes back empty," +
+    " broaden the query and try again before concluding a capability is empty. Only" +
+    " if a broadened attempt still yields nothing should you skip it, and then note" +
+    " that to the user in a single friendly sentence. You may also add a capability" +
+    " the plan missed if the answer calls for it.";
   return text;
 }
