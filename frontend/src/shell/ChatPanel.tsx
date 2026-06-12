@@ -26,6 +26,7 @@ import { useSessionContext } from "./SessionContext";
 import { Tooltip } from "./Tooltip";
 import { useChat } from "./useChat";
 import { useIsMobile } from "./useIsMobile";
+import { useToolProgress } from "./useToolProgress";
 import { useWaitingMessage } from "./useWaitingMessage";
 
 // Seed for a new conversation's model (until its session row exists). undefined
@@ -114,6 +115,10 @@ export function ChatPanel() {
   // Calm filler shown beneath the glyph during dead air (gaps between real
   // status events). null when there's real status to show or nothing to fill.
   const waitingMessage = useWaitingMessage(isLoading);
+  // Scripted tool progress: keeps the activity line moving through a slow tool's
+  // silent fetch window. Overrides the backend's single frozen tool_start label on
+  // the streaming message; superseded the instant a real status/result/text lands.
+  const toolProgress = useToolProgress(isLoading);
   const [draft, setDraft] = useState("");
   const started = messages.length > 0;
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -334,7 +339,7 @@ export function ChatPanel() {
           </div>
         )}
         <ul className="mx-auto max-w-2xl space-y-4">
-          {messages.map((m) => (
+          {messages.map((m, mi) => (
             <li
               key={m.id}
               className={
@@ -352,11 +357,19 @@ export function ChatPanel() {
                   m.text
                 ) : (
                   <>
-                    {m.toolActivity && (
-                      <div className="mb-1 text-xs text-content-subtle italic">
-                        {m.toolActivity}
-                      </div>
-                    )}
+                    {/* Activity line: the scripted tool progress wins on the
+                        streaming (last) message during a slow tool's fetch; else
+                        the backend's own tool_start/status label. */}
+                    {(() => {
+                      const isStreaming = mi === messages.length - 1;
+                      const activity =
+                        (isStreaming && toolProgress) || m.toolActivity;
+                      return activity ? (
+                        <div className="mb-1 text-xs text-content-subtle italic">
+                          {activity}
+                        </div>
+                      ) : null;
+                    })()}
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{

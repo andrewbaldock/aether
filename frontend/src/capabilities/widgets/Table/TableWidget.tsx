@@ -149,7 +149,7 @@ export function SpecTable({
         ))}
       </thead>
       <tbody>
-        {table.getRowModel().rows.map((row) => {
+        {table.getRowModel().rows.map((row, i) => {
           // Build a readable summary of this row to ground the explore prompt.
           const rowSummary = spec.columns
             .map((col) => `${col.label}: ${cellText(row.getValue(col.key))}`)
@@ -171,7 +171,11 @@ export function SpecTable({
                 },
               ]}
             >
-              <tr className="border-b border-border/60 hover:bg-elevated">
+              {/* Cascade rows in on first paint (capped delay — see drip-row-in). */}
+              <tr
+                className="drip-row-in border-b border-border/60 hover:bg-elevated"
+                style={{ "--i": Math.min(i, 24) } as React.CSSProperties}
+              >
                 {row.getVisibleCells().map((cell) => (
                   <td key={cell.id} className="px-3 py-2 align-top">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}

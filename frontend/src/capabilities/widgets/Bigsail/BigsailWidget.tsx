@@ -9,12 +9,13 @@ import { useKnowledgeGraphState } from "../KnowledgeGraph/useKnowledgeGraphState
 import { useTableState } from "../Table/useTableState";
 import { useTimelineState } from "../Timeline/useTimelineState";
 import { BigsailLoading } from "./BigsailLoading";
+import { useBigsailPlan } from "./BigsailPlanProvider";
 import { toCards } from "./cards";
+import { mergeWithSkeletons, planToSkeletons } from "./skeletonCards";
 import { TilesCanvas } from "./TilesCanvas";
 import {
-  columnsForWidth,
-  GRID_MARGIN,
   placeCards,
+  STACK_BREAKPOINT_PX,
   type TilesLayoutItem,
 } from "./tilesLayout";
 
@@ -25,9 +26,6 @@ import {
 //
 // (A zoom/pan plane + a node-graph "flowchart" mode are planned future surfaces;
 // layout.ts keeps that flowchart/edge code dormant for then.)
-
-// Column-width fallback before the panel has measured (first paint).
-const TARGET_FALLBACK_COL_PX = 90;
 
 export function BigsailWidget(_props: { widget: Widget }) {
   const { nodes, links } = useKnowledgeGraphState();
@@ -45,8 +43,9 @@ export function BigsailWidget(_props: { widget: Widget }) {
   );
   const savedLayout = currentSession?.ui_state?.tilesLayout;
 
-  // Measure the panel so the grid's column count tracks the available width —
-  // columns stay ~content-wide instead of clipping. Re-measures on resize.
+  // Measure the panel only to decide the skinny breakpoint. The grid is always
+  // 24 columns; below the breakpoint cards collapse to full-width stacked, above
+  // it they reflow to their true fractional layout. Re-measures on resize.
   const hostRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(0);
   useEffect(() => {
@@ -59,32 +58,58 @@ export function BigsailWidget(_props: { widget: Widget }) {
     return () => ro.disconnect();
   }, []);
 
-  const columns = columnsForWidth(panelWidth);
-  // The on-screen pixel width of one grid column (minus the inter-card margins),
-  // used to convert each card's desired pixel width into the right column span.
-  const colWidthPx =
-    panelWidth > 0
-      ? (panelWidth - GRID_MARGIN * (columns + 1)) / columns
-      : TARGET_FALLBACK_COL_PX;
+  const stacked = panelWidth > 0 && panelWidth < STACK_BREAKPOINT_PX;
 
-  const cards = useMemo(
+  const graphTitle = currentSession?.title ?? undefined;
+  const realCards = useMemo(
     () =>
       toCards({
         table,
         chart,
         timeline,
         images,
-        graph: nodes.length > 0 ? { nodes, links } : null,
+        graph: nodes.length > 0 ? { nodes, links, title: graphTitle } : null,
       }),
-    [table, chart, timeline, images, nodes, links]
+    [table, chart, timeline, images, nodes, links, graphTitle]
   );
+
+  // Drip feed: while a turn is in flight, paint skeleton cards from the planner's
+  // composition plan so the canvas shows its final shape BEFORE tools return. Each
+  // skeleton is superseded by the real card of the same capability the instant its
+  // tool_result lands (mergeWithSkeletons). Skeletons vanish once the turn settles
+  // (busy → false) or every planned capability has a real card. Saved arrangements
+  // never include skeletons (they only ride the live, un-persisted view).
+  const plan = useBigsailPlan();
+  const cards = useMemo(() => {
+    if (!busy) return realCards;
+    return mergeWithSkeletons(realCards, planToSkeletons(plan));
+  }, [busy, realCards, plan]);
+
+  // Spinner floor: on a FRESH turn (the canvas was empty when the turn began),
+  // hold the BigsailLoading animation for a minimum window before the skeletons
+  // take over — the rectangles-into-formation spinner is the nicest first moment
+  // and the plan often lands within a few hundred ms, cutting it short. Once the
+  // window elapses (or the turn ends) we let the skeletons/content through. On a
+  // follow-up turn (content already present) there's no floor — we never flash the
+  // spinner over existing cards.
+  const SPINNER_FLOOR_MS = 1400;
+  const [spinnerHold, setSpinnerHold] = useState(false);
+  const wasBusy = useRef(false);
+  useEffect(() => {
+    const startedFresh = busy && !wasBusy.current && realCards.length === 0;
+    wasBusy.current = busy;
+    if (!startedFresh) return;
+    setSpinnerHold(true);
+    const t = setTimeout(() => setSpinnerHold(false), SPINNER_FLOOR_MS);
+    return () => clearTimeout(t);
+  }, [busy, realCards.length]);
 
   // Merge the saved arrangement with the current card set: saved cards keep their
   // spot, new cards auto-place. Recompute when cards, the saved layout, or the
   // grid dimensions change.
   const placed = useMemo(
-    () => placeCards(cards, savedLayout, columns, colWidthPx),
-    [cards, savedLayout, columns, colWidthPx]
+    () => placeCards(cards, savedLayout, stacked),
+    [cards, savedLayout, stacked]
   );
 
   // Debounced persistence of the grid arrangement. Keep the latest activeWidget
@@ -94,11 +119,14 @@ export function BigsailWidget(_props: { widget: Widget }) {
   const activeWidget = currentSession?.ui_state?.activeWidget ?? null;
   function persistLayout(layout: TilesLayoutItem[]) {
     if (!sessionId) return;
+    // Never persist transient skeleton positions — they vanish when the turn
+    // settles, so a saved `skeleton:*` entry would just be dead weight on reload.
+    const real = layout.filter((item) => !item.id.startsWith("skeleton:"));
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       updateSession.mutate({
         id: sessionId,
-        patch: { ui_state: { activeWidget, tilesLayout: layout } },
+        patch: { ui_state: { activeWidget, tilesLayout: real } },
       });
     }, 900);
   }
@@ -122,7 +150,9 @@ export function BigsailWidget(_props: { widget: Widget }) {
     setResetTick((t) => t + 1);
   }
 
-  const hasContent = cards.length > 0;
+  // While the spinner floor is active, keep showing BigsailLoading even though
+  // skeleton cards already exist — let the opening animation breathe.
+  const hasContent = cards.length > 0 && !spinnerHold;
 
   return (
     <div ref={hostRef} className="relative h-full w-full bg-surface">
@@ -142,10 +172,7 @@ export function BigsailWidget(_props: { widget: Widget }) {
       {hasContent ? (
         <TilesCanvas
           key={`${sessionId ?? "none"}:${resetTick}`}
-          placed={
-            resetTick ? placeCards(cards, [], columns, colWidthPx) : placed
-          }
-          columns={columns}
+          placed={resetTick ? placeCards(cards, [], stacked) : placed}
           onLayoutChange={persistLayout}
         />
       ) : busy ? (

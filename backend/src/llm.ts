@@ -10,6 +10,7 @@ import {
   isDegenerate,
   type ToolDefinition,
   toOpenAITools,
+  toolResultStatus,
 } from "./tools";
 
 // Per-turn cap on in-loop self-corrections. One graded retry on a degenerate
@@ -387,6 +388,11 @@ function createClaudeClient(
           await onToolStart?.(tool.name, input);
           const result = await executeTool(tool.name, input, sessionId);
           await onToolResult?.(tool.name, result);
+          // Honest "got N results…" status, superseding the frontend's scripted
+          // progress with a real count the instant the fetch resolves (data tools
+          // only; null/skipped otherwise).
+          const countStatus = toolResultStatus(tool.name, result);
+          if (countStatus) await onStatus?.(countStatus);
           // Self-correction: if the result is degenerate (empty rows/data/items)
           // and we haven't already corrected this turn, append a corrective
           // directive to the tool_result content the MODEL sees (not the one the
@@ -669,6 +675,9 @@ function createOpenAICompatClient(
           await onToolStart?.(tool.name, input);
           const result = await executeTool(tool.name, input, sessionId);
           await onToolResult?.(tool.name, result);
+          // Honest count status, same as the Claude client.
+          const countStatus = toolResultStatus(tool.name, result);
+          if (countStatus) await onStatus?.(countStatus);
           // Self-correction, same as the Claude client (see there for rationale).
           let modelResult = result;
           if (

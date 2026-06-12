@@ -510,6 +510,40 @@ export function toolStatusLabel(name: string, input?: unknown): string {
   return `${base}: “${subject}”…`;
 }
 
+// An honest, human-readable "got N results" status for the slow fetch tools, or
+// null when the tool has no meaningful count (or its result is unparseable). This
+// is the REAL signal that supersedes the frontend's scripted progress mid-fetch —
+// emitted right after the tool resolves. Defensive about result shape: anything
+// odd just yields null (no false "got 0…" on a healthy-but-differently-shaped
+// result). Only the data tools are handled; render_* echoes need no count.
+export function toolResultStatus(name: string, resultJson: string): string | null {
+  let data: unknown;
+  try {
+    data = JSON.parse(resultJson);
+  } catch {
+    return null;
+  }
+  const count = (arr: unknown): number | null =>
+    Array.isArray(arr) ? arr.length : null;
+
+  let n: number | null = null;
+  if (name === "wikidata_query") {
+    // SPARQL result: { rows: [...] } (or a bare array).
+    const obj = data as Record<string, unknown>;
+    n = count(obj?.rows) ?? count(data);
+  } else if (name === "world_bank") {
+    const obj = data as Record<string, unknown>;
+    n = count(obj?.series) ?? count(obj?.rows) ?? count(data);
+  } else if (name === "search_images") {
+    const obj = data as Record<string, unknown>;
+    n = count(obj?.images) ?? count(obj?.results) ?? count(data);
+  }
+
+  if (n === null || n <= 0) return null;
+  const noun = name === "search_images" ? "image" : "result";
+  return `Got ${n} ${noun}${n === 1 ? "" : "s"} — shaping…`;
+}
+
 export async function executeTool(
   name: string,
   input: unknown,

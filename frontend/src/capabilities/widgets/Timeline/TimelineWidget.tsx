@@ -98,7 +98,7 @@ export function SpecTimeline({ spec }: { spec: TimelineSpec }) {
             </p>
           )}
           <ol className="relative border-l border-border-strong pl-5 space-y-4">
-            {lane.items.map((item) => {
+            {lane.items.map((item, i) => {
               const dateLabel = item.end
                 ? `${formatDate(item.start)} – ${formatDate(item.end)}`
                 : formatDate(item.start);
@@ -116,7 +116,11 @@ export function SpecTimeline({ spec }: { spec: TimelineSpec }) {
                     },
                   ]}
                 >
-                  <li className="relative">
+                  {/* Cascade items in on first paint (capped — see drip-row-in). */}
+                  <li
+                    className="drip-row-in relative"
+                    style={{ "--i": Math.min(i, 24) } as React.CSSProperties}
+                  >
                     {/* Dot on the spine */}
                     <span className="absolute -left-[1.4rem] top-1 h-2.5 w-2.5 rounded-full border-2 border-[#ff2e9a] bg-surface" />
                     <DateRange item={item} />

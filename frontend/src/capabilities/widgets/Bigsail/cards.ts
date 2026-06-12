@@ -25,10 +25,12 @@ export interface SizeHint {
 
 // The knowledge graph collapses to a single whole-graph card in v1, so its spec
 // is the live nodes+links snapshot. toCards keeps this as the seam where a future
-// per-node split could live.
+// per-node split could live. `title` is the conversation title, shown as the card
+// header so the graph card reads as "the graph of THIS conversation".
 export interface GraphCardSpec {
   nodes: GraphNode[];
   links: GraphLink[];
+  title?: string;
 }
 
 export type CardSpec =
@@ -43,11 +45,24 @@ export interface Card<S extends CardSpec = CardSpec> {
   // card has a fixed id since it's a singleton.
   id: string;
   capabilityType: CardCapability;
-  // The EXISTING widget spec, rendered by the shared Spec* component.
+  // The EXISTING widget spec, rendered by the shared Spec* component. Null only
+  // for a placeholder skeleton card (no data yet — see placeholder).
   spec: S;
   // Derived purely from the spec (no DOM measurement) so the layout is identical
   // on every load and every device.
   sizeHint: SizeHint;
+  // True for a skeleton card placed from the composition plan BEFORE its tool has
+  // returned. It occupies its real masonry slot (same capabilityType → same span)
+  // and renders a shimmer; a real card of the same capability supersedes it the
+  // instant its tool_result lands. `spec` is a typed-but-empty stand-in.
+  placeholder?: boolean;
+}
+
+// Default size hint for a capability, used both as the base for content growth
+// (sizeHintFor) and as a skeleton's size before any data exists. Exported so the
+// skeleton builder sizes placeholders identically to the real card they precede.
+export function baseSizeHint(type: CardCapability): SizeHint {
+  return BASE_SIZE[type];
 }
 
 // Starting size hints per capability. Heights for content-bearing cards grow with
