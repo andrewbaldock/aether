@@ -7,6 +7,10 @@ export interface TimelineItem {
   start: string;
   end?: string;
   group?: string;
+  // Optional lucide-react icon name (PascalCase) the model picked as the best
+  // match for this event, from the backend's ICON_VOCABULARY. Rendered in the
+  // marker on the spine; falls back to a plain dot when absent or invalid.
+  icon?: string;
 }
 
 export interface TimelineGroup {

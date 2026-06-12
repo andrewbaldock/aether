@@ -17,9 +17,22 @@ export interface HealthResult {
     deepseek: ProviderResult;
     mistral: ProviderResult;
   };
+  dataSources: {
+    wikidata: ProviderResult;
+    wikidataSearch: ProviderResult;
+    worldBank: ProviderResult;
+    wikipedia: ProviderResult;
+    openalex: ProviderResult;
+    wikimedia: ProviderResult;
+    unsplash: ProviderResult;
+  };
 }
 
 const TIMEOUT_MS = 5000;
+
+// Wikidata Query Service and Wikimedia Commons both ask API clients to send a
+// descriptive User-Agent with contact info — same value tools.ts uses.
+const WIKIMEDIA_USER_AGENT = "Aether/1.0 (https://github.com/baldrocks; demo)";
 
 async function checkSupabase(): Promise<HealthResult["supabase"]> {
   const url = process.env.SUPABASE_URL;
@@ -105,8 +118,78 @@ async function checkOpenAICompat(
   }
 }
 
+// A keyless data source: there's no API key, so it's always "configured" and the
+// check is pure reachability. We test the SERVICE, not a specific query, so any
+// 2xx counts — a reachable endpoint that returns empty rows is still healthy.
+async function checkKeylessHttp(
+  url: string,
+  headers?: Record<string, string>
+): Promise<ProviderResult> {
+  const t0 = Date.now();
+  try {
+    const res = await fetch(url, {
+      headers,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    const latencyMs = Date.now() - t0;
+    if (!res.ok) {
+      return { ok: false, configured: true, latencyMs, error: `HTTP ${res.status}` };
+    }
+    return { ok: true, configured: true, latencyMs };
+  } catch (err) {
+    return {
+      ok: false,
+      configured: true,
+      latencyMs: Date.now() - t0,
+      error: String(err),
+    };
+  }
+}
+
+// Unsplash is keyed like the LLM providers: unset key ⇒ not configured (amber),
+// 401/403 ⇒ reachable but key wrong (still a failure), 2xx ⇒ ok.
+async function checkUnsplash(): Promise<ProviderResult> {
+  const key = process.env.UNSPLASH_ACCESS_KEY;
+  if (!key) return { ok: false, configured: false, latencyMs: 0 };
+  const t0 = Date.now();
+  try {
+    const res = await fetch(
+      "https://api.unsplash.com/search/photos?query=test&per_page=1",
+      {
+        headers: { Authorization: `Client-ID ${key}`, "Accept-Version": "v1" },
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      }
+    );
+    const latencyMs = Date.now() - t0;
+    if (!res.ok) {
+      return { ok: false, configured: true, latencyMs, error: `HTTP ${res.status}` };
+    }
+    return { ok: true, configured: true, latencyMs };
+  } catch (err) {
+    return {
+      ok: false,
+      configured: true,
+      latencyMs: Date.now() - t0,
+      error: String(err),
+    };
+  }
+}
+
 export async function checkHealth(): Promise<HealthResult> {
-  const [supabase, claude, google, deepseek, mistral] = await Promise.all([
+  const [
+    supabase,
+    claude,
+    google,
+    deepseek,
+    mistral,
+    wikidata,
+    wikidataSearch,
+    worldBank,
+    wikipedia,
+    openalex,
+    wikimedia,
+    unsplash,
+  ] = await Promise.all([
     checkSupabase(),
     checkClaude(),
     checkOpenAICompat(
@@ -124,7 +207,44 @@ export async function checkHealth(): Promise<HealthResult> {
       "MISTRAL_API_KEY",
       "mistral-small-latest"
     ),
+    // Keyless data sources — lightest request that proves the service answers.
+    checkKeylessHttp(
+      "https://query.wikidata.org/sparql?format=json&query=" +
+        encodeURIComponent("SELECT ?x WHERE { ?x ?p ?o } LIMIT 1"),
+      { Accept: "application/sparql-results+json", "User-Agent": WIKIMEDIA_USER_AGENT }
+    ),
+    // The wbsearchentities resolver lives on www.wikidata.org (the wiki API),
+    // a different host from the query service above — probe it separately.
+    checkKeylessHttp(
+      "https://www.wikidata.org/w/api.php?action=wbsearchentities&search=Earth&language=en&format=json",
+      { "User-Agent": WIKIMEDIA_USER_AGENT }
+    ),
+    checkKeylessHttp("https://api.worldbank.org/v2/country/USA?format=json"),
+    checkKeylessHttp(
+      "https://en.wikipedia.org/api/rest_v1/page/summary/Aether",
+      { "User-Agent": WIKIMEDIA_USER_AGENT }
+    ),
+    checkKeylessHttp("https://api.openalex.org/works?per_page=1", {
+      "User-Agent": WIKIMEDIA_USER_AGENT,
+    }),
+    checkKeylessHttp(
+      "https://commons.wikimedia.org/w/api.php?action=query&meta=siteinfo&format=json",
+      { "User-Agent": WIKIMEDIA_USER_AGENT }
+    ),
+    checkUnsplash(),
   ]);
 
-  return { supabase, providers: { claude, google, deepseek, mistral } };
+  return {
+    supabase,
+    providers: { claude, google, deepseek, mistral },
+    dataSources: {
+      wikidata,
+      wikidataSearch,
+      worldBank,
+      wikipedia,
+      openalex,
+      wikimedia,
+      unsplash,
+    },
+  };
 }

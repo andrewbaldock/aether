@@ -3,6 +3,7 @@ import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { WithContextMenu } from "../ContextMenu";
+import { DynamicIcon, resolveIconName } from "../lucideIcon";
 import { useFillFromConversation } from "../useFillFromConversation";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
@@ -16,7 +17,7 @@ export function TimelineWidget(_props: { widget: Widget }) {
   const fill = useFillFromConversation({
     hasContent: entries.length > 0,
     gentlePrompt:
-      "Looking back at what we've already discussed, build a timeline now from any events or dates that have come up. This is about the conversation so far, not future messages — if there's genuinely nothing chronological to lay out yet, just say so briefly.",
+      "Build the best timeline you can about what we've been discussing. Draw on the events, dates, periods, and developments in the subject so far — and broaden from what was literally said: lay out the real chronology of the topic, not only dates someone typed. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call render_timeline now. Only skip if the subject genuinely has no chronological dimension at all.",
     forcedPrompt:
       "Call the render_timeline tool right now to lay out the most timeline-worthy events from our conversation so far.",
     displayText: "Update the Timeline from our conversation.",
@@ -44,7 +45,9 @@ export function TimelineWidget(_props: { widget: Widget }) {
   );
 }
 
-function SpecTimeline({ spec }: { spec: TimelineSpec }) {
+// Self-contained single-spec timeline (chronological, swimlanes, explore menu).
+// Used by the Timeline tab and BigsailCard. Pure spec → JSX; canonical renderer.
+export function SpecTimeline({ spec }: { spec: TimelineSpec }) {
   const bus = useAgentEvents();
   // Ground each entry's explore prompt in the timeline title when present.
   const titleCtx = spec.title ? ` in the "${spec.title}" timeline` : "";
@@ -96,7 +99,7 @@ function SpecTimeline({ spec }: { spec: TimelineSpec }) {
             </p>
           )}
           <ol className="relative border-l border-border-strong pl-5 space-y-4">
-            {lane.items.map((item) => {
+            {lane.items.map((item, i) => {
               const dateLabel = item.end
                 ? `${formatDate(item.start)} – ${formatDate(item.end)}`
                 : formatDate(item.start);
@@ -114,9 +117,12 @@ function SpecTimeline({ spec }: { spec: TimelineSpec }) {
                     },
                   ]}
                 >
-                  <li className="relative">
-                    {/* Dot on the spine */}
-                    <span className="absolute -left-[1.4rem] top-1 h-2.5 w-2.5 rounded-full border-2 border-[#ff2e9a] bg-surface" />
+                  {/* Cascade items in on first paint (capped — see drip-row-in). */}
+                  <li
+                    className="drip-row-in relative"
+                    style={{ "--i": Math.min(i, 24) } as React.CSSProperties}
+                  >
+                    <SpineMarker icon={item.icon} />
                     <DateRange item={item} />
                     <p className="text-sm text-content leading-snug">
                       {item.content}
@@ -129,6 +135,28 @@ function SpecTimeline({ spec }: { spec: TimelineSpec }) {
         </div>
       ))}
     </section>
+  );
+}
+
+// Marker on the spine. When the model picked a valid lucide icon for the event we
+// render it inside a pink ring; otherwise we keep the original small pink dot so
+// nothing regresses for icon-less timelines. Mirrors the Knowledge Graph's
+// per-node icon treatment (see lucideIcon.ts), which is what inspired this.
+function SpineMarker({ icon }: { icon?: string }) {
+  const name = icon ? resolveIconName(icon) : null;
+
+  if (!name) {
+    // Plain dot, centred on the spine (matches the pre-icon look).
+    return (
+      <span className="absolute -left-[1.4rem] top-1 h-2.5 w-2.5 rounded-full border-2 border-[#ff2e9a] bg-surface" />
+    );
+  }
+
+  // Pink ring badge with the icon centred inside, sitting on the spine line.
+  return (
+    <span className="absolute -left-7.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#ff2e9a] bg-surface text-[#ff2e9a]">
+      <DynamicIcon name={name} size={11} strokeWidth={2.25} />
+    </span>
   );
 }
 

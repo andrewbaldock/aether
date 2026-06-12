@@ -1,3 +1,4 @@
+import { BIGSAIL_WIDGET } from "./widgets/Bigsail";
 import { CHART_WIDGET } from "./widgets/Chart";
 import { useChartState } from "./widgets/Chart/useChartState";
 import { IMAGES_WIDGET } from "./widgets/Images";
@@ -19,7 +20,17 @@ export function useCapabilityContent(): Record<string, boolean> {
   const { entries: timeline } = useTimelineState();
   const { entries: images } = useImagesState();
 
+  // Bigsail mirrors every other capability, so it "has content" whenever any
+  // source does — its chip fills the moment the conversation produces anything.
+  const anyContent =
+    nodes.length > 0 ||
+    table.length > 0 ||
+    chart.length > 0 ||
+    timeline.length > 0 ||
+    images.length > 0;
+
   return {
+    [BIGSAIL_WIDGET.id]: anyContent,
     [KNOWLEDGE_GRAPH_WIDGET.id]: nodes.length > 0,
     [TABLE_WIDGET.id]: table.length > 0,
     [CHART_WIDGET.id]: chart.length > 0,

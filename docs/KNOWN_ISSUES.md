@@ -9,8 +9,11 @@ Known rough edges, not yet fixed. Tagged `website:` for the portfolio site; unta
 - **incomplete mobile affordance** scan for all hover-only controls that need mobile equivalents.  No way to rename or delete conversations on mobiel for example.
 - **Resize handle not discoverable** — the column resize needs a visible handle on hover.
 - **Help panel animation only works if already open** — opening the Welcome/help panel mid-query skips its open animation; it only animates correctly when opened before asking a question.
+- **"Working" dialogs don't name the active tool** — the in-progress status should say which tool/data source is running right now, not a generic "working" message.
+- **Chart x-axis labels render poorly** — labels are cramped and some are dropped; needs a better strategy so every label shows legibly (rotate, stagger, or otherwise fit them all).
 
 ## Website
 
 - **Resume copy/paste spacing** — selecting and pasting resume text produces weird spacing.
 - **Needs better marketing assets** — better screenshots, updated copy, GIFs, and screen captures of the mobile experience in action.
+- **Case study missing byline** — the case study needs my name on it.

@@ -38,6 +38,21 @@ export type ImageData = {
 export type UiState = {
   // Which capability tab (widget id) was last on top. null/absent = none.
   activeWidget?: string | null;
+  // The Tiles canvas layout for this conversation: the user's drag/resize
+  // arrangement, persisted so it follows them across devices. One entry per card
+  // (keyed by the stable card id `${capability}:${entryId}`); GridStack's
+  // save()/load() shape. Absent = auto-place everything (no manual arrangement yet).
+  tilesLayout?: TilesLayoutItem[];
+};
+
+// One placed card in the Tiles layout. Grid units (columns/rows), not pixels, so
+// the arrangement is resolution-independent. Mirrors GridStack's serialized node.
+export type TilesLayoutItem = {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 };
 
 export interface Session {
@@ -194,13 +209,30 @@ export async function updateSessionModel(
   if (error) throw new Error(`updateSessionModel: ${error.message}`);
 }
 
+// MERGE the patch into the existing ui_state rather than replacing it, so
+// independent writers (the active-view tracker and the Tiles layout saver) can
+// each patch their own field without clobbering the other's. Read-modify-write:
+// a lost-update race between the two debounced writers is harmless here (both are
+// idempotent "last value wins" UI memories, not transactional data).
 export async function updateSessionUiState(
   sessionId: string,
-  uiState: UiState
+  patch: UiState
 ): Promise<void> {
-  const { error } = await getDb()
+  const db = getDb();
+  const { data, error: readErr } = await db
     .from("sessions")
-    .update({ ui_state: uiState, updated_at: new Date().toISOString() })
+    .select("ui_state")
+    .eq("id", sessionId)
+    .single();
+  if (readErr)
+    throw new Error(`updateSessionUiState (read): ${readErr.message}`);
+  const merged: UiState = {
+    ...((data?.ui_state as UiState | null) ?? {}),
+    ...patch,
+  };
+  const { error } = await db
+    .from("sessions")
+    .update({ ui_state: merged, updated_at: new Date().toISOString() })
     .eq("id", sessionId);
   if (error) throw new Error(`updateSessionUiState: ${error.message}`);
 }

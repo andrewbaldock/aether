@@ -1,0 +1,216 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useUpdateSession } from "../../../hooks/useUpdateSession";
+import { useSessionContext } from "../../../shell/SessionContext";
+import { useAgentBusy } from "../../../shell/useAgentBusy";
+import type { Widget } from "../../registry";
+import { useChartState } from "../Chart/useChartState";
+import { useImagesState } from "../Images/useImagesState";
+import { useKnowledgeGraphState } from "../KnowledgeGraph/useKnowledgeGraphState";
+import { useTableState } from "../Table/useTableState";
+import { useTimelineState } from "../Timeline/useTimelineState";
+import { BigsailLoading } from "./BigsailLoading";
+import { useBigsailPlan } from "./BigsailPlanProvider";
+import { toCards } from "./cards";
+import { mergeWithSkeletons, planToSkeletons } from "./skeletonCards";
+import { TilesCanvas } from "./TilesCanvas";
+import {
+  placeCards,
+  STACK_BREAKPOINT_PX,
+  type TilesLayoutItem,
+} from "./tilesLayout";
+
+// Bigsail — the Tiles canvas. It mirrors every widget the conversation produces
+// as a live card on a best-fit-packed, draggable, resizable grid (GridStack). The
+// user's arrangement persists per conversation in ui_state.tilesLayout; new cards
+// auto-place into gaps. The `widget` prop is unused; all state is live.
+//
+// (A zoom/pan plane + a node-graph "flowchart" mode are planned future surfaces;
+// layout.ts keeps that flowchart/edge code dormant for then.)
+
+export function BigsailWidget(_props: { widget: Widget }) {
+  const { nodes, links } = useKnowledgeGraphState();
+  const { entries: table } = useTableState();
+  const { entries: chart } = useChartState();
+  const { entries: timeline } = useTimelineState();
+  const { entries: images } = useImagesState();
+  const busy = useAgentBusy();
+  const { userId, sessionId, sessions, messages } = useSessionContext();
+  const updateSession = useUpdateSession(userId);
+
+  const currentSession = useMemo(
+    () => sessions.find((s) => s.id === sessionId) ?? null,
+    [sessions, sessionId]
+  );
+  const savedLayout = currentSession?.ui_state?.tilesLayout;
+
+  // Measure the panel only to decide the skinny breakpoint. The grid is always
+  // 24 columns; below the breakpoint cards collapse to full-width stacked, above
+  // it they reflow to their true fractional layout. Re-measures on resize.
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [panelWidth, setPanelWidth] = useState(0);
+  useEffect(() => {
+    const el = hostRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      if (entry) setPanelWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const stacked = panelWidth > 0 && panelWidth < STACK_BREAKPOINT_PX;
+
+  const graphTitle = currentSession?.title ?? undefined;
+  const realCards = useMemo(
+    () =>
+      toCards({
+        table,
+        chart,
+        timeline,
+        images,
+        graph: nodes.length > 0 ? { nodes, links, title: graphTitle } : null,
+      }),
+    [table, chart, timeline, images, nodes, links, graphTitle]
+  );
+
+  // Skeleton lifecycle across a turn. The backend planner predicts which panels this
+  // turn will compose (planToSkeletons); that ordered set is the canvas's final
+  // shape. We reveal it in two phases:
+  //
+  //   1. DRIP (before the first real panel): the spinner animation plays and one
+  //      planned skeleton pops into its slot every DRIP_INTERVAL_MS — capped at the
+  //      planned count, so we never show more slots than the answer will have.
+  //   2. FULL (once the first real panel's data lands): the spinner stops and the
+  //      ENTIRE planned set shows at once — the arrived panel filled, the rest
+  //      shimmering — then each remaining skeleton is superseded in place by its
+  //      panel's data as it arrives (mergeWithSkeletons). The last extras vanish as
+  //      the final panel fills.
+  //
+  // A turn with no plan (a simple ask) has no skeletons: it's just spinner → panel.
+  // Skeletons never persist — persistLayout drops every skeleton:* id.
+  const plan = useBigsailPlan();
+  const planSkeletons = useMemo(() => planToSkeletons(plan), [plan]);
+
+  const DRIP_INTERVAL_MS = 10_000;
+  const [dripCount, setDripCount] = useState(0);
+  const firstPanelArrived = realCards.length > 0;
+  useEffect(() => {
+    // Drip only while we're waiting for the first panel on a planned turn.
+    if (!busy || firstPanelArrived || planSkeletons.length === 0) {
+      setDripCount(0);
+      return;
+    }
+    const t = setInterval(() => {
+      setDripCount((n) => Math.min(n + 1, planSkeletons.length));
+    }, DRIP_INTERVAL_MS);
+    return () => clearInterval(t);
+  }, [busy, firstPanelArrived, planSkeletons.length]);
+
+  const cards = useMemo(() => {
+    if (!busy) return realCards;
+    // Phase 2: once the first panel lands, show the full planned set (real cards
+    // supersede their skeletons in place; the rest keep shimmering).
+    if (firstPanelArrived) return mergeWithSkeletons(realCards, planSkeletons);
+    // Phase 1: reveal only the dripped-in slice of the planned skeletons.
+    return planSkeletons.slice(0, dripCount);
+  }, [busy, realCards, firstPanelArrived, planSkeletons, dripCount]);
+
+  // Merge the saved arrangement with the current card set: saved cards keep their
+  // spot, new cards auto-place. Recompute when cards, the saved layout, or the
+  // grid dimensions change.
+  const placed = useMemo(
+    () => placeCards(cards, savedLayout, stacked),
+    [cards, savedLayout, stacked]
+  );
+
+  // Debounced persistence of the grid arrangement. Keep the latest activeWidget
+  // alongside so the optimistic cache write doesn't drop it (the backend merges
+  // too, but this avoids a flash before the refetch).
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeWidget = currentSession?.ui_state?.activeWidget ?? null;
+  function persistLayout(layout: TilesLayoutItem[]) {
+    if (!sessionId) return;
+    // Never persist transient skeleton positions — they vanish when the turn
+    // settles, so a saved `skeleton:*` entry would just be dead weight on reload.
+    const real = layout.filter((item) => !item.id.startsWith("skeleton:"));
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      updateSession.mutate({
+        id: sessionId,
+        patch: { ui_state: { activeWidget, tilesLayout: real } },
+      });
+    }, 900);
+  }
+  useEffect(
+    () => () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    },
+    []
+  );
+
+  // Reset the arrangement: clear the saved layout so every card re-auto-places.
+  // Remounts the canvas (via key bump) so GridStack rebuilds from defaults.
+  const [resetTick, setResetTick] = useState(0);
+  function resetLayout() {
+    if (sessionId) {
+      updateSession.mutate({
+        id: sessionId,
+        patch: { ui_state: { activeWidget, tilesLayout: [] } },
+      });
+    }
+    setResetTick((t) => t + 1);
+  }
+
+  // The BigsailLoading animation overlays everything until the first real panel
+  // lands — for the first ~10s it plays alone, then over the skeletons as they drip
+  // in beneath it. It stops the instant a real panel arrives.
+  const waitingForFirstPanel = busy && realCards.length === 0;
+  const hasContent = cards.length > 0;
+
+  return (
+    <div ref={hostRef} className="relative h-full w-full bg-surface">
+      {hasContent && (
+        <div className="absolute right-3 top-3 z-10">
+          <button
+            type="button"
+            onClick={resetLayout}
+            title="Reset the card arrangement to a fresh best-fit layout"
+            className="rounded-full border border-border bg-surface/90 px-3 py-1 text-xs font-medium text-content-muted backdrop-blur-sm transition-colors hover:text-content"
+          >
+            Reset layout
+          </button>
+        </div>
+      )}
+
+      {hasContent ? (
+        <TilesCanvas
+          key={`${sessionId ?? "none"}:${resetTick}`}
+          placed={resetTick ? placeCards(cards, [], stacked) : placed}
+          onLayoutChange={persistLayout}
+        />
+      ) : !busy ? (
+        <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+          <p className="font-display text-base font-semibold text-content">
+            Your canvas is empty — for now.
+          </p>
+          <p className="max-w-sm text-sm text-content-muted">
+            {messages.length > 0
+              ? "Ask something rich — a comparison, a history, a set of facts — and everything I compose lands here as live, rearrangeable cards."
+              : "Start a conversation. Tables, charts, timelines, images, and the knowledge graph all appear here together as a living canvas of cards you can drag and resize."}
+          </p>
+        </div>
+      ) : null}
+
+      {/* Assembling-canvas animation, overlaid on the shimmering skeletons while
+          the first real panel is still composing — it rides ON TOP of the
+          skeletons (only a whisper of a backdrop so the placeholders pop in
+          visibly underneath), not a wash that hides them. Pointer-events off so
+          the cards underneath stay live. Clears the instant a real panel lands. */}
+      {waitingForFirstPanel && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+          <BigsailLoading />
+        </div>
+      )}
+    </div>
+  );
+}
