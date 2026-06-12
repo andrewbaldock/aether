@@ -781,7 +781,7 @@ type ImageResult = {
 // extmetadata / HTML-bearing values: strip tags, decode the handful of entities
 // that show up, collapse whitespace, cap length so a stray long caption can't
 // blow the token budget.
-function stripHtml(html: string | undefined): string | undefined {
+export function stripHtml(html: string | undefined): string | undefined {
   if (!html) return undefined;
   const text = html
     .replace(/<[^>]*>/g, "")
@@ -973,7 +973,7 @@ async function searchUnsplash(
 
 // Interleave two source lists so the merged gallery isn't all-Commons-then-all-
 // Unsplash. Stops when both are exhausted.
-function interleave<T>(a: T[], b: T[]): T[] {
+export function interleave<T>(a: T[], b: T[]): T[] {
   const out: T[] = [];
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
     if (i < a.length) out.push(a[i] as T);
@@ -1039,7 +1039,7 @@ const DATA_TOOL_USER_AGENT = COMMONS_USER_AGENT;
 // Cap any single cell so a verbose label/description can't dominate context.
 const MAX_CELL_LEN = 200;
 
-function capCell(value: string): string {
+export function capCell(value: string): string {
   return value.length > MAX_CELL_LEN
     ? `${value.slice(0, MAX_CELL_LEN - 1)}…`
     : value;
@@ -1103,7 +1103,14 @@ async function wikidataSearch(input: unknown): Promise<string> {
     });
   }
 
-  const data = (await res.json()) as { search?: WbSearchHit[] };
+  let data: { search?: WbSearchHit[] };
+  try {
+    data = (await res.json()) as { search?: WbSearchHit[] };
+  } catch (err) {
+    return JSON.stringify({
+      error: `Wikidata search returned an unreadable response (${String(err)}). Tell the user and offer to try again.`,
+    });
+  }
   const results = (data.search ?? [])
     .map((h) => {
       if (!h.id) return null;
@@ -1161,10 +1168,20 @@ async function wikidataQuery(input: unknown): Promise<string> {
     });
   }
 
-  const data = (await res.json()) as {
+  let data: {
     head?: { vars?: string[] };
     results?: { bindings?: SparqlBinding[] };
   };
+  try {
+    data = (await res.json()) as {
+      head?: { vars?: string[] };
+      results?: { bindings?: SparqlBinding[] };
+    };
+  } catch (err) {
+    return JSON.stringify({
+      error: `Wikidata returned an unreadable response (${String(err)}). Tell the user and offer to try again.`,
+    });
+  }
   const vars = data.head?.vars ?? [];
   const bindings = data.results?.bindings ?? [];
   if (bindings.length === 0) {
@@ -1266,7 +1283,14 @@ async function worldBank(input: unknown): Promise<string> {
 
   // The API returns [paginationMeta, observations]. A bad indicator/code returns
   // a message object in element 0 with no data array.
-  const body = (await res.json()) as unknown;
+  let body: unknown;
+  try {
+    body = (await res.json()) as unknown;
+  } catch (err) {
+    return JSON.stringify({
+      error: `World Bank returned an unreadable response (${String(err)}). Tell the user and offer to try again.`,
+    });
+  }
   if (!Array.isArray(body) || body.length < 2 || !Array.isArray(body[1])) {
     return JSON.stringify({
       error:
@@ -1331,7 +1355,12 @@ async function fetchOneWikipediaSummary(
     return null; // network/timeout — skip this title, keep the rest
   }
   if (!res.ok) return null; // 404 (no such article) etc. — skip silently
-  const data = (await res.json()) as WikipediaSummaryResponse;
+  let data: WikipediaSummaryResponse;
+  try {
+    data = (await res.json()) as WikipediaSummaryResponse;
+  } catch {
+    return null; // unreadable/partial body — skip this title, keep the rest
+  }
   if (!data.extract) return null; // disambiguation/empty pages carry no extract
   const row: Record<string, string> = {
     title: data.title ?? title,
@@ -1434,7 +1463,14 @@ async function openalexSearch(input: unknown): Promise<string> {
     });
   }
 
-  const body = (await res.json()) as { results?: unknown };
+  let body: { results?: unknown };
+  try {
+    body = (await res.json()) as { results?: unknown };
+  } catch (err) {
+    return JSON.stringify({
+      error: `OpenAlex returned an unreadable response (${String(err)}). Tell the user and offer to try again.`,
+    });
+  }
   const results = Array.isArray(body.results) ? body.results : [];
 
   const rows =

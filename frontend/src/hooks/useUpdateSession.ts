@@ -30,7 +30,20 @@ export function useUpdateSession(userId: string) {
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<Session[]>(key);
       queryClient.setQueryData<Session[]>(key, (rows) =>
-        rows?.map((row) => (row.id === id ? { ...row, ...patch } : row))
+        rows?.map((row) => {
+          if (row.id !== id) return row;
+          // Deep-merge ui_state so a partial patch (e.g. ChatPanel writing only
+          // { activeWidget }) doesn't clobber sibling keys like tilesLayout. The
+          // backend's updateSessionUiState read-modify-writes the same way, so the
+          // optimistic cache and the persisted row stay symmetric — without this,
+          // a tab switch would momentarily drop the saved Bigsail layout until the
+          // refetch lands.
+          const merged = { ...row, ...patch };
+          if (patch.ui_state) {
+            merged.ui_state = { ...row.ui_state, ...patch.ui_state };
+          }
+          return merged;
+        })
       );
       return { previous };
     },

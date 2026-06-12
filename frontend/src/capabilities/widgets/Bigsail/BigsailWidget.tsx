@@ -149,7 +149,11 @@ export function BigsailWidget(_props: { widget: Widget }) {
   );
 
   // Reset the arrangement: clear the saved layout so every card re-auto-places.
-  // Remounts the canvas (via key bump) so GridStack rebuilds from defaults.
+  // The mutation writes tilesLayout: [] (optimistically + deep-merged into the
+  // cache, so `savedLayout` becomes [] this render and `placed` recomputes to the
+  // auto-layout). The key bump only forces GridStack to rebuild from those fresh
+  // positions — it must NOT also gate `placed`, or it would permanently pin the
+  // canvas to the auto-layout and ignore drags saved after the first reset.
   const [resetTick, setResetTick] = useState(0);
   function resetLayout() {
     if (sessionId) {
@@ -185,7 +189,7 @@ export function BigsailWidget(_props: { widget: Widget }) {
       {hasContent ? (
         <TilesCanvas
           key={`${sessionId ?? "none"}:${resetTick}`}
-          placed={resetTick ? placeCards(cards, [], stacked) : placed}
+          placed={placed}
           onLayoutChange={persistLayout}
         />
       ) : !busy ? (

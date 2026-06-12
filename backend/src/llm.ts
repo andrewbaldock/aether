@@ -75,6 +75,77 @@ type ApiMessage = Anthropic.Messages.MessageParam;
 // in 1–3 iterations; anything past ~6 is a loop, not progress.
 const MAX_ITERATIONS = Number(process.env.LLM_MAX_ITERATIONS) || 6;
 
+// ── Shared agent-loop helpers ──────────────────────────────────────────────
+// The two clients (Claude / OpenAI-compat) run the SAME agent loop with different
+// wire formats. These small helpers hold the wire-format-independent logic so it
+// lives in ONE place and can't drift between the clients.
+
+// The planner pre-pass, gated. On a complex turn, decompose the request into an
+// abstract composition plan, emit it (→ `plan` SSE / Bigsail), and return a short
+// preamble string to fold into the conversation so the loop is STEERED by it.
+// Best-effort — returns null on simple turns or any failure → plain ReAct. The
+// caller appends the preamble to the conversation prefix ONCE (not per iteration),
+// so the cached system/tools prefix is untouched and (on Claude) the preamble
+// rides the conversation cache on iterations 2+.
+async function runPlannerPrePass(
+  messages: ChatMessage[],
+  onPlan?: (plan: CompositionPlan) => Promise<void>
+): Promise<string | null> {
+  const lastUser = [...messages].reverse().find((m) => m.role === "user");
+  if (!lastUser) return null;
+  const plan = await planTurn(lastUser.content);
+  if (!plan) return null;
+  await onPlan?.(plan);
+  return planPreamble(plan);
+}
+
+// Status emitted at the top of each iteration, filling dead-air windows. Iteration
+// 1's "Thinking it through…" covers the longest gap (pre-first-token); 2+ signals
+// the loop re-entering after tool results. atCap signals the forced text close.
+async function emitIterationStatus(
+  iteration: number,
+  atCap: boolean,
+  onLoopStart?: (iteration: number) => Promise<void>,
+  onStatus?: (message: string) => Promise<void>
+): Promise<void> {
+  if (iteration > 1) {
+    await onLoopStart?.(iteration);
+    await onStatus?.("Reviewing what came back…");
+  } else {
+    await onStatus?.("Thinking it through…");
+  }
+  if (atCap) await onStatus?.("Wrapping up…");
+}
+
+// Self-correction, applied to a whole batch of tool results from one iteration.
+// If a result is degenerate (empty rows/data/items), append a corrective directive
+// to the content the MODEL sees (not the one the frontend parsed) so it self-heals
+// next iteration. The budget (MAX_CORRECTIONS) is spent PER ITERATION, not per
+// tool: when a correction pass is allowed, ALL degenerate tools in the batch get
+// the directive — otherwise tool ordering would decide which empty panel gets
+// healed in a composed (multi-tool) answer, the headline use case. Returns the
+// (possibly augmented) model-facing string for each result, in input order, plus
+// whether this batch consumed a correction pass.
+function applySelfCorrection(
+  results: { name: string; result: string }[],
+  correctionCount: number,
+  iteration: number
+): { modelResults: string[]; consumedCorrection: boolean } {
+  const canCorrect = correctionCount < MAX_CORRECTIONS;
+  let consumedCorrection = false;
+  const modelResults = results.map(({ name, result }) => {
+    if (canCorrect && isDegenerate(name, result)) {
+      consumedCorrection = true;
+      console.log(
+        `[self-correct] iter=${iteration} tool=${name} degenerate → corrective retry ${correctionCount + 1}/${MAX_CORRECTIONS}`
+      );
+      return result + correctionDirective(name);
+    }
+    return result;
+  });
+  return { modelResults, consumedCorrection };
+}
+
 function createClaudeClient(
   tools: ToolDefinition[],
   systemPrompt: string,
@@ -207,24 +278,11 @@ function createClaudeClient(
         content: m.content,
       }));
 
-      // Conditional planner pre-pass (gated): on a complex turn, decompose the
-      // request into an abstract composition plan, emit it (→ `plan` SSE / Bigsail),
-      // and fold a short preamble into the conversation so the loop is STEERED by
-      // it. Best-effort — null on simple turns or any failure → plain ReAct.
-      // Appended to the conversation prefix ONCE here (not per iteration), so the
-      // cached system/tools prefix is untouched and the preamble rides the
-      // conversation cache on iterations 2+.
-      const lastUser = [...messages].reverse().find((m) => m.role === "user");
-      if (lastUser) {
-        const plan = await planTurn(lastUser.content);
-        if (plan) {
-          await onPlan?.(plan);
-          history.push({
-            role: "user",
-            content: planPreamble(plan),
-          });
-        }
-      }
+      // Conditional planner pre-pass (gated) — appended ONCE to the conversation
+      // prefix, so the cached system/tools prefix is untouched and the preamble
+      // rides the conversation cache on iterations 2+. See runPlannerPrePass.
+      const preamble = await runPlannerPrePass(messages, onPlan);
+      if (preamble) history.push({ role: "user", content: preamble });
 
       // Counts trips through the loop. Iteration 1 is the initial call; every
       // increment past that means tool results were fed back and we're calling
@@ -246,21 +304,12 @@ function createClaudeClient(
 
       while (true) {
         iteration++;
-        if (iteration > 1) {
-          await onLoopStart?.(iteration);
-          await onStatus?.("Reviewing what came back…");
-        } else {
-          // Fill the pre-first-token gap immediately — the longest, most common
-          // dead-air window. Superseded as soon as a token or tool_start arrives.
-          await onStatus?.("Thinking it through…");
-        }
-
         // On the final allowed iteration, call without tools so the model must
         // answer in text — the loop closes cleanly instead of requesting another
         // tool it can't run. (Equality, not >: the previous iteration's tool
         // results are already in history, so this call produces the final reply.)
         const atCap = iteration >= MAX_ITERATIONS;
-        if (atCap) await onStatus?.("Wrapping up…");
+        await emitIterationStatus(iteration, atCap, onLoopStart, onStatus);
 
         // Per-turn accumulators — reset each iteration.
         const pendingTools = new Map<
@@ -379,8 +428,9 @@ function createClaudeClient(
         ];
         history.push({ role: "assistant", content: assistantContent });
 
-        // Execute each tool and collect results.
-        const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
+        // Execute each tool and collect results (in input order, preserved by the
+        // Map's insertion order).
+        const executed: { id: string; name: string; result: string }[] = [];
         for (const [, tool] of pendingTools) {
           const input = JSON.parse(
             tool.inputChunks.join("") || "{}"
@@ -393,28 +443,25 @@ function createClaudeClient(
           // only; null/skipped otherwise).
           const countStatus = toolResultStatus(tool.name, result);
           if (countStatus) await onStatus?.(countStatus);
-          // Self-correction: if the result is degenerate (empty rows/data/items)
-          // and we haven't already corrected this turn, append a corrective
-          // directive to the tool_result content the MODEL sees (not the one the
-          // frontend parsed) so it self-heals on the next iteration. Bounded by
-          // MAX_CORRECTIONS and, transitively, MAX_ITERATIONS.
-          let modelResult = result;
-          if (
-            correctionCount < MAX_CORRECTIONS &&
-            isDegenerate(tool.name, result)
-          ) {
-            correctionCount++;
-            modelResult = result + correctionDirective(tool.name);
-            console.log(
-              `[self-correct] iter=${iteration} tool=${tool.name} degenerate → corrective retry ${correctionCount}/${MAX_CORRECTIONS}`
-            );
-          }
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: tool.id,
-            content: modelResult,
-          });
+          executed.push({ id: tool.id, name: tool.name, result });
         }
+
+        // Self-correction across the whole batch (see applySelfCorrection): one
+        // correction pass per turn, but it heals EVERY degenerate result in the
+        // batch, not just the first by tool order.
+        const { modelResults, consumedCorrection } = applySelfCorrection(
+          executed,
+          correctionCount,
+          iteration
+        );
+        if (consumedCorrection) correctionCount++;
+
+        const toolResults: Anthropic.Messages.ToolResultBlockParam[] =
+          executed.map((t, i) => ({
+            type: "tool_result",
+            tool_use_id: t.id,
+            content: modelResults[i] as string,
+          }));
 
         history.push({ role: "user", content: toolResults });
         // Continue the loop — call the API again with updated history.
@@ -526,14 +573,8 @@ function createOpenAICompatClient(
       // is appended to history as an extra user message; there's no prompt cache
       // here, so this just steers the model. The planner itself always runs on
       // Haiku, so non-Claude conversations still get planning + the `plan` event.
-      const lastUser = [...messages].reverse().find((m) => m.role === "user");
-      if (lastUser) {
-        const plan = await planTurn(lastUser.content);
-        if (plan) {
-          await onPlan?.(plan);
-          history.push({ role: "user", content: planPreamble(plan) });
-        }
-      }
+      const preamble = await runPlannerPrePass(messages, onPlan);
+      if (preamble) history.push({ role: "user", content: preamble });
 
       let iteration = 0;
       // In-loop self-correction counter for this turn (see MAX_CORRECTIONS).
@@ -541,17 +582,10 @@ function createOpenAICompatClient(
 
       while (true) {
         iteration++;
-        if (iteration > 1) {
-          await onLoopStart?.(iteration);
-          await onStatus?.("Reviewing what came back…");
-        } else {
-          await onStatus?.("Thinking it through…");
-        }
-
         // Final allowed iteration: send no tools so the model must answer in text
         // and the loop closes cleanly (the cap). Mirrors the Claude client.
         const atCap = iteration >= MAX_ITERATIONS;
-        if (atCap) await onStatus?.("Wrapping up…");
+        await emitIterationStatus(iteration, atCap, onLoopStart, onStatus);
 
         // Per-turn accumulators. Tool calls arrive as deltas keyed by index; we
         // collect id/name/argument-fragments until the chunk stream ends, then
@@ -670,6 +704,7 @@ function createOpenAICompatClient(
           })),
         });
 
+        const executed: { id: string; name: string; result: string }[] = [];
         for (const tool of sortedTools) {
           const input = JSON.parse(tool.argChunks.join("") || "{}") as unknown;
           await onToolStart?.(tool.name, input);
@@ -678,24 +713,25 @@ function createOpenAICompatClient(
           // Honest count status, same as the Claude client.
           const countStatus = toolResultStatus(tool.name, result);
           if (countStatus) await onStatus?.(countStatus);
-          // Self-correction, same as the Claude client (see there for rationale).
-          let modelResult = result;
-          if (
-            correctionCount < MAX_CORRECTIONS &&
-            isDegenerate(tool.name, result)
-          ) {
-            correctionCount++;
-            modelResult = result + correctionDirective(tool.name);
-            console.log(
-              `[self-correct] iter=${iteration} tool=${tool.name} degenerate → corrective retry ${correctionCount}/${MAX_CORRECTIONS}`
-            );
-          }
+          executed.push({ id: tool.id, name: tool.name, result });
+        }
+
+        // Self-correction across the whole batch, same as the Claude client (see
+        // applySelfCorrection for rationale).
+        const { modelResults, consumedCorrection } = applySelfCorrection(
+          executed,
+          correctionCount,
+          iteration
+        );
+        if (consumedCorrection) correctionCount++;
+
+        executed.forEach((t, i) => {
           history.push({
             role: "tool",
-            tool_call_id: tool.id,
-            content: modelResult,
+            tool_call_id: t.id,
+            content: modelResults[i] as string,
           });
-        }
+        });
         // Continue the loop — call the API again with the updated history.
       }
     },
