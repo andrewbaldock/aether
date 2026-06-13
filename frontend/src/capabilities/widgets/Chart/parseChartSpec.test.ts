@@ -74,4 +74,51 @@ describe("parseChartSpec", () => {
     );
     expect(spec?.data).toHaveLength(1);
   });
+
+  it("carries orientation, stacked, and axis labels through", () => {
+    const spec = parseChartSpec(
+      JSON.stringify({
+        type: "bar",
+        xKey: "country",
+        data: [{ country: "A", pop: 1 }],
+        series: [{ key: "pop" }],
+        orientation: "horizontal",
+        stacked: true,
+        yLabel: "% of population",
+        xLabel: "Country",
+      })
+    );
+    expect(spec?.orientation).toBe("horizontal");
+    expect(spec?.stacked).toBe(true);
+    expect(spec?.yLabel).toBe("% of population");
+    expect(spec?.xLabel).toBe("Country");
+  });
+
+  it("leaves new fields undefined when absent (back-compat)", () => {
+    const spec = parseChartSpec(
+      JSON.stringify({
+        type: "bar",
+        xKey: "quarter",
+        data: [{ quarter: "Q1", revenue: 10 }],
+        series: [{ key: "revenue" }],
+      })
+    );
+    expect(spec?.orientation).toBeUndefined();
+    expect(spec?.stacked).toBeUndefined();
+    expect(spec?.yLabel).toBeUndefined();
+    expect(spec?.xLabel).toBeUndefined();
+  });
+
+  it("ignores an invalid orientation value", () => {
+    const spec = parseChartSpec(
+      JSON.stringify({
+        type: "bar",
+        xKey: "x",
+        data: [{ x: "a", y: 1 }],
+        series: [{ key: "y" }],
+        orientation: "sideways",
+      })
+    );
+    expect(spec?.orientation).toBeUndefined();
+  });
 });

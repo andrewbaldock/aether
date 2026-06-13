@@ -12,7 +12,7 @@ import {
   type AgentEvent,
   useAgentEvents,
 } from "../../../shell/AgentEventContext";
-import type { ChartSpec, ChartType } from "./types";
+import type { ChartOrientation, ChartSpec, ChartType } from "./types";
 
 // One rendered chart: a parsed spec plus a stable id assigned on arrival, so the
 // widget can key the stack without leaning on array index.
@@ -58,6 +58,10 @@ export function parseChartSpec(raw: string): ChartSpec | null {
     data: points,
     xKey,
     series,
+    orientation,
+    stacked,
+    yLabel,
+    xLabel,
   } = data as Record<string, unknown>;
 
   if (!VALID_TYPES.has(type as ChartType)) return null;
@@ -82,6 +86,13 @@ export function parseChartSpec(raw: string): ChartSpec | null {
     data: validData,
     xKey,
     series: validSeries,
+    orientation:
+      orientation === "horizontal" || orientation === "vertical"
+        ? (orientation as ChartOrientation)
+        : undefined,
+    stacked: typeof stacked === "boolean" ? stacked : undefined,
+    yLabel: typeof yLabel === "string" ? yLabel : undefined,
+    xLabel: typeof xLabel === "string" ? xLabel : undefined,
   };
 }
 

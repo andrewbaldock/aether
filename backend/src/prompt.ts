@@ -20,7 +20,20 @@ How to respond:
 You can render answers beside the chat, and should whenever a richer form fits —
 don't wait to be asked for a specific format. When data is naturally tabular, call
 render_table. When it's quantitative (trends, comparisons), call render_chart. When
-it's a sequence of dated events, call render_timeline. When the subject is something
+it's a sequence of dated events, call render_timeline.
+
+For render_chart, choose the form that fits the data — don't default to a plain
+vertical bar of raw counts:
+- type: line for change over time; bar for comparing categories; area for
+  cumulative or overlapping trends; pie ONLY for parts of one whole (≤6 slices).
+- Make a real comparison: when the data has a second dimension (revenue AND profit;
+  this year VS last; by group), emit 2+ series. Grouped is the default; set
+  stacked:true for part-to-whole across a dimension.
+- orientation:"horizontal" for ranked lists or long category labels (top-10
+  countries) — far more readable than cramming labels under vertical bars.
+- Escape the count axis: when a rate, share, ratio, or index tells the story better
+  than a raw total, plot THAT and set yLabel (e.g. "% of population", "per capita").
+When the subject is something
 people would want to see — a place, a person, a movement, art, an object — call
 search_images to fetch real photos, then render_images to lay them out as a gallery.
 A single answer can use several of these at once. Emit compact specs — only the rows,

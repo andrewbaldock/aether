@@ -253,6 +253,23 @@ export const RENDER_CHART_TOOL: ToolDefinition = {
         type: "string",
         description: "field name for the x-axis / category",
       },
+      orientation: {
+        type: "string",
+        enum: ["vertical", "horizontal"],
+        description:
+          "bar only; horizontal for ranked lists or long category labels. default vertical",
+      },
+      stacked: {
+        type: "boolean",
+        description:
+          "bar/area with 2+ series: stack them (part-to-whole) instead of grouping side-by-side",
+      },
+      yLabel: {
+        type: "string",
+        description:
+          "value-axis caption, e.g. '% of population', 'per capita', 'index (2000=100)' — use when the axis isn't a raw count",
+      },
+      xLabel: { type: "string", description: "optional category-axis caption" },
       series: {
         type: "array",
         items: {

@@ -5,6 +5,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Label,
   Legend,
   Line,
   LineChart,
@@ -73,7 +74,7 @@ export function ChartWidget(_props: { widget: Widget }) {
   const fill = useFillFromConversation({
     hasContent: entries.length > 0,
     gentlePrompt:
-      "Build the best chart you can about what we've been discussing. Visualize the quantitative shape of the subject — trends, distributions, or comparisons — and broaden from what was literally said: chart the real numbers the topic involves, fetching figures from your data sources if needed rather than only plotting numbers someone typed. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call render_chart now. Only skip if the subject genuinely has no quantitative dimension at all.",
+      "Build the best chart you can about what we've been discussing. Visualize the quantitative shape of the subject — trends, distributions, or comparisons — and broaden from what was literally said: chart the real numbers the topic involves, fetching figures from your data sources if needed rather than only plotting numbers someone typed. Choose the form and comparison that fit — line for trends, a multi-series or stacked bar for real comparisons, horizontal bars for rankings, a rate or share on the value axis when that's the truer story — not always a vertical bar of raw counts. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call render_chart now. Only skip if the subject genuinely has no quantitative dimension at all.",
     forcedPrompt:
       "Call the render_chart tool right now to visualize the most chart-worthy numbers from our conversation so far.",
     displayText: "Update the Chart from our conversation.",
@@ -214,11 +215,21 @@ export function SpecChart({ spec }: { spec: ChartSpec }) {
   }
 
   if (spec.type === "bar") {
+    const horizontal = spec.orientation === "horizontal";
+    // Recharts inverts its layout naming: a HORIZONTAL bar chart (bars run
+    // left→right) is layout="vertical". Then the category sits on Y and the value
+    // on X; upright, it's the reverse. Build both axes against the slot each one
+    // occupies for this orientation.
+    const stackId = spec.stacked ? "stack" : undefined;
     return (
-      <BarChart {...common}>
+      <BarChart {...common} layout={horizontal ? "vertical" : "horizontal"}>
         <CartesianGrid strokeOpacity={0.15} />
-        <XAxis dataKey={spec.xKey} stroke={AXIS_COLOR} fontSize={12} />
-        <YAxis stroke={AXIS_COLOR} fontSize={12} />
+        <CategoryAxis
+          axis={horizontal ? "y" : "x"}
+          xKey={spec.xKey}
+          label={spec.xLabel}
+        />
+        <ValueAxis axis={horizontal ? "x" : "y"} label={spec.yLabel} />
         <RechartsTooltip />
         <Legend />
         {spec.series.map((s, i) => (
@@ -227,6 +238,7 @@ export function SpecChart({ spec }: { spec: ChartSpec }) {
             dataKey={s.key}
             name={s.label ?? s.key}
             fill={seriesColor(s.color, i)}
+            stackId={stackId}
           >
             {/* Single-series bar charts: color each bar by category (like a pie).
                 Multi-series: use the series color uniformly (Cells would override
@@ -244,11 +256,12 @@ export function SpecChart({ spec }: { spec: ChartSpec }) {
   }
 
   if (spec.type === "area") {
+    const stackId = spec.stacked ? "stack" : undefined;
     return (
       <AreaChart {...common}>
         <CartesianGrid strokeOpacity={0.15} />
-        <XAxis dataKey={spec.xKey} stroke={AXIS_COLOR} fontSize={12} />
-        <YAxis stroke={AXIS_COLOR} fontSize={12} />
+        <CategoryAxis axis="x" xKey={spec.xKey} label={spec.xLabel} />
+        <ValueAxis axis="y" label={spec.yLabel} />
         <RechartsTooltip />
         <Legend />
         {spec.series.map((s, i) => {
@@ -261,6 +274,7 @@ export function SpecChart({ spec }: { spec: ChartSpec }) {
               stroke={color}
               fill={color}
               fillOpacity={0.25}
+              stackId={stackId}
             />
           );
         })}
@@ -272,8 +286,8 @@ export function SpecChart({ spec }: { spec: ChartSpec }) {
   return (
     <LineChart {...common}>
       <CartesianGrid strokeOpacity={0.15} />
-      <XAxis dataKey={spec.xKey} stroke={AXIS_COLOR} fontSize={12} />
-      <YAxis stroke={AXIS_COLOR} fontSize={12} />
+      <CategoryAxis axis="x" xKey={spec.xKey} label={spec.xLabel} />
+      <ValueAxis axis="y" label={spec.yLabel} />
       <RechartsTooltip />
       <Legend />
       {spec.series.map((s, i) => (
@@ -287,6 +301,62 @@ export function SpecChart({ spec }: { spec: ChartSpec }) {
         />
       ))}
     </LineChart>
+  );
+}
+
+// The category axis (the xKey dimension). `axis` is the SLOT it occupies for the
+// current orientation: "x" for upright charts, "y" for a horizontal bar chart
+// (Recharts layout="vertical"), where it also needs extra width so long labels
+// read. Recharts dispatches axis components by type, so these must be returned as
+// bare <XAxis>/<YAxis>, not wrapped.
+function CategoryAxis({
+  axis,
+  xKey,
+  label,
+}: {
+  axis: "x" | "y";
+  xKey: string;
+  label?: string;
+}) {
+  if (axis === "x") {
+    return (
+      <XAxis dataKey={xKey} stroke={AXIS_COLOR} fontSize={12}>
+        {label ? <Label value={label} position="bottom" fontSize={11} /> : null}
+      </XAxis>
+    );
+  }
+  return (
+    <YAxis
+      type="category"
+      dataKey={xKey}
+      width={120}
+      stroke={AXIS_COLOR}
+      fontSize={12}
+    >
+      {label ? (
+        <Label value={label} angle={-90} position="left" fontSize={11} />
+      ) : null}
+    </YAxis>
+  );
+}
+
+// The value axis (the numeric series). `axis` is the slot it occupies: "y" for
+// upright charts, "x" for a horizontal bar chart. `label` lets it read a rate or
+// index rather than an implied raw count.
+function ValueAxis({ axis, label }: { axis: "x" | "y"; label?: string }) {
+  if (axis === "x") {
+    return (
+      <XAxis type="number" stroke={AXIS_COLOR} fontSize={12}>
+        {label ? <Label value={label} position="bottom" fontSize={11} /> : null}
+      </XAxis>
+    );
+  }
+  return (
+    <YAxis stroke={AXIS_COLOR} fontSize={12}>
+      {label ? (
+        <Label value={label} angle={-90} position="left" fontSize={11} />
+      ) : null}
+    </YAxis>
   );
 }
 
