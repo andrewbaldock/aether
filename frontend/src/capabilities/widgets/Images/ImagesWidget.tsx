@@ -166,6 +166,7 @@ export function SpecImages({
           return (
             <WithContextMenu
               key={img.url}
+              label="Explore this image"
               items={[
                 {
                   label: "Explore further",

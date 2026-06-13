@@ -3,7 +3,7 @@
 How Aether fits together. **Keep this current:** update it in the same commit that changes how
 the pieces connect.
 
-Last updated: Health-gated model picker (`/api/models` tags each model `available` via a cached live provider probe).
+Last updated: Shared Radix menu/select primitives — `@radix-ui/react-dropdown-menu` (Explore-further kebab) + `@radix-ui/react-select` (model picker); `AgentEventBus` now replays its most-recent coarse phase to opt-in subscribers so a mid-turn mount catches up.
 
 ---
 

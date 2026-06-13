@@ -34,6 +34,9 @@ source. See [ARCHITECTURE.md](./ARCHITECTURE.md#two-runtimes).
 | `react-resizable-panels` | ^4.11.2 | Resizable/collapsible panel groups | Powers the three-zone shell (sidebar / chat / capability column). **Unit trap — see [ARCHITECTURE.md](./ARCHITECTURE.md#the-shell--three-zone-layout).** |
 | `d3-force` / `d3-selection` / `d3-zoom` | ^3.x | Force layout + SVG selection + pan/zoom | The knowledge-graph widget: force-directed node layout rendered to SVG with pan/zoom. |
 | `lucide-react` | ^1.17.0 | Icon set | UI glyphs across the shell. |
+| `@radix-ui/react-tooltip` | ^1.2.9 | Accessible tooltip primitive | Hover/focus tooltips with correct a11y + collision handling, instead of hand-rolling. |
+| `@radix-ui/react-dropdown-menu` | ^2.1.17 | Accessible menu primitive | The shared "Explore further" kebab menu on table rows / chart series / image tiles / timeline events (`widgets/ContextMenu.tsx`). Replaced a right-click-only menu that was unreachable on touch; Radix gives a visible ⋮ trigger plus outside-click/Escape/focus-trap/collision-flip for free. |
+| `@radix-ui/react-select` | ^2.3.0 | Accessible select primitive | The chat-footer model picker (`shell/ModelPicker.tsx`). Replaced a native `<select>` + a cross-browser width-hugging hack: the custom trigger hugs its content, themes with app tokens, and shows each model's blurb (impossible in a native `<option>`). Keeps health-gating + Sonnet default. |
 | `@supabase/supabase-js` | ^2.106.2 | Supabase client | Persistence — session + message history. |
 
 ### Dev dependencies

@@ -1,5 +1,7 @@
+import { Pencil, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "../brand/Wordmark";
+import { ExploreMenu } from "../capabilities/widgets/ContextMenu";
 import { SITE_URL } from "../lib/links";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { useModelLabel } from "./ModelPicker";
@@ -157,23 +159,9 @@ function SessionItem({
   onRename,
   onDelete,
 }: SessionItemProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(title);
-  const menuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Close menu on outside click.
-  useEffect(() => {
-    if (!menuOpen) return;
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [menuOpen]);
 
   // Focus input when rename mode opens.
   useEffect(() => {
@@ -185,7 +173,6 @@ function SessionItem({
   function startRename() {
     setDraft(title);
     setRenaming(true);
-    setMenuOpen(false);
   }
 
   function commitRename() {
@@ -226,53 +213,29 @@ function SessionItem({
         </button>
       )}
 
-      {/* Kebab button — always visible on touch (no hover), reveal-on-hover on
-          desktop, and pinned visible while its menu is open. */}
+      {/* Kebab menu — always visible on touch (no hover), reveal-on-hover on
+          desktop, and pinned visible while its menu is open (data-[state=open]).
+          Shares the Radix-backed ExploreMenu primitive with the widgets. */}
       {!renaming && (
-        <div ref={menuRef} className="absolute right-1 top-1.5">
-          <button
-            type="button"
-            aria-label="Session options"
-            onClick={(e) => {
-              e.stopPropagation();
-              setMenuOpen((o) => !o);
-            }}
-            className={`rounded p-1 text-content-faint hover:bg-border-strong hover:text-content ${
-              menuOpen
-                ? "bg-border-strong text-content opacity-100"
-                : "opacity-100 md:opacity-0 md:group-hover:opacity-100"
-            }`}
-          >
-            <KebabIcon />
-          </button>
-
-          {menuOpen && (
-            <div className="absolute right-0 top-full z-20 mt-1 w-36 rounded-lg border border-border bg-surface-raised py-1 shadow-md">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  startRename();
-                }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-content hover:bg-elevated"
-              >
-                <PencilIcon />
-                Rename
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setMenuOpen(false);
-                  onDelete();
-                }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-danger-content hover:bg-elevated"
-              >
-                <TrashIcon />
-                Delete
-              </button>
-            </div>
-          )}
+        <div className="absolute right-1 top-1.5">
+          <ExploreMenu
+            label="Session options"
+            align="end"
+            triggerClassName="inline-flex items-center justify-center rounded p-1 text-content-faint opacity-100 transition-opacity hover:bg-border-strong hover:text-content focus-visible:outline-none data-[state=open]:bg-border-strong data-[state=open]:text-content md:opacity-0 md:group-hover:opacity-100 md:data-[state=open]:opacity-100"
+            items={[
+              {
+                label: "Rename",
+                icon: <Pencil className="h-3.5 w-3.5" aria-hidden />,
+                onClick: startRename,
+              },
+              {
+                label: "Delete",
+                icon: <Trash2 className="h-3.5 w-3.5" aria-hidden />,
+                destructive: true,
+                onClick: onDelete,
+              },
+            ]}
+          />
         </div>
       )}
     </li>
@@ -306,63 +269,6 @@ export function SidebarToggleIcon() {
     >
       <rect x="3" y="4" width="18" height="16" rx="2" />
       <path d="M9 4v16" />
-    </svg>
-  );
-}
-
-function KebabIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="5" r="2" />
-      <circle cx="12" cy="12" r="2" />
-      <circle cx="12" cy="19" r="2" />
-    </svg>
-  );
-}
-
-function PencilIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-      <path d="M10 11v6" />
-      <path d="M14 11v6" />
-      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
     </svg>
   );
 }

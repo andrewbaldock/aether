@@ -2,7 +2,7 @@ import { useAgentEvents } from "../../../shell/AgentEventContext";
 import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
-import { WithContextMenu } from "../ContextMenu";
+import { ExploreMenu } from "../ContextMenu";
 import { DynamicIcon, resolveIconName } from "../lucideIcon";
 import { useFillFromConversation } from "../useFillFromConversation";
 import { WidgetEmptyState } from "../WidgetEmptyState";
@@ -104,31 +104,35 @@ export function SpecTimeline({ spec }: { spec: TimelineSpec }) {
                 ? `${formatDate(item.start)} – ${formatDate(item.end)}`
                 : formatDate(item.start);
               return (
-                <WithContextMenu
+                // Cascade items in on first paint (capped — see drip-row-in).
+                // group/event drives the kebab's hover-reveal on pointer devices.
+                <li
                   key={item.id}
-                  items={[
-                    {
-                      label: "Explore further",
-                      onClick: () =>
-                        bus.emit({
-                          type: "explore_request",
-                          prompt: `Tell me more about this event${titleCtx}: ${dateLabel} — ${item.content}. What's significant about it and what to explore next.`,
-                        }),
-                    },
-                  ]}
+                  className="group/event drip-row-in relative pr-9"
+                  style={{ "--i": Math.min(i, 24) } as React.CSSProperties}
                 >
-                  {/* Cascade items in on first paint (capped — see drip-row-in). */}
-                  <li
-                    className="drip-row-in relative"
-                    style={{ "--i": Math.min(i, 24) } as React.CSSProperties}
-                  >
-                    <SpineMarker icon={item.icon} />
-                    <DateRange item={item} />
-                    <p className="text-sm text-content leading-snug">
-                      {item.content}
-                    </p>
-                  </li>
-                </WithContextMenu>
+                  <SpineMarker icon={item.icon} />
+                  <DateRange item={item} />
+                  <p className="text-sm text-content leading-snug">
+                    {item.content}
+                  </p>
+                  {/* Visible on touch; hover/focus-reveal on pointer devices. */}
+                  <div className="absolute top-0 right-1 opacity-100 transition-opacity sm:opacity-0 sm:group-focus-within/event:opacity-100 sm:group-hover/event:opacity-100">
+                    <ExploreMenu
+                      label="Explore this event"
+                      items={[
+                        {
+                          label: "Explore further",
+                          onClick: () =>
+                            bus.emit({
+                              type: "explore_request",
+                              prompt: `Tell me more about this event${titleCtx}: ${dateLabel} — ${item.content}. What's significant about it and what to explore next.`,
+                            }),
+                        },
+                      ]}
+                    />
+                  </div>
+                </li>
               );
             })}
           </ol>

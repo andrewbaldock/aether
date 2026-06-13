@@ -12,7 +12,7 @@ import { useAgentEvents } from "../../../shell/AgentEventContext";
 import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
-import { WithContextMenu } from "../ContextMenu";
+import { ExploreMenu } from "../ContextMenu";
 import { useFillFromConversation } from "../useFillFromConversation";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
@@ -145,6 +145,9 @@ export function SpecTable({
                 </th>
               );
             })}
+            {/* Actions column header — empty; the per-row explore kebab lives
+                below it. Keeps the column count aligned with the body. */}
+            <th className="w-10 px-3 py-2" aria-label="Actions" />
           </tr>
         ))}
       </thead>
@@ -157,32 +160,32 @@ export function SpecTable({
           const contextLabel = title
             ? `in the "${title}" table`
             : "in this table";
+          const exploreItems = [
+            {
+              label: "Explore further",
+              onClick: () =>
+                bus.emit({
+                  type: "explore_request",
+                  prompt: `Tell me more about this row ${contextLabel}: ${rowSummary}`,
+                }),
+            },
+          ];
           return (
-            <WithContextMenu
+            // Cascade rows in on first paint (capped delay — see drip-row-in).
+            <tr
               key={row.id}
-              items={[
-                {
-                  label: "Explore further",
-                  onClick: () =>
-                    bus.emit({
-                      type: "explore_request",
-                      prompt: `Tell me more about this row ${contextLabel}: ${rowSummary}`,
-                    }),
-                },
-              ]}
+              className="drip-row-in border-b border-border/60 hover:bg-elevated"
+              style={{ "--i": Math.min(i, 24) } as React.CSSProperties}
             >
-              {/* Cascade rows in on first paint (capped delay — see drip-row-in). */}
-              <tr
-                className="drip-row-in border-b border-border/60 hover:bg-elevated"
-                style={{ "--i": Math.min(i, 24) } as React.CSSProperties}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-3 py-2 align-top">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
-            </WithContextMenu>
+              {row.getVisibleCells().map((cell) => (
+                <td key={cell.id} className="px-3 py-2 align-top">
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </td>
+              ))}
+              <td className="w-10 px-3 py-2 align-top text-right">
+                <ExploreMenu items={exploreItems} label="Explore this row" />
+              </td>
+            </tr>
           );
         })}
       </tbody>
