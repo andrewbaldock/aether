@@ -1,3 +1,4 @@
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   forceCenter,
   forceCollide,
@@ -18,9 +19,12 @@ import {
 import {
   Building2,
   Calendar,
+  Compass,
   Lightbulb,
   type LucideIcon,
   MapPin,
+  Maximize2,
+  Trash2,
   User,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -60,27 +64,35 @@ interface ForceGraphProps {
   onSelect: (id: string | null) => void;
   // Editing + persistence hooks from the graph provider. Optional so the graph can
   // also render read-only (e.g. as a Bigsail card), where there's no provider to
-  // persist positions or wire pin/remove/explore into.
+  // persist positions or wire position/remove/explore into.
   onReportPositions?: (positions: Map<string, NodePosition>) => void;
-  onPin?: (id: string, x: number, y: number) => void;
-  onUnpin?: (id: string) => void;
+  // Called on drag end to persist the node's new (dragged) position.
+  onPositionNode?: (id: string, x: number, y: number) => void;
   onRemove?: (id: string) => void;
   onExplore?: (node: GraphNode) => void;
 }
 
+// Long-press duration (ms) before a stationary press on a node opens its menu.
+// This is the touch path to the menu — right-click has no touch equivalent, so a
+// hold is how phones reach explore/remove.
+const LONG_PRESS_MS = 500;
+
 // d3-force simulation rendered as SVG. The simulation mutates node x/y in place;
 // a tick handler copies a snapshot into React state so the DOM follows. New nodes
 // fade + scale in via CSS (the .kg-node class). d3-zoom drives pan/zoom by
-// writing a transform onto the <g>. Nodes can be dragged to pin them (fx/fy) and
-// right-clicked for a context menu (explore / remove / unpin).
+// writing a transform onto the <g>. Nodes can be dragged to reposition them — the
+// drop point is fixed (fx/fy) and persisted, so the user's arrangement reloads —
+// and opened for a context menu (explore / remove) by right-click on pointer
+// devices or long-press on touch. The menu is a Radix DropdownMenu anchored to the
+// press point (its own menu, not the shared ExploreMenu: this one is canvas-
+// anchored and drag-aware, which would only contort the shared primitive).
 export function ForceGraph({
   nodes,
   links,
   selectedId,
   onSelect,
   onReportPositions,
-  onPin,
-  onUnpin,
+  onPositionNode,
   onRemove,
   onExplore,
 }: ForceGraphProps) {
@@ -224,11 +236,12 @@ export function ForceGraph({
     }
   }, [nodes, links, reportPositions]);
 
-  // Tear the simulation down on unmount.
+  // Tear the simulation down on unmount; clear any pending long-press timer.
   useEffect(() => {
     return () => {
       simRef.current?.stop();
       simRef.current = null;
+      if (longPressRef.current) clearTimeout(longPressRef.current);
     };
   }, []);
 
@@ -275,25 +288,19 @@ export function ForceGraph({
     return typeof p === "string" ? nodeById.get(p) : p;
   }
 
-  // Fit the whole graph into the viewport and centre it: measure the node
-  // bounding box, scale to fit with a margin (clamped to the zoom extent), then
-  // translate so the bbox centre lands at the viewBox centre.
-  function resetView() {
-    const svgEl = svgRef.current;
-    const zoomBehavior = zoomRef.current;
-    if (!svgEl || !zoomBehavior) return;
-
-    const nodes = renderNodes;
-    if (nodes.length === 0) {
-      select(svgEl).call(zoomBehavior.transform, zoomIdentity);
-      return;
-    }
+  // Compute the transform that fits every node perfectly in the viewport: measure
+  // the node bounding box, scale to fit with a margin (clamped to the zoom
+  // extent), then translate so the bbox centre lands at the viewBox centre.
+  // Returns null when there are no nodes (nothing to fit). Pure — used both to
+  // apply the fit and to decide whether the Fit button would change anything.
+  const computeFitTransform = useCallback((): ZoomTransform | null => {
+    if (renderNodes.length === 0) return null;
 
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
-    for (const n of nodes) {
+    for (const n of renderNodes) {
       const x = n.x ?? VIEW_W / 2;
       const y = n.y ?? VIEW_H / 2;
       minX = Math.min(minX, x - NODE_R);
@@ -314,12 +321,35 @@ export function ForceGraph({
     );
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
-    const transform = zoomIdentity
+    return zoomIdentity
       .translate(VIEW_W / 2 - k * cx, VIEW_H / 2 - k * cy)
       .scale(k);
+  }, [renderNodes]);
 
-    select(svgEl).call(zoomBehavior.transform, transform);
+  // Apply the fit transform (animated by d3 via the zoom behaviour).
+  function fitView() {
+    const svgEl = svgRef.current;
+    const zoomBehavior = zoomRef.current;
+    const target = computeFitTransform();
+    if (!svgEl || !zoomBehavior || !target) return;
+    select(svgEl).call(zoomBehavior.transform, target);
   }
+
+  // Whether clicking Fit would actually move the view — false when there are no
+  // nodes, or the current transform already matches the fit (within a small
+  // epsilon, since d3 transforms are floats). Drives the button's disabled state.
+  // Computed inline (not memoised) so it re-reads the live zoom transform on every
+  // render — the `transform` state bump (pan/zoom) and `setTick` (each sim tick as
+  // nodes drift) both re-render, so this never goes stale.
+  const fitTarget = computeFitTransform();
+  const currentTransform = svgRef.current
+    ? zoomTransform(svgRef.current)
+    : zoomIdentity;
+  const canFit =
+    fitTarget != null &&
+    (Math.abs(currentTransform.k - fitTarget.k) > 1e-3 ||
+      Math.abs(currentTransform.x - fitTarget.x) > 0.5 ||
+      Math.abs(currentTransform.y - fitTarget.y) > 0.5);
 
   // Convert a pointer event to graph-space coords, undoing both the SVG viewBox
   // scaling and the current zoom/pan transform.
@@ -339,8 +369,44 @@ export function ForceGraph({
     return { x: (pt.x - t.x) / t.k, y: (pt.y - t.y) / t.k };
   }
 
-  // --- Drag-to-pin (native pointer events; no d3-drag dependency) -----------
-  const dragRef = useRef<{ id: string; moved: boolean } | null>(null);
+  // Open the menu anchored at a screen point (converted to container-relative
+  // pixels for the absolutely-positioned Radix anchor). Shared by right-click and
+  // the touch long-press so both reach the same menu.
+  const openMenuAt = useCallback(
+    (clientX: number, clientY: number, nodeId: string) => {
+      const rect = svgRef.current?.getBoundingClientRect();
+      setMenu({
+        id: nodeId,
+        x: clientX - (rect?.left ?? 0),
+        y: clientY - (rect?.top ?? 0),
+      });
+    },
+    []
+  );
+
+  // --- Drag-to-position (native pointer events; no d3-drag dependency) -------
+  // Dragging a node fixes it at the drop point (d3's fx/fy) so the layout the
+  // user arranges is the layout that persists and reloads. `longPress` arms on
+  // pointerdown and fires the menu if the press stays put; any drag past
+  // threshold (or pointerup) cancels it. `openedMenu` suppresses the pointerup
+  // select-toggle when the press became a menu-open instead.
+  const dragRef = useRef<{
+    id: string;
+    moved: boolean;
+    openedMenu: boolean;
+    // Did the node already have a saved position (fx/fy) when the press began? A
+    // long-press that opens the menu must restore exactly this, not the transient
+    // fx/fy that sub-threshold pointermoves wrote.
+    hadSavedPosition: boolean;
+  } | null>(null);
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function cancelLongPress() {
+    if (longPressRef.current) {
+      clearTimeout(longPressRef.current);
+      longPressRef.current = null;
+    }
+  }
 
   function onNodePointerDown(e: React.PointerEvent, node: GraphNode) {
     if (e.button !== 0) return; // left button only; right opens the menu
@@ -348,7 +414,22 @@ export function ForceGraph({
     // Capture on the handler element (the node <g>), not whichever child glyph
     // was hit, so move/up keep firing here even if the pointer leaves the node.
     e.currentTarget.setPointerCapture?.(e.pointerId);
-    dragRef.current = { id: node.id, moved: false };
+    dragRef.current = {
+      id: node.id,
+      moved: false,
+      openedMenu: false,
+      hadSavedPosition: node.fx != null,
+    };
+    // Touch path to the menu: hold still on a node for LONG_PRESS_MS to open it.
+    // A drag (handled in pointermove) cancels this before it fires.
+    const { clientX, clientY } = e;
+    cancelLongPress();
+    longPressRef.current = setTimeout(() => {
+      const drag = dragRef.current;
+      if (!drag || drag.id !== node.id || drag.moved) return;
+      drag.openedMenu = true;
+      openMenuAt(clientX, clientY, node.id);
+    }, LONG_PRESS_MS);
     // Heat the sim a little so neighbours respond while dragging.
     simRef.current?.alphaTarget(0.3).restart();
   }
@@ -366,6 +447,7 @@ export function ForceGraph({
       return;
     }
     drag.moved = true;
+    cancelLongPress(); // movement means drag, not long-press
     node.fx = x;
     node.fy = y;
     setTick((t) => t + 1);
@@ -374,19 +456,32 @@ export function ForceGraph({
   function onNodePointerUp(e: React.PointerEvent, node: GraphNode) {
     const drag = dragRef.current;
     dragRef.current = null;
+    cancelLongPress();
     simRef.current?.alphaTarget(0);
     if (!drag || drag.id !== node.id) return;
     e.currentTarget.releasePointerCapture?.(e.pointerId);
 
+    // The long-press already opened the menu — don't also toggle selection.
+    // Restore the pre-press state: a sub-threshold pointermove may have written a
+    // transient fx/fy, but a stationary hold shouldn't fix a node that didn't
+    // already have a saved position (those come only from a deliberate drag).
+    if (drag.openedMenu) {
+      if (!drag.hadSavedPosition) {
+        node.fx = null;
+        node.fy = null;
+      }
+      return;
+    }
+
     if (drag.moved) {
-      // Pin where it was dropped and persist the layout.
+      // Fix the node where it was dropped and persist the layout.
       const x = node.x ?? 0;
       const y = node.y ?? 0;
       node.fx = x;
       node.fy = y;
-      onPin?.(node.id, x, y);
+      onPositionNode?.(node.id, x, y);
     } else {
-      // No real movement — treat as a select toggle, and drop the transient pin.
+      // No real movement — treat as a select toggle, and drop the transient fix.
       node.fx = null;
       node.fy = null;
       const selected = node.id === selectedId;
@@ -397,34 +492,10 @@ export function ForceGraph({
   function openMenu(e: React.MouseEvent, node: GraphNode) {
     e.preventDefault();
     e.stopPropagation();
-    const rect = svgRef.current?.getBoundingClientRect();
-    setMenu({
-      id: node.id,
-      x: e.clientX - (rect?.left ?? 0),
-      y: e.clientY - (rect?.top ?? 0),
-    });
+    openMenuAt(e.clientX, e.clientY, node.id);
   }
 
-  // Close the context menu on any outside click or Escape (mirrors the sidebar
-  // kebab menu). Avoids putting an onClick on the SVG canvas itself.
-  useEffect(() => {
-    if (!menu) return;
-    function onDocClick() {
-      setMenu(null);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setMenu(null);
-    }
-    document.addEventListener("mousedown", onDocClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [menu]);
-
   const menuNode = menu ? nodeById.get(menu.id) : undefined;
-  const menuPinned = menuNode?.fx != null;
 
   return (
     <div className="relative h-full w-full overflow-hidden">
@@ -476,7 +547,6 @@ export function ForceGraph({
               transform never fights the positional translate. */}
           {renderNodes.map((n) => {
             const selected = n.id === selectedId;
-            const pinned = n.fx != null && n.fx !== undefined;
             const color = TYPE_COLOR[n.type];
             const r = selected ? NODE_R + 2 : NODE_R;
             return (
@@ -499,17 +569,6 @@ export function ForceGraph({
                     }
                   }}
                 >
-                  {/* Pin marker — a dashed ring behind a pinned node. */}
-                  {pinned && (
-                    <circle
-                      r={r + 4}
-                      fill="none"
-                      stroke="var(--content-faint)"
-                      strokeWidth={1}
-                      strokeDasharray="2 2"
-                      className="pointer-events-none"
-                    />
-                  )}
                   <circle
                     r={r}
                     fill={color}
@@ -546,57 +605,60 @@ export function ForceGraph({
         </g>
       </svg>
 
-      {/* Right-click context menu */}
-      {menu && menuNode && (
-        <div
-          role="menu"
-          className="absolute z-30 w-40 rounded-lg border border-border bg-surface-raised py-1 shadow-md"
-          style={{ left: menu.x, top: menu.y }}
-          // Stop the document mousedown listener from closing the menu before a
-          // button's click handler runs.
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              onExplore?.(menuNode);
-              setMenu(null);
-            }}
-            className="block w-full px-3 py-1.5 text-left text-sm text-content hover:bg-elevated"
+      {/* Node context menu — a Radix DropdownMenu anchored to the press point.
+          Radix owns outside-click / Escape / focus-trap / collision-flipping; we
+          drive open state ourselves (opened by right-click or long-press above).
+          The Trigger is a zero-size element positioned at the anchor — Radix
+          flips the content to stay on-screen near a viewport edge. Its own menu,
+          not the shared ExploreMenu, because this anchor is canvas-relative. */}
+      <DropdownMenu.Root
+        open={!!menu && !!menuNode}
+        onOpenChange={(open) => {
+          if (!open) setMenu(null);
+        }}
+      >
+        <DropdownMenu.Trigger
+          aria-hidden
+          tabIndex={-1}
+          className="pointer-events-none absolute h-0 w-0 p-0"
+          style={{ left: menu?.x ?? 0, top: menu?.y ?? 0 }}
+        />
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            align="start"
+            sideOffset={4}
+            className="z-9999 min-w-44 rounded-lg border border-border-strong bg-surface-raised py-1 shadow-lg"
           >
-            Explore further
-          </button>
-          {menuPinned && (
-            <button
-              type="button"
-              onClick={() => {
-                onUnpin?.(menuNode.id);
-                setMenu(null);
-              }}
-              className="block w-full px-3 py-1.5 text-left text-sm text-content hover:bg-elevated"
+            <DropdownMenu.Item
+              onSelect={() => menuNode && onExplore?.(menuNode)}
+              className="flex cursor-pointer select-none items-center gap-2 px-3 py-2 text-sm text-content outline-none data-highlighted:bg-elevated"
             >
-              Unpin
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              onRemove?.(menuNode.id);
-              setMenu(null);
-            }}
-            className="block w-full px-3 py-1.5 text-left text-sm text-danger-content hover:bg-elevated"
-          >
-            Remove from graph
-          </button>
-        </div>
-      )}
+              <Compass className="h-4 w-4" aria-hidden />
+              Explore further
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              onSelect={() => menuNode && onRemove?.(menuNode.id)}
+              className="flex cursor-pointer select-none items-center gap-2 px-3 py-2 text-sm text-danger-content outline-none data-highlighted:bg-elevated"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden />
+              Remove from graph
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
 
+      {/* Fit-to-view: frames every node perfectly. Icon-only and tiny; disabled
+          when the view is already fitted (or there are no nodes) so clicking it
+          would do nothing. */}
       <button
         type="button"
-        onClick={resetView}
-        className="absolute bottom-2 right-2 rounded-md border border-border bg-surface-raised px-2 py-1 text-xs text-content-muted hover:text-content"
+        onClick={fitView}
+        disabled={!canFit}
+        aria-label="Fit graph to view"
+        title="Fit graph to view"
+        className="absolute bottom-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface-raised text-content-muted transition-colors hover:text-content disabled:cursor-default disabled:opacity-40 disabled:hover:text-content-muted"
       >
-        Reset view
+        <Maximize2 className="h-4 w-4" aria-hidden />
       </button>
     </div>
   );

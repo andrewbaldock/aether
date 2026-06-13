@@ -289,9 +289,16 @@ export function ChatPanel() {
     if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: "auto" });
   }, [messages.length, messages.at(-1)?.text, isLoading]);
 
+  // The send button is a Stop control only while a turn streams and the field is
+  // empty; with text present it stays a Send button (the message queues). Used by
+  // the button's type, click handler, label, and rendered glyph.
+  const isStop = isLoading && draft.trim().length === 0;
+
   function submit() {
     const text = draft.trim();
-    if (!text || isLoading) return;
+    // Empty draft does nothing. A non-empty draft sends even mid-stream — useChat
+    // queues it behind the running turn and fires it when that turn finishes.
+    if (!text) return;
     setDraft("");
     sendMessage(text);
     textareaRef.current?.focus();
@@ -510,40 +517,47 @@ export function ChatPanel() {
                 onChange={selectModel}
                 disabled={isLoading}
               />
-              {/* Send / Stop — while a turn is streaming the button becomes a stop
-                control. The stop square is ALWAYS visible while loading (no hover
-                gate, so it works on touch); a spinning ring around it signals the
-                turn is still in flight. */}
+              {/* Send / Stop. The button is a STOP control only while a turn is
+                streaming AND the field is empty; the moment there's text to send
+                it's a Send button again (the new message queues behind the running
+                turn — see useChat). In stop mode the lotus spins to signal work in
+                flight and swaps to a stop square on hover (touch shows the square
+                outright, since there's no hover). */}
               <Tooltip
-                label={isLoading ? "Stop generating" : "Send message"}
+                label={isStop ? "Stop generating" : "Send message"}
                 side="top"
                 className="group"
               >
                 <button
-                  // While loading this is an abort control, not a submit — `button`
-                  // type so it never re-submits the form, and it stays enabled.
-                  type={isLoading ? "button" : "submit"}
+                  // Stop mode is an abort control, not a submit — `button` type so
+                  // it never re-submits the form, and it stays enabled. Otherwise
+                  // it's a normal submit (which queues when a turn is in flight).
+                  type={isStop ? "button" : "submit"}
                   onClick={(e) => {
                     e.currentTarget.blur();
-                    if (isLoading) abortStream();
+                    if (isStop) abortStream();
                   }}
-                  aria-label={isLoading ? "Stop generating" : "Send message"}
+                  aria-label={isStop ? "Stop generating" : "Send message"}
                   className="relative flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-r from-[#fd40a4] to-[#c35ed1] text-2xl leading-none text-white transition hover:brightness-110 disabled:opacity-40 max-md:h-11 max-md:w-11"
-                  // Only disabled when there's nothing to send. While loading the
-                  // button is active so it can stop the stream.
-                  disabled={!isLoading && draft.trim().length === 0}
+                  // Disabled only when there's nothing to do: not in stop mode and
+                  // the field is empty. (Stop mode is always actionable.)
+                  disabled={!isStop && draft.trim().length === 0}
                 >
-                  {isLoading ? (
+                  {isStop ? (
                     <>
-                      {/* Spinning ring: the "working" signal, behind the stop icon. */}
+                      {/* Spinning lotus: the desktop "working" signal. Hidden on
+                          desktop hover (swaps to the stop square below) and on
+                          touch (no hover, so the stop square shows instead). */}
                       <span
                         aria-hidden="true"
-                        className="absolute inset-0.75 animate-spin rounded-full border-2 border-white/30 border-t-white/90"
-                      />
-                      {/* Stop square: always visible while loading, on touch + desktop. */}
+                        className="animate-spin text-2xl leading-none group-hover:hidden max-md:hidden"
+                      >
+                        𑁍
+                      </span>
+                      {/* Stop square: shown on desktop hover, and always on touch. */}
                       <span
                         aria-hidden="true"
-                        className="h-2.5 w-2.5 rounded-xs bg-white max-md:h-3 max-md:w-3"
+                        className="hidden h-2.5 w-2.5 rounded-xs bg-white group-hover:block max-md:block max-md:h-3 max-md:w-3"
                       />
                     </>
                   ) : (

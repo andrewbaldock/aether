@@ -255,12 +255,22 @@ app.put("/api/sessions/:id/graph", async (c) => {
   } catch {
     return c.json({ error: "Request body must be JSON" }, 400);
   }
-  const { nodes, links } = body as { nodes?: unknown; links?: unknown };
+  const { schemaVersion, nodes, links } = body as {
+    schemaVersion?: unknown;
+    nodes?: unknown;
+    links?: unknown;
+  };
   if (!Array.isArray(nodes) || !Array.isArray(links)) {
     return c.json({ error: "Expected { nodes: [], links: [] }" }, 400);
   }
   try {
-    const snapshot: GraphSnapshot = { nodes, links };
+    // Preserve the frontend's stamp; dropping it makes load-time validation
+    // always fail (undefined !== current version) → resets + toast on reload.
+    const snapshot: GraphSnapshot = {
+      ...(typeof schemaVersion === "number" ? { schemaVersion } : {}),
+      nodes,
+      links,
+    };
     await updateSessionGraphData(id, snapshot);
     return c.json({ ok: true });
   } catch (err) {
@@ -297,6 +307,7 @@ app.put("/api/sessions/:id/widgets", async (c) => {
     return c.json({ error: "Request body must be JSON" }, 400);
   }
   const b = body as {
+    schemaVersion?: unknown;
     table?: unknown;
     chart?: unknown;
     timeline?: unknown;
@@ -307,6 +318,11 @@ app.put("/api/sessions/:id/widgets", async (c) => {
   }
   try {
     const snapshot: WidgetSnapshot = {
+      // Preserve the frontend's stamp; dropping it makes load-time validation
+      // always fail (undefined !== current version) → resets + toast on reload.
+      ...(typeof b.schemaVersion === "number"
+        ? { schemaVersion: b.schemaVersion }
+        : {}),
       table: Array.isArray(b.table) ? b.table : null,
       chart: Array.isArray(b.chart) ? b.chart : null,
       timeline: Array.isArray(b.timeline) ? b.timeline : null,

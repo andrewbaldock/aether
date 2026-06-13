@@ -18,40 +18,47 @@ describe("stamp", () => {
 });
 
 describe("validate", () => {
-  it("returns the payload for a current-version blob that passes the guard", () => {
+  it("returns the payload, not stale, for a current-version blob", () => {
     const raw = stamp("graph", { foo: 1 });
-    expect(validate("graph", raw, isFoo)).toEqual(raw);
+    expect(validate("graph", raw, isFoo)).toEqual({ data: raw, stale: false });
   });
 
   it("round-trips a stamped blob", () => {
     const raw = stamp("widgets", { foo: 7 });
-    expect(validate("widgets", raw, isFoo)).not.toBeNull();
+    expect(validate("widgets", raw, isFoo).data).not.toBeNull();
   });
 
-  it("returns null when the schemaVersion is missing", () => {
-    expect(validate("graph", { foo: 1 }, isFoo)).toBeNull();
+  // The version is advisory: a usable shape always renders. A stale/missing/
+  // non-numeric stamp flags `stale: true` (→ caller heals) but never discards.
+  it("renders data with stale=true when the schemaVersion is missing", () => {
+    const raw = { foo: 1 };
+    expect(validate("graph", raw, isFoo)).toEqual({ data: raw, stale: true });
   });
 
-  it("returns null for an older version", () => {
-    expect(
-      validate("graph", { foo: 1, schemaVersion: SCHEMA_VERSIONS.graph - 1 }, isFoo)
-    ).toBeNull();
+  it("renders data with stale=true for an older version", () => {
+    const raw = { foo: 1, schemaVersion: SCHEMA_VERSIONS.graph - 1 };
+    expect(validate("graph", raw, isFoo)).toEqual({ data: raw, stale: true });
   });
 
-  it("returns null for a NaN / non-numeric version", () => {
-    expect(validate("graph", { foo: 1, schemaVersion: "1" }, isFoo)).toBeNull();
-    expect(validate("graph", { foo: 1, schemaVersion: NaN }, isFoo)).toBeNull();
+  it("renders data with stale=true for a NaN / non-numeric version", () => {
+    expect(validate("graph", { foo: 1, schemaVersion: "1" }, isFoo).stale).toBe(
+      true
+    );
+    expect(validate("graph", { foo: 1, schemaVersion: NaN }, isFoo).stale).toBe(
+      true
+    );
   });
 
-  it("returns null when the version matches but the shape guard fails", () => {
+  // The shape guard is the ONLY thing that discards.
+  it("returns data=null when the shape guard fails (even at current version)", () => {
     expect(
       validate("graph", { schemaVersion: SCHEMA_VERSIONS.graph }, isFoo)
-    ).toBeNull();
+    ).toEqual({ data: null, stale: false });
   });
 
-  it("returns null for non-object input", () => {
-    expect(validate("graph", null, isFoo)).toBeNull();
-    expect(validate("graph", undefined, isFoo)).toBeNull();
-    expect(validate("graph", 42, isFoo)).toBeNull();
+  it("returns data=null for non-object input", () => {
+    expect(validate("graph", null, isFoo).data).toBeNull();
+    expect(validate("graph", undefined, isFoo).data).toBeNull();
+    expect(validate("graph", 42, isFoo).data).toBeNull();
   });
 });

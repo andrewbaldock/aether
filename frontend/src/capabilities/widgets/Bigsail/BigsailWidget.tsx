@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUpdateSession } from "../../../hooks/useUpdateSession";
 import { SCHEMA_VERSIONS } from "../../../lib/schemaVersion";
-import { notifyStateReset } from "../../../shell/toast";
 import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
@@ -43,27 +42,12 @@ export function BigsailWidget(_props: { widget: Widget }) {
     () => sessions.find((s) => s.id === sessionId) ?? null,
     [sessions, sessionId]
   );
-  // Use the saved arrangement only when its version stamp matches the current
-  // tilesLayout schema; on a mismatch, ignore it (every card auto-places) so a
-  // layout saved against an older shape can't mis-position the canvas. An empty
-  // array is a deliberate reset, not stale data — pass it through untouched.
-  const rawSavedLayout = currentSession?.ui_state?.tilesLayout;
-  const savedVersion = currentSession?.ui_state?.tilesLayoutVersion;
-  const layoutVersionOk =
-    !rawSavedLayout ||
-    rawSavedLayout.length === 0 ||
-    savedVersion === SCHEMA_VERSIONS.tilesLayout;
-  const savedLayout = layoutVersionOk ? rawSavedLayout : undefined;
-
-  // Toast once per session when a non-empty saved arrangement is discarded for a
-  // version mismatch. Keyed on sessionId so switching conversations re-arms it.
-  const resetNotifiedRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (layoutVersionOk) return;
-    if (resetNotifiedRef.current === sessionId) return;
-    resetNotifiedRef.current = sessionId ?? null;
-    notifyStateReset();
-  }, [layoutVersionOk, sessionId]);
+  // Always render the user's saved arrangement best-effort, whatever version it
+  // was stamped against — never wipe their layout over a version number. The
+  // layout is positioning-only and placeCards clamps each item to the grid, so a
+  // slightly-older shape just re-flows rather than breaking. A stale stamp heals
+  // itself on the next persist (persistLayout writes the current version).
+  const savedLayout = currentSession?.ui_state?.tilesLayout;
 
   // Measure the panel only to decide the skinny breakpoint. The grid is always
   // 24 columns; below the breakpoint cards collapse to full-width stacked, above

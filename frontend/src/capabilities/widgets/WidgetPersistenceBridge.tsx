@@ -69,10 +69,14 @@ export function WidgetPersistenceBridge() {
           `/api/sessions/${sessionId}/widgets`
         );
         if (cancelled) return;
-        // Discard widget specs from an older shape (or corrupt ones) and fall
-        // back to empty; the next turn repopulates. Only toast when there were
-        // genuinely saved widgets being reset (a new session is just empty).
-        const snapshot = validate("widgets", raw, isWidgetSnapshot);
+        // Render saved widgets whenever the SHAPE is usable — a stale/missing
+        // version stamp never discards them (we heal the stamp instead). Only a
+        // shape-guard failure (truly corrupt) falls back to empty + dev toast.
+        const { data: snapshot, stale } = validate(
+          "widgets",
+          raw,
+          isWidgetSnapshot
+        );
         if (!snapshot) {
           clearTable();
           clearChart();
@@ -94,6 +98,21 @@ export function WidgetPersistenceBridge() {
         if (snapshot.images)
           loadImages(snapshot.images as Parameters<typeof loadImages>[0]);
         else clearImages();
+        // Heal a stale stamp in the DB now rather than waiting for the next
+        // turn's save, so the version mismatch resolves on its own.
+        if (stale)
+          apiFetch<void>(`/api/sessions/${sessionId}/widgets`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(
+              stamp("widgets", {
+                table: snapshot.table,
+                chart: snapshot.chart,
+                timeline: snapshot.timeline,
+                images: snapshot.images,
+              })
+            ),
+          }).catch((err) => logApiError(`widget heal ${sessionId}`, err));
       } catch (err) {
         logApiError(`widget load ${sessionId}`, err);
         if (!cancelled) {

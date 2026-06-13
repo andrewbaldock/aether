@@ -22,8 +22,7 @@ export function KnowledgeGraphWidget(_props: { widget: Widget }) {
     select,
     isAwaitingGraph,
     reportPositions,
-    pinNode,
-    unpinNode,
+    fixNodePosition,
     removeNode,
   } = useKnowledgeGraphState();
   const bus = useAgentEvents();
@@ -71,8 +70,7 @@ export function KnowledgeGraphWidget(_props: { widget: Widget }) {
               selectedId={selectedId}
               onSelect={select}
               onReportPositions={reportPositions}
-              onPin={pinNode}
-              onUnpin={unpinNode}
+              onPositionNode={fixNodePosition}
               onRemove={removeNode}
               onExplore={exploreNode}
             />

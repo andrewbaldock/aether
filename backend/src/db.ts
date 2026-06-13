@@ -4,8 +4,10 @@ import { createClient } from "@supabase/supabase-js";
 // plus any drag-pinned positions. Stored as-is in the `graph_data` jsonb column
 // so reopening (or reloading) a conversation restores the graph the user built,
 // rather than relying on the model to re-emit it. The backend doesn't interpret
-// the shape — it round-trips whatever the frontend saves.
+// the shape — it round-trips whatever the frontend saves, including the
+// frontend's `schemaVersion` stamp (dropping it breaks load-time validation).
 export type GraphSnapshot = {
+  schemaVersion?: number; // frontend stamp; round-tripped, not interpreted
   nodes: unknown[];
   links: unknown[];
 };
@@ -13,7 +15,10 @@ export type GraphSnapshot = {
 // Persisted render-tool specs for a session. Stored in `widget_data` jsonb.
 // The backend doesn't interpret the shape — it round-trips whatever the
 // frontend saves. null fields mean "nothing generated yet this session".
+// `schemaVersion` is the frontend's per-tool stamp; we must preserve it
+// through the round trip or load-time validation always fails and discards.
 export type WidgetSnapshot = {
+  schemaVersion?: number; // frontend stamp; round-tripped, not interpreted
   table: unknown[] | null; // TableEntry[] (serialised)
   chart: unknown[] | null; // ChartEntry[] (serialised)
   timeline: unknown[] | null; // TimelineEntry[] (serialised)

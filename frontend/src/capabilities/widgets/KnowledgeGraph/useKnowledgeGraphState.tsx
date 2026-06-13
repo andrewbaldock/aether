@@ -42,8 +42,8 @@ export interface KnowledgeGraphState {
   isAwaitingGraph: boolean;
 
   // --- Persistence ---------------------------------------------------------
-  // Bumped whenever the graph meaningfully changes (merge, remove, pin/unpin,
-  // drag end). The persistence bridge watches this to debounce-save.
+  // Bumped whenever the graph meaningfully changes (merge, remove, drag end).
+  // The persistence bridge watches this to debounce-save.
   revision: number;
   // ForceGraph reports live node positions here so getSnapshot can include them.
   reportPositions: (positions: Map<string, NodePosition>) => void;
@@ -56,8 +56,8 @@ export interface KnowledgeGraphState {
 
   // --- Editing -------------------------------------------------------------
   removeNode: (id: string) => void;
-  pinNode: (id: string, x: number, y: number) => void;
-  unpinNode: (id: string) => void;
+  // Persist a node's dragged position (fixes it at x/y so the layout reloads).
+  fixNodePosition: (id: string, x: number, y: number) => void;
   // ForceGraph calls this on drag end so the bridge re-saves the new layout.
   markDirty: () => void;
 }
@@ -460,24 +460,16 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
     [bump]
   );
 
-  const pinNode = useCallback(
+  // Persist a node's dragged position: fix it at (x, y) via d3's fx/fy so the
+  // layout the user arranges survives saves and reloads. (There's no inverse
+  // "release" affordance — once placed, a node lives where it was dropped; to
+  // move it, drag it again.)
+  const fixNodePosition = useCallback(
     (id: string, x: number, y: number) => {
       const pos = positionsRef.current.get(id) ?? {};
       positionsRef.current.set(id, { ...pos, x, y, fx: x, fy: y });
       setNodes((prev) =>
         prev.map((n) => (n.id === id ? { ...n, x, y, fx: x, fy: y } : n))
-      );
-      bump();
-    },
-    [bump]
-  );
-
-  const unpinNode = useCallback(
-    (id: string) => {
-      const pos = positionsRef.current.get(id) ?? {};
-      positionsRef.current.set(id, { ...pos, fx: null, fy: null });
-      setNodes((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, fx: null, fy: null } : n))
       );
       bump();
     },
@@ -499,8 +491,7 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
       loadGraph,
       clearGraph,
       removeNode,
-      pinNode,
-      unpinNode,
+      fixNodePosition,
       markDirty,
     }),
     [
@@ -515,8 +506,7 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
       loadGraph,
       clearGraph,
       removeNode,
-      pinNode,
-      unpinNode,
+      fixNodePosition,
       markDirty,
     ]
   );

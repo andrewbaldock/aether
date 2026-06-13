@@ -51,13 +51,22 @@ export function GraphPersistenceBridge() {
           `/api/sessions/${sessionId}/graph`
         );
         if (cancelled) return;
-        // Discard a snapshot from an older shape (or corrupt one) and fall back
-        // to first-run empty state; the next turn repopulates it. A brand-new
-        // session legitimately has no stamp yet but also no nodes, so only toast
-        // when there was actual saved content to reset.
-        const valid = validate("graph", raw, isGraphSnapshot);
-        if (valid) {
-          loadGraph({ nodes: valid.nodes ?? [], links: valid.links ?? [] });
+        // Render the saved graph whenever its SHAPE is usable — a stale/missing
+        // version stamp never discards it (we heal the stamp instead). Only a
+        // shape-guard failure (truly corrupt) falls back to empty + dev toast.
+        const { data, stale } = validate("graph", raw, isGraphSnapshot);
+        if (data) {
+          loadGraph({ nodes: data.nodes ?? [], links: data.links ?? [] });
+          // Heal a stale stamp in the DB now rather than waiting for the next
+          // edit, so the mismatch resolves even if the user never touches it.
+          if (stale)
+            apiFetch<void>(`/api/sessions/${sessionId}/graph`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(
+                stamp("graph", { nodes: data.nodes, links: data.links })
+              ),
+            }).catch((err) => logApiError(`graph heal ${sessionId}`, err));
         } else {
           clearGraph();
           if (hasSavedContent(raw)) notifyStateReset();

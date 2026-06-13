@@ -76,7 +76,15 @@ export function useChat({
   const abortRef = useRef<AbortController | null>(null);
   const epochRef = useRef(0);
 
+  // FIFO of messages the user sent while a turn was already streaming. Each is
+  // already shown as a user bubble (appended at enqueue time); we hold only what
+  // the next turn needs to fire. Drained one-at-a-time as each turn completes.
+  const queueRef = useRef<{ text: string; displayText?: string }[]>([]);
+
   const abortStream = useCallback(() => {
+    // A manual stop also discards anything the user had queued behind this turn —
+    // stopping means "I'm done", not "skip to the next queued message".
+    queueRef.current = [];
     const wasInFlight = abortRef.current !== null;
     abortRef.current?.abort();
     abortRef.current = null;
@@ -94,8 +102,36 @@ export function useChat({
     if (wasInFlight) bus.emit({ type: "idle" });
   }, [bus]);
 
+  // Public send. Always appends the user bubble immediately. If a turn is already
+  // streaming, the new message is queued (FIFO) and fired when that turn ends —
+  // the send button stays a Send button while text is present, so users can stack
+  // follow-ups instead of having to wait or stop. Otherwise the turn runs now.
   async function sendMessage(text: string, displayText?: string) {
-    // Supersede any in-flight stream so its late writes are dropped.
+    // What the transcript shows. The full `text` still goes to the model later;
+    // displayText only swaps the on-screen bubble.
+    const shownText = displayText ?? text;
+    const withUser: Message[] = [
+      ...messagesRef.current,
+      { id: crypto.randomUUID(), role: "user", text: shownText },
+    ];
+    onMessagesChange(withUser);
+    messagesRef.current = withUser;
+
+    // A turn is in flight — queue this one and let the current turn's drain pick
+    // it up. The bubble is already on screen; only the send payload waits.
+    if (abortRef.current !== null) {
+      queueRef.current.push({ text, displayText });
+      return;
+    }
+
+    await runTurn(text, displayText);
+  }
+
+  // Runs one network turn. The user bubble for `text` is already in
+  // messagesRef.current (appended by sendMessage or a prior drain). On completion
+  // it drains the next queued message, so a backlog fires in order.
+  async function runTurn(text: string, displayText?: string) {
+    // Supersede any lingering aborted stream so its late writes are dropped.
     abortRef.current?.abort();
     const epoch = ++epochRef.current;
     const controller = new AbortController();
@@ -103,19 +139,15 @@ export function useChat({
 
     bus.emit({ type: "request_start" });
 
-    // Whether this is the session's first turn — gates the post-[DONE] refresh,
-    // since a title is only assigned on the first turn. Measured before we
-    // append the user message + assistant placeholder.
-    const isFirstTurn = messagesRef.current.length === 0;
+    // The message list including this turn's user bubble but not yet the assistant
+    // placeholder — used for the wire payload and the first-turn check.
+    const next = messagesRef.current;
 
-    // What the transcript shows. The full `text` still goes to the model below
-    // (see the request body); displayText only swaps the on-screen bubble.
-    const shownText = displayText ?? text;
-    const next: Message[] = [
-      ...messagesRef.current,
-      { id: crypto.randomUUID(), role: "user", text: shownText },
-    ];
-    onMessagesChange(next);
+    // Whether this is the session's first turn — gates the post-[DONE] refresh,
+    // since a title is only assigned on the first turn. The user bubble is already
+    // present, so the first turn has exactly one message.
+    const isFirstTurn = next.length === 1;
+
     setIsLoading(true);
     setError(null);
 
@@ -310,8 +342,18 @@ export function useChat({
     } finally {
       // Only the current stream owns the loading flag + abort handle.
       if (epoch === epochRef.current) {
-        setIsLoading(false);
         abortRef.current = null;
+        // Drain the next queued message, if any. Its user bubble is already on
+        // screen (appended at enqueue time); fire its turn now. Keep isLoading
+        // true across the handoff so the indicator doesn't flicker between turns.
+        const queued = queueRef.current.shift();
+        if (queued) {
+          // Not awaited: this finally must unwind so the current turn settles
+          // before the next one mutates refs. runTurn re-arms abortRef/epoch.
+          void runTurn(queued.text, queued.displayText);
+        } else {
+          setIsLoading(false);
+        }
       }
     }
   }
