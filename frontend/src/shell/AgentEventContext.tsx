@@ -40,11 +40,55 @@ export type AgentEvent =
   // terse transcript stand-in for a long fill instruction the user shouldn't read.
   | { type: "explore_request"; prompt: string; displayText?: string };
 
-type Listener = (event: AgentEvent) => void;
+// A listener receives each event plus a `replay` flag: true only for the
+// catch-up event a new subscriber gets on subscribe (see below), false for live
+// emits. Observers that rebuild visual state can use the replayed phase to land
+// lit; observers with side effects (logging, network) ignore replays.
+type Listener = (event: AgentEvent, replay: boolean) => void;
+
+// The coarse phase events worth replaying to a late subscriber — the milestones
+// that define "where in the turn are we right now". A subscriber that mounts
+// mid-turn (e.g. the Welcome diagram opened while a turn is in flight) would
+// otherwise miss every one of these and sit idle until the next live event.
+const PHASE_EVENTS = new Set<AgentEvent["type"]>([
+  "request_start",
+  "text",
+  "tool_start",
+  "loop_start",
+  "done",
+  "idle",
+]);
+
+// Is this event a coarse phase milestone (so the bus should remember it for
+// replay)? Fine-grained or side-channel events (status, tool_result, plan,
+// error, explore_request) are deliberately excluded — replaying them to a
+// late subscriber would be noise, not a useful "current phase".
+export function isPhaseEvent(event: AgentEvent): boolean {
+  return PHASE_EVENTS.has(event.type);
+}
+
+// Given the previously-remembered phase and a freshly emitted event, return the
+// phase the bus should retain going forward: the new event if it's a phase
+// milestone, otherwise the unchanged previous one. Pure so it's unit-testable
+// without standing up the React provider.
+export function nextLastPhase(
+  prev: AgentEvent | null,
+  event: AgentEvent
+): AgentEvent | null {
+  return isPhaseEvent(event) ? event : prev;
+}
 
 export interface AgentEventBus {
-  // Returns an unsubscribe function — call it in an effect cleanup.
-  subscribe: (listener: Listener) => () => void;
+  // Subscribe to live events. Returns an unsubscribe function — call it in an
+  // effect cleanup.
+  //
+  // Opt in with { replay: true } and the listener is ALSO called once on
+  // subscribe with the most-recent coarse phase event (replay flag = true), so a
+  // subscriber that mounts mid-turn catches up to the current phase instead of
+  // starting idle. Default is no replay — most subscribers have side effects
+  // (scripted progress, network fills) that must fire only on live events, so
+  // replay stays off unless a subscriber explicitly rebuilds visual state from it.
+  subscribe: (listener: Listener, opts?: { replay?: boolean }) => () => void;
   emit: (event: AgentEvent) => void;
 }
 
@@ -54,16 +98,25 @@ export function AgentEventProvider({ children }: { children: ReactNode }) {
   // Listeners live in a ref, not state — adding/removing a subscriber must never
   // re-render the provider or its subtree.
   const listeners = useRef(new Set<Listener>());
+  // The single most-recent coarse phase event (see PHASE_EVENTS). This is the
+  // ONLY state the bus retains — it stays a pub/sub bus, not a state container.
+  // Replayed to each new subscriber so a mid-turn mount lands in the right phase.
+  const lastPhase = useRef<AgentEvent | null>(null);
 
   const bus = useMemo<AgentEventBus>(
     () => ({
-      subscribe(listener) {
+      subscribe(listener, opts) {
         listeners.current.add(listener);
+        // Catch the new subscriber up to the current phase, flagged as a replay
+        // so it can rebuild visuals without re-running side effects. Opt-in only.
+        if (opts?.replay && lastPhase.current)
+          listener(lastPhase.current, true);
         return () => listeners.current.delete(listener);
       },
       emit(event) {
+        lastPhase.current = nextLastPhase(lastPhase.current, event);
         // Snapshot before iterating: a listener may unsubscribe in response.
-        for (const listener of [...listeners.current]) listener(event);
+        for (const listener of [...listeners.current]) listener(event, false);
       },
     }),
     []

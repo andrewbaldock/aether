@@ -116,9 +116,9 @@ export function useAgentDiagramState(): DiagramState {
   const litUntil = useRef<Partial<Record<NodeId, number>>>({});
   // Pending deferred-demotion timers, keyed by node, so a later patch can cancel
   // a node's stale pending demotion before scheduling a new one.
-  const holdTimers = useRef<Partial<Record<NodeId, ReturnType<typeof setTimeout>>>>(
-    {}
-  );
+  const holdTimers = useRef<
+    Partial<Record<NodeId, ReturnType<typeof setTimeout>>>
+  >({});
   // True once we've logged "streaming tokens…" for the current burst, so dozens
   // of token events produce one console line, not dozens.
   const loggedStreaming = useRef(false);
@@ -209,7 +209,79 @@ export function useAgentDiagramState(): DiagramState {
       }));
     }
 
-    function handle(event: AgentEvent) {
+    // Land the diagram in the right coarse phase for a subscriber that mounted
+    // mid-turn, WITHOUT replaying the turn: the bus hands a new listener the
+    // most-recent phase event flagged replay=true. We light the relevant spine
+    // and set phase/activeToolName, but skip console writes and the request_start
+    // console-clear (a catch-up must never wipe an in-progress turn's state) —
+    // the next LIVE event picks up logging normally. `idle`/`done` replays just
+    // settle to a resting state; from there live events take over.
+    function handleReplay(event: AgentEvent) {
+      switch (event.type) {
+        case "request_start":
+        case "text": {
+          // A turn is underway and Claude is (or was just) streaming — light the
+          // request → Claude spine so the diagram reads "running", not dead.
+          setState((s) => ({
+            ...s,
+            phase: "running",
+            activeToolName: null,
+            nodeStatuses: set(
+              { ...ALL_IDLE },
+              {
+                user: "complete",
+                http_post: "complete",
+                build_history: "complete",
+                claude_api: "active",
+                stream_tokens: "active",
+                token_append: "active",
+              }
+            ),
+          }));
+          break;
+        }
+        case "tool_start": {
+          setState((s) => ({
+            ...s,
+            phase: "tool_use",
+            activeToolName: event.tool,
+            nodeStatuses: set(
+              { ...ALL_IDLE },
+              {
+                user: "complete",
+                http_post: "complete",
+                build_history: "complete",
+                stop_reason: "active",
+                tool_exec: "active",
+              }
+            ),
+          }));
+          break;
+        }
+        case "loop_start": {
+          setState((s) => ({
+            ...s,
+            phase: "running",
+            loopCount: Math.max(s.loopCount, event.iteration),
+            nodeStatuses: set(
+              { ...ALL_IDLE },
+              {
+                build_history: "looping",
+                claude_api: "active",
+              }
+            ),
+          }));
+          break;
+        }
+        // done / idle: nothing in flight — leave the diagram at rest (INITIAL).
+      }
+    }
+
+    function handle(event: AgentEvent, replay: boolean) {
+      if (replay) {
+        handleReplay(event);
+        return;
+      }
       switch (event.type) {
         case "request_start": {
           clearTimers();
@@ -417,7 +489,10 @@ export function useAgentDiagramState(): DiagramState {
       }
     }
 
-    const unsubscribe = bus.subscribe(handle);
+    // Opt into replay: if this hook mounts mid-turn (e.g. Welcome opened while a
+    // turn is in flight), the bus immediately replays the current phase so the
+    // diagram lands lit instead of sitting idle until the next live event.
+    const unsubscribe = bus.subscribe(handle, { replay: true });
     return () => {
       unsubscribe();
       clearTimers();
