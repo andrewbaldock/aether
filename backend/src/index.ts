@@ -21,9 +21,9 @@ import {
   updateSessionWidgetData,
   type WidgetSnapshot,
 } from "./db";
-import { checkHealth } from "./health";
+import { checkHealth, checkProviders } from "./health";
 import { type ChatMessage, createClient, generateTitle } from "./llm";
-import { MODELS, resolveModel } from "./models";
+import { MODELS, type Provider, resolveModel } from "./models";
 import { toolStatusLabel } from "./tools";
 
 const app = new Hono();
@@ -36,8 +36,54 @@ app.get("/api/health/full", async (c) => {
 });
 
 // The model picker's options — single source of truth so the frontend doesn't
-// hardcode the allowlist.
-app.get("/api/models", (c) => c.json({ models: MODELS }));
+// hardcode the allowlist. We filter to providers that pass a live health probe so
+// the picker never offers a model whose key is missing/wrong/unreachable (it would
+// only throw mid-turn). The probe is a billable 1-token completion per provider, so
+// we cache the green-set in memory for a short TTL rather than re-probing every
+// page load. Claude is the default everywhere — if its probe is down we still
+// expose the full allowlist rather than an empty picker (better a degraded turn
+// than a dead control); the chat route surfaces the real provider error.
+const PROVIDER_HEALTH_TTL_MS = 60_000;
+let providerHealthCache: { at: number; green: Set<Provider> } | null = null;
+
+async function greenProviders(): Promise<Set<Provider>> {
+  if (
+    providerHealthCache &&
+    Date.now() - providerHealthCache.at < PROVIDER_HEALTH_TTL_MS
+  ) {
+    return providerHealthCache.green;
+  }
+  const providers = await checkProviders();
+  const green = new Set<Provider>(
+    (Object.keys(providers) as Provider[]).filter((p) => providers[p].ok)
+  );
+  providerHealthCache = { at: Date.now(), green };
+  return green;
+}
+
+app.get("/api/models", async (c) => {
+  // We tag each model `available` rather than dropping unhealthy ones, because the
+  // full allowlist is also the source of truth for LABELLING past sessions (the
+  // sidebar shows each session's saved model). Dropping an entry would make a
+  // session that ran on a now-down provider render with the wrong model name. The
+  // picker hides the unavailable ones; the label lookup still resolves every id.
+  let green: Set<Provider>;
+  try {
+    green = await greenProviders();
+  } catch {
+    // If the probe itself blows up, treat everything as available rather than
+    // stranding the user with an empty picker.
+    green = new Set<Provider>(MODELS.map((m) => m.provider));
+  }
+  // Claude is the default everywhere; if its probe is down, don't blank the picker —
+  // expose the full set and let the chat route surface the real provider error.
+  const allAvailable = !green.has("claude");
+  const models = MODELS.map((m) => ({
+    ...m,
+    available: allAvailable || green.has(m.provider),
+  }));
+  return c.json({ models });
+});
 
 app.post("/api/sessions", async (c) => {
   let body: unknown;

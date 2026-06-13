@@ -226,7 +226,8 @@ function SessionItem({
         </button>
       )}
 
-      {/* Kebab button — visible on hover or when menu is open */}
+      {/* Kebab button — always visible on touch (no hover), reveal-on-hover on
+          desktop, and pinned visible while its menu is open. */}
       {!renaming && (
         <div ref={menuRef} className="absolute right-1 top-1.5">
           <button
@@ -239,7 +240,7 @@ function SessionItem({
             className={`rounded p-1 text-content-faint hover:bg-border-strong hover:text-content ${
               menuOpen
                 ? "bg-border-strong text-content opacity-100"
-                : "opacity-0 group-hover:opacity-100"
+                : "opacity-100 md:opacity-0 md:group-hover:opacity-100"
             }`}
           >
             <KebabIcon />

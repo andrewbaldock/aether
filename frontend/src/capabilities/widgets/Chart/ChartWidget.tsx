@@ -14,6 +14,7 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
   XAxis,
+  type XAxisTickContentProps,
   YAxis,
 } from "recharts";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
@@ -228,6 +229,7 @@ export function SpecChart({ spec }: { spec: ChartSpec }) {
           axis={horizontal ? "y" : "x"}
           xKey={spec.xKey}
           label={spec.xLabel}
+          count={spec.data.length}
         />
         <ValueAxis axis={horizontal ? "x" : "y"} label={spec.yLabel} />
         <RechartsTooltip />
@@ -260,7 +262,12 @@ export function SpecChart({ spec }: { spec: ChartSpec }) {
     return (
       <AreaChart {...common}>
         <CartesianGrid strokeOpacity={0.15} />
-        <CategoryAxis axis="x" xKey={spec.xKey} label={spec.xLabel} />
+        <CategoryAxis
+          axis="x"
+          xKey={spec.xKey}
+          label={spec.xLabel}
+          count={spec.data.length}
+        />
         <ValueAxis axis="y" label={spec.yLabel} />
         <RechartsTooltip />
         <Legend />
@@ -286,7 +293,12 @@ export function SpecChart({ spec }: { spec: ChartSpec }) {
   return (
     <LineChart {...common}>
       <CartesianGrid strokeOpacity={0.15} />
-      <CategoryAxis axis="x" xKey={spec.xKey} label={spec.xLabel} />
+      <CategoryAxis
+        axis="x"
+        xKey={spec.xKey}
+        label={spec.xLabel}
+        count={spec.data.length}
+      />
       <ValueAxis axis="y" label={spec.yLabel} />
       <RechartsTooltip />
       <Legend />
@@ -309,18 +321,57 @@ export function SpecChart({ spec }: { spec: ChartSpec }) {
 // (Recharts layout="vertical"), where it also needs extra width so long labels
 // read. Recharts dispatches axis components by type, so these must be returned as
 // bare <XAxis>/<YAxis>, not wrapped.
+// An x-axis tick that angles the label and truncates over-long text, so labels
+// stay legible instead of overlapping or being silently dropped by recharts.
+const TICK_MAX_CHARS = 16;
+function AngledTick(props: XAxisTickContentProps) {
+  const x = Number(props.x ?? 0);
+  const y = Number(props.y ?? 0);
+  const raw = String(props.payload?.value ?? "");
+  const text =
+    raw.length > TICK_MAX_CHARS ? `${raw.slice(0, TICK_MAX_CHARS - 1)}…` : raw;
+  return (
+    <text
+      x={x}
+      y={y}
+      dy={4}
+      dx={-4}
+      textAnchor="end"
+      transform={`rotate(-35, ${x}, ${y})`}
+      fill={AXIS_COLOR}
+      fontSize={11}
+    >
+      {text}
+    </text>
+  );
+}
+
 function CategoryAxis({
   axis,
   xKey,
   label,
+  count = 0,
 }: {
   axis: "x" | "y";
   xKey: string;
   label?: string;
+  count?: number;
 }) {
   if (axis === "x") {
+    // Show every label when there's room; once they'd collide, let recharts
+    // thin them evenly (interval="preserveStartEnd") rather than clipping the
+    // ends. Angled, truncating ticks keep long labels readable either way.
+    const dense = count > 12;
     return (
-      <XAxis dataKey={xKey} stroke={AXIS_COLOR} fontSize={12}>
+      <XAxis
+        dataKey={xKey}
+        stroke={AXIS_COLOR}
+        fontSize={12}
+        height={56}
+        interval={dense ? "preserveStartEnd" : 0}
+        tick={AngledTick}
+        tickMargin={8}
+      >
         {label ? <Label value={label} position="bottom" fontSize={11} /> : null}
       </XAxis>
     );

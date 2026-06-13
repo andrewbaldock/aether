@@ -13,6 +13,11 @@ export interface ModelOption {
   provider: Provider;
   label: string;
   blurb: string;
+  // Whether the model's provider currently passes the backend's live health
+  // probe. The picker shows only available models; the label lookup uses the
+  // full list so it can still name a past session's model even if its provider
+  // is momentarily down. Absent/true = available.
+  available?: boolean;
 }
 
 // Human-readable group headers, and the order groups appear in. Anthropic first.
@@ -23,14 +28,17 @@ const PROVIDER_LABELS: Record<Provider, string> = {
   mistral: "Mistral",
 };
 
-// The allowlist never changes within a session, so a long staleTime keeps it
-// cached app-wide; TanStack dedups the fetch across every mounted picker (and
-// the sidebar, which reuses this to label sessions by their saved model).
+// The picker's options are the allowlist filtered to providers passing a live
+// health probe (server-side, ~60s TTL — see GET /api/models). So unlike a static
+// allowlist this can change within a session as a provider recovers or fails; we
+// use a finite staleTime that roughly tracks the server TTL rather than caching
+// forever. TanStack still dedups the fetch across every mounted picker (and the
+// sidebar, which reuses this to label sessions by their saved model).
 export function useModels(): ModelOption[] {
   const { data } = useQuery({
     queryKey: ["models"],
     queryFn: () => apiFetch<{ models: ModelOption[] }>("/api/models"),
-    staleTime: Number.POSITIVE_INFINITY,
+    staleTime: 60_000,
     select: (d) => d.models,
   });
   return data ?? [];
@@ -67,9 +75,17 @@ interface ModelPickerProps {
 // fetch, cached). The selected value follows the active conversation; choosing
 // one persists it to the session (handled by the parent).
 export function ModelPicker({ value, onChange, disabled }: ModelPickerProps) {
-  const models = useModels();
+  const allModels = useModels();
   const spanRef = useRef<HTMLSpanElement>(null);
   const selectRef = useRef<HTMLSelectElement>(null);
+
+  // The picker offers only models whose provider passed the backend health probe
+  // (`available !== false`). The session's currently-saved model is always kept
+  // selectable even if its provider just went down, so the control still reflects
+  // what the conversation would use rather than silently snapping to another model.
+  const models = allModels.filter(
+    (m) => m.available !== false || m.id === value
+  );
 
   // Until the list loads (or if it failed), render nothing rather than an empty
   // select — the conversation still works on the server default.

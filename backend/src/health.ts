@@ -175,22 +175,12 @@ async function checkUnsplash(): Promise<ProviderResult> {
   }
 }
 
-export async function checkHealth(): Promise<HealthResult> {
-  const [
-    supabase,
-    claude,
-    google,
-    deepseek,
-    mistral,
-    wikidata,
-    wikidataSearch,
-    worldBank,
-    wikipedia,
-    openalex,
-    wikimedia,
-    unsplash,
-  ] = await Promise.all([
-    checkSupabase(),
+// Just the four LLM provider probes — the live, billable part of the health
+// check, split out so the model picker can gate its dropdown on provider health
+// without also running the dozen keyless data-source probes. Each probe is a
+// 1-token completion; see the per-provider checkers above.
+export async function checkProviders(): Promise<HealthResult["providers"]> {
+  const [claude, google, deepseek, mistral] = await Promise.all([
     checkClaude(),
     checkOpenAICompat(
       "https://generativelanguage.googleapis.com/v1beta/openai/",
@@ -207,6 +197,24 @@ export async function checkHealth(): Promise<HealthResult> {
       "MISTRAL_API_KEY",
       "mistral-small-latest"
     ),
+  ]);
+  return { claude, google, deepseek, mistral };
+}
+
+export async function checkHealth(): Promise<HealthResult> {
+  const [
+    supabase,
+    providers,
+    wikidata,
+    wikidataSearch,
+    worldBank,
+    wikipedia,
+    openalex,
+    wikimedia,
+    unsplash,
+  ] = await Promise.all([
+    checkSupabase(),
+    checkProviders(),
     // Keyless data sources — lightest request that proves the service answers.
     checkKeylessHttp(
       "https://query.wikidata.org/sparql?format=json&query=" +
@@ -236,7 +244,7 @@ export async function checkHealth(): Promise<HealthResult> {
 
   return {
     supabase,
-    providers: { claude, google, deepseek, mistral },
+    providers,
     dataSources: {
       wikidata,
       wikidataSearch,

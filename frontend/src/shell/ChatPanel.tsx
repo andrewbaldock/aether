@@ -511,8 +511,9 @@ export function ChatPanel() {
                 disabled={isLoading}
               />
               {/* Send / Stop — while a turn is streaming the button becomes a stop
-                control: the spinner is the resting state, and hovering reveals a
-                stop icon that aborts the stream on click. */}
+                control. The stop square is ALWAYS visible while loading (no hover
+                gate, so it works on touch); a spinning ring around it signals the
+                turn is still in flight. */}
               <Tooltip
                 label={isLoading ? "Stop generating" : "Send message"}
                 side="top"
@@ -527,19 +528,23 @@ export function ChatPanel() {
                     if (isLoading) abortStream();
                   }}
                   aria-label={isLoading ? "Stop generating" : "Send message"}
-                  className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-r from-[#fd40a4] to-[#c35ed1] text-2xl leading-none text-white hover:brightness-110 disabled:opacity-40 max-md:h-11 max-md:w-11"
+                  className="relative flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-r from-[#fd40a4] to-[#c35ed1] text-2xl leading-none text-white transition hover:brightness-110 disabled:opacity-40 max-md:h-11 max-md:w-11"
                   // Only disabled when there's nothing to send. While loading the
                   // button is active so it can stop the stream.
                   disabled={!isLoading && draft.trim().length === 0}
                 >
                   {isLoading ? (
                     <>
-                      {/* Resting: spinner. Hidden on hover so the stop icon shows. */}
-                      <span className="animate-spin group-hover:hidden">𑁍</span>
-                      {/* Hover: a stop square. Smaller than the send glyph. */}
-                      <span className="hidden text-base leading-none group-hover:inline">
-                        ◼
-                      </span>
+                      {/* Spinning ring: the "working" signal, behind the stop icon. */}
+                      <span
+                        aria-hidden="true"
+                        className="absolute inset-0.75 animate-spin rounded-full border-2 border-white/30 border-t-white/90"
+                      />
+                      {/* Stop square: always visible while loading, on touch + desktop. */}
+                      <span
+                        aria-hidden="true"
+                        className="h-2.5 w-2.5 rounded-xs bg-white max-md:h-3 max-md:w-3"
+                      />
                     </>
                   ) : (
                     <span>𑁍</span>
@@ -614,8 +619,9 @@ function ConversationTitle({
         className="group flex w-full items-center justify-center gap-1 px-4 pb-2 pt-3.5 text-sm text-content-muted hover:text-content transition-colors"
       >
         <span className="max-w-sm truncate">{title ?? "·"}</span>
+        {/* Edit affordance: shown on touch (no hover), reveal-on-hover on desktop. */}
         <ChevronDown
-          className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="h-3.5 w-3.5 shrink-0 opacity-60 transition-opacity md:opacity-0 md:group-hover:opacity-100"
           aria-hidden
         />
       </button>

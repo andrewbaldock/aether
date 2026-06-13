@@ -12,8 +12,14 @@ import { Sidebar, SidebarToggleIcon } from "./Sidebar";
 import { Tooltip } from "./Tooltip";
 import { useIsMobile } from "./useIsMobile";
 
+// The resize handle: a wide-enough-to-grab hit zone (w-2.5) that's transparent
+// at rest, with an always-visible grip pill centered in it so the divider is
+// discoverable without hovering. The pill and hit zone both brighten on
+// hover/drag. `group` lets the inner grip react to the separator's hover state.
 const handle =
-  "w-1 bg-border transition-colors hover:bg-border-strong data-[separator-state=hover]:bg-border-strong data-[separator-state=drag]:bg-content-subtle";
+  "group relative flex w-2.5 shrink-0 cursor-col-resize items-center justify-center";
+const handleGrip =
+  "h-8 w-1 rounded-full bg-border transition-colors group-hover:bg-border-strong group-data-[separator-state=hover]:bg-border-strong group-data-[separator-state=drag]:bg-content-subtle";
 
 const SIDEBAR_COLLAPSED_KEY = "aether-sidebar-collapsed";
 const SIDEBAR_WIDTH = 240; // px — fixed so the wordmark never gets cramped
@@ -124,7 +130,9 @@ function ShellInner() {
             >
               <ChatPanel />
             </Panel>
-            <Separator className={handle} />
+            <Separator className={handle}>
+              <span aria-hidden="true" className={handleGrip} />
+            </Separator>
           </>
         )}
 

@@ -23,6 +23,12 @@ export interface ModelOption {
   label: string;
   /** One-line description of the trade-off. */
   blurb: string;
+  /**
+   * Whether this model's provider currently passes a live health probe. Set by
+   * GET /api/models (not stored here — the static allowlist is always "all"). The
+   * picker hides models where this is false; absent/true means available.
+   */
+  available?: boolean;
 }
 
 // Human-readable provider names for the picker's group headers. Order of the keys
