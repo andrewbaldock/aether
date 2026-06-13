@@ -3,7 +3,7 @@
 How Aether fits together. **Keep this current:** update it in the same commit that changes how
 the pieces connect.
 
-Last updated: Shared Radix menu/select primitives — `@radix-ui/react-dropdown-menu` (Explore-further kebab) + `@radix-ui/react-select` (model picker); `AgentEventBus` now replays its most-recent coarse phase to opt-in subscribers so a mid-turn mount catches up.
+Last updated: Progressive widget rendering — render-tool JSON now streams to the frontend as it's generated (`tool_partial` SSE event) so widgets paint while the model is still writing, and a truncated result is salvaged (best-effort JSON close) instead of failing the turn on `max_tokens`.
 
 ---
 
@@ -114,6 +114,7 @@ request   {
           }
 response  text/event-stream
   data: {"type":"text","content":"..."}   // one event per token
+  data: {"type":"tool_partial","tool":"render_table","partialJson":"...","isComplete":false} // streamed render-tool spec
   data: [DONE]                            // stream complete
   data: {"type":"error","message":"..."}  // mid-stream error
 error     { error: string }              // 400 (bad body) before streaming starts
@@ -134,8 +135,40 @@ server (and `/api/health`) start fine without a key.
 
 Tools are defined in `backend/src/tools.ts` (a `TOOLS` array of Anthropic-schema definitions plus
 an `executeTool` dispatcher) and passed to `createClaudeClient` at construction time — the
-`LlmClient` interface stays tool-agnostic. The `stream()` method accepts optional `onToolStart` and
-`onToolResult` callbacks; the route uses these to emit `tool_start` / `tool_result` SSE events.
+`LlmClient` interface stays tool-agnostic. The `stream()` method accepts optional `onToolStart`,
+`onToolResult`, and `onToolPartial` callbacks; the route uses these to emit `tool_start` /
+`tool_result` / `tool_partial` SSE events. (Callbacks are positional in the `stream(...)`
+signature — `onToolPartial` sits between `onToolResult` and `onLoopStart`; the SSE callback order in
+`index.ts` must match.)
+
+### Progressive rendering — render tools are pass-throughs
+
+The render tools (`render_table`, `render_chart`, `render_timeline`, `render_images`,
+`build_knowledge_graph`) do no work in `executeTool` — they `return JSON.stringify(input)`. So a
+render tool's **result is the model's tool-input JSON, verbatim**. That single fact powers progressive
+rendering: the agent loop forwards the streaming `input_json_delta` for these tools (the set is
+`STREAMABLE_RENDER_TOOLS`) over a `tool_partial` event, throttled to ~one frame per 120 ms, in both the
+Claude and OpenAI-compat clients. The widget repaints from the growing spec instead of waiting for the
+whole block — so a big "compare everything" answer shows its first rows in ~1 s. The authoritative
+`tool_result` still fires after execute; `tool_partial` is purely additive.
+
+On the frontend, KnowledgeGraph feeds partials straight into its existing **additive, idempotent**
+merge (the final `tool_result` reconciles without double-adding). Table/Chart/Timeline/Images share
+`frontend/src/capabilities/widgets/useStreamingEntries.ts`, which **upserts one streaming entry in
+place** as partials arrive, finalizes it on `tool_result`, and closes the slot on `done`/`error`/`idle`
+(the salvage path emits a final partial but no `tool_result`, so without that close the next turn would
+upsert into the stale entry).
+
+### max_tokens salvage — keep what streamed
+
+When the model runs out of output budget mid tool-call (`stop_reason="max_tokens"` /
+`finish_reason="length"`), the partial JSON is unparseable. Instead of throwing the whole turn away,
+the loop best-effort-closes it via `backend/src/bestEffortJson.ts` (`closeTruncatedJson` rewinds to the
+last complete element and restores the open-bracket stack; `parseBestEffort` parses it), emits the
+salvaged spec as a final `tool_partial`, and ends the turn with a soft status — _"That ran long —
+showing what came through."_ Only when nothing is salvageable does it surface the hard error. The
+`ANTHROPIC_MAX_TOKENS` default is 8192 (env-overridable), and the system prompt asks the model to emit
+the most important rows/entities **first** so a cutoff loses the tail, not the headline.
 
 On the frontend, the stream reader lives in `frontend/src/shell/useChat.ts`; message state is
 lifted into `SessionContext` so both `ChatPanel` and `Sidebar` share it. `ChatPanel.tsx` is just
@@ -301,10 +334,13 @@ SSE wire format — all event types:
 ```
 data: {"type":"text","content":"..."}              // one event per token
 data: {"type":"tool_start","tool":"...","input":{}} // tool call beginning
+data: {"type":"tool_partial","tool":"...","partialJson":"...","isComplete":false} // streamed render-tool spec (progressive paint)
 data: {"type":"tool_result","tool":"...","result":"..."} // tool result fed back
 data: [DONE]                                       // stream complete
 data: {"type":"error","message":"..."}             // mid-stream error
 ```
+(Other event types the route emits: `status`, `loop_start`, `plan`, `warning`. The `tool_partial`
+stream is render-tools-only — see the progressive-rendering and salvage notes above.)
 
 The agent loop runs entirely on the backend; the frontend sees only SSE events. Tool
 definitions live in `backend/src/tools.ts`; the loop in `backend/src/llm.ts`.
