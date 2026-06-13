@@ -740,6 +740,20 @@ export async function executeTool(
   }
 }
 
+// The render tools whose tool_use input IS the widget spec verbatim (executeTool
+// just echoes it). Because the result is the streamed input_json_delta and nothing
+// else, we can forward the partial JSON to the frontend AS IT STREAMS and the
+// widget can render a growing spec — no waiting for the whole block. Data tools
+// (wikidata, world_bank, …) are NOT here: their result comes from a fetch, not the
+// model's text, so there's nothing meaningful to stream mid-input.
+export const STREAMABLE_RENDER_TOOLS: ReadonlySet<string> = new Set([
+  "build_knowledge_graph",
+  "render_table",
+  "render_chart",
+  "render_timeline",
+  "render_images",
+]);
+
 // --- Self-correction: degenerate-result detection --------------------------
 // Promotes the frontend's empty-panel escalation (useFillFromConversation) into
 // the agent loop: detect when a render/data tool produced nothing usable so the

@@ -25,6 +25,11 @@ export type AgentEvent =
   | { type: "status"; message: string }
   | { type: "tool_start"; tool: string; input: unknown }
   | { type: "tool_result"; tool: string; result: string }
+  // Streamed render-tool spec while it's still arriving (and once more complete).
+  // `partialJson` is the growing tool input; widgets re-parse it (defensively —
+  // mid-token JSON just yields null) to paint progressively. tool_result remains
+  // the authoritative final, so observers that only want settled data ignore this.
+  | { type: "tool_partial"; tool: string; partialJson: string; isComplete: boolean }
   | { type: "loop_start"; iteration: number }
   // The backend planner's abstract composition plan for this turn — which
   // capabilities participate and how they relate (never coordinates). Emitted

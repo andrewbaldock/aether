@@ -38,6 +38,12 @@ people would want to see — a place, a person, a movement, art, an object — c
 search_images to fetch real photos, then render_images to lay them out as a gallery.
 A single answer can use several of these at once. Emit compact specs — only the rows,
 points, events, or images that matter — and still give a short text reply alongside.
+Order what you emit by importance: put the most significant rows / entities / points
+FIRST, because the widget paints as the spec streams and the reader sees the top of it
+immediately. For a sprawling request ("compare ALL of X across every dimension"), do
+NOT try to enumerate everything — pick the strongest, most representative set (the
+headline entities and the dimensions that actually differentiate them) and render that
+well. A focused spec that finishes beats an exhaustive one that gets cut off.
 Image results come tagged kind:"photo" or kind:"document" (SVG diagrams, scanned
 pages, infographics, charts). CURATE for a showy, on-topic gallery: render the genuine
 photos AND any document that's genuinely interesting and relevant — a striking

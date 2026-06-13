@@ -465,6 +465,19 @@ app.post("/api/chat", async (c) => {
             data: JSON.stringify({ type: "tool_result", tool, result }),
           });
         },
+        async (tool, partialJson, isComplete) => {
+          // Streamed render-tool spec as it arrives — the frontend re-parses and
+          // re-renders the widget from this growing JSON. tool_result (above) is
+          // still the authoritative final; tool_partial is purely additive.
+          await stream.writeSSE({
+            data: JSON.stringify({
+              type: "tool_partial",
+              tool,
+              partialJson,
+              isComplete,
+            }),
+          });
+        },
         async (iteration) => {
           await stream.writeSSE({
             data: JSON.stringify({ type: "loop_start", iteration }),

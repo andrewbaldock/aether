@@ -218,11 +218,21 @@ export function KnowledgeGraphProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (event.type !== "tool_result") return;
+      // Accept BOTH the streamed partials (paint as the graph spec arrives) and the
+      // authoritative tool_result (the final reconcile). The merge below is additive
+      // and idempotent — exact-id nodes and dup link keys are skipped — so applying a
+      // growing partial and then the complete result converges with no double-adds.
+      const isPartial = event.type === "tool_partial";
+      if (event.type !== "tool_result" && event.type !== "tool_partial") return;
       if (event.tool !== "build_knowledge_graph") return;
+      // Clear the "mapping…" spinner as soon as the first usable data lands (partial
+      // or final) — that's the whole point: show something fast.
       endLoading();
 
-      const payload = parsePayload(event.result);
+      const raw = isPartial ? event.partialJson : event.result;
+      const payload = parsePayload(raw);
+      // A mid-token partial often isn't valid JSON yet → null. Skip this tick; the
+      // next (larger) partial or the final tool_result will carry parseable data.
       if (!payload) return;
 
       // New nodes — but first fold slug-drift duplicates. For each incoming

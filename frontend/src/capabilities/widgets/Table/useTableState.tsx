@@ -3,15 +3,9 @@ import {
   type ReactNode,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
-  useRef,
-  useState,
 } from "react";
-import {
-  type AgentEvent,
-  useAgentEvents,
-} from "../../../shell/AgentEventContext";
+import { useStreamingEntries } from "../useStreamingEntries";
 import type { TableSpec } from "./types";
 
 // One rendered table: a parsed spec plus a stable id assigned on arrival, so the
@@ -70,29 +64,23 @@ export function parseTableSpec(raw: string): TableSpec | null {
 }
 
 export function TableProvider({ children }: { children: ReactNode }) {
-  const bus = useAgentEvents();
-  const [entries, setEntries] = useState<TableEntry[]>([]);
-  // Monotonic id source for stable keys — never reused, even across removals.
-  const nextId = useRef(0);
+  // Accumulating table list, fed by both streamed partials and the final
+  // tool_result via the shared streaming-entries hook (see useStreamingEntries).
+  const { entries, setEntries, nextId } = useStreamingEntries<TableSpec>(
+    "render_table",
+    parseTableSpec
+  );
 
-  useEffect(() => {
-    function handle(event: AgentEvent) {
-      if (event.type !== "tool_result") return;
-      if (event.tool !== "render_table") return;
-      const parsed = parseTableSpec(event.result);
-      if (parsed)
-        setEntries((prev) => [...prev, { id: nextId.current++, spec: parsed }]);
-    }
-    return bus.subscribe(handle);
-  }, [bus]);
+  const loadEntries = useCallback(
+    (loaded: TableEntry[]) => {
+      // Assign fresh ids so they don't collide with any ids already in nextId.
+      const rehydrated = loaded.map((e) => ({ ...e, id: nextId.current++ }));
+      setEntries(rehydrated);
+    },
+    [nextId, setEntries]
+  );
 
-  const loadEntries = useCallback((loaded: TableEntry[]) => {
-    // Assign fresh ids so they don't collide with any ids already in nextId.
-    const rehydrated = loaded.map((e) => ({ ...e, id: nextId.current++ }));
-    setEntries(rehydrated);
-  }, []);
-
-  const clearEntries = useCallback(() => setEntries([]), []);
+  const clearEntries = useCallback(() => setEntries([]), [setEntries]);
 
   const value = useMemo<TableState>(
     () => ({ entries, loadEntries, clearEntries }),

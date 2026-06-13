@@ -3,15 +3,9 @@ import {
   type ReactNode,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
-  useRef,
-  useState,
 } from "react";
-import {
-  type AgentEvent,
-  useAgentEvents,
-} from "../../../shell/AgentEventContext";
+import { useStreamingEntries } from "../useStreamingEntries";
 import type { ImageItem, ImagesSpec } from "./types";
 
 export interface ImagesEntry {
@@ -71,27 +65,21 @@ export function parseImagesSpec(raw: string): ImagesSpec | null {
 }
 
 export function ImagesProvider({ children }: { children: ReactNode }) {
-  const bus = useAgentEvents();
-  const [entries, setEntries] = useState<ImagesEntry[]>([]);
-  const nextId = useRef(0);
+  // Streamed partials + final tool_result, via the shared streaming-entries hook.
+  const { entries, setEntries, nextId } = useStreamingEntries<ImagesSpec>(
+    "render_images",
+    parseImagesSpec
+  );
 
-  useEffect(() => {
-    function handle(event: AgentEvent) {
-      if (event.type !== "tool_result") return;
-      if (event.tool !== "render_images") return;
-      const parsed = parseImagesSpec(event.result);
-      if (parsed)
-        setEntries((prev) => [...prev, { id: nextId.current++, spec: parsed }]);
-    }
-    return bus.subscribe(handle);
-  }, [bus]);
+  const loadEntries = useCallback(
+    (loaded: ImagesEntry[]) => {
+      const rehydrated = loaded.map((e) => ({ ...e, id: nextId.current++ }));
+      setEntries(rehydrated);
+    },
+    [nextId, setEntries]
+  );
 
-  const loadEntries = useCallback((loaded: ImagesEntry[]) => {
-    const rehydrated = loaded.map((e) => ({ ...e, id: nextId.current++ }));
-    setEntries(rehydrated);
-  }, []);
-
-  const clearEntries = useCallback(() => setEntries([]), []);
+  const clearEntries = useCallback(() => setEntries([]), [setEntries]);
 
   const value = useMemo<ImagesState>(
     () => ({ entries, loadEntries, clearEntries }),

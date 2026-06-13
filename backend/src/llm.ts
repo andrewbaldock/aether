@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
+import { closeTruncatedJson, parseBestEffort } from "./bestEffortJson";
 import { DEFAULT_MODEL, type Provider, providerForModel } from "./models";
 import { type CompositionPlan, planPreamble, planTurn } from "./planner";
 import { buildSystemPrompt } from "./prompt";
@@ -8,6 +9,7 @@ import {
   correctionDirective,
   executeTool,
   isDegenerate,
+  STREAMABLE_RENDER_TOOLS,
   type ToolDefinition,
   toOpenAITools,
   toolResultStatus,
@@ -43,6 +45,17 @@ export interface LlmClient {
     onDone: () => Promise<void>,
     onToolStart?: (name: string, input: unknown) => Promise<void>,
     onToolResult?: (name: string, result: string) => Promise<void>,
+    // Fired repeatedly while a STREAMABLE render tool's input JSON streams in, then
+    // once more with isComplete=true when the block closes. `partialJson` is the
+    // raw, possibly-incomplete tool input accumulated so far — the same string that
+    // will become the tool_result, just early. Lets the frontend paint a growing
+    // widget spec instead of waiting for the whole block. Render tools only; data
+    // tools never fire this (their result comes from a fetch, not the model text).
+    onToolPartial?: (
+      name: string,
+      partialJson: string,
+      isComplete: boolean
+    ) => Promise<void>,
     // Fired at the top of the agent loop for the second iteration onward — i.e.
     // each time tool results are fed back and the model is called again. Lets the
     // frontend visualise the loop re-entering. Iteration 1 is implied by the
@@ -181,7 +194,7 @@ function createClaudeClient(
   // truncated (stop_reason "max_tokens"), leaving a partial tool_use that can't
   // be parsed and a turn that produces no usable output. Override with
   // ANTHROPIC_MAX_TOKENS.
-  const maxTokens = Number(process.env.ANTHROPIC_MAX_TOKENS) || 4096;
+  const maxTokens = Number(process.env.ANTHROPIC_MAX_TOKENS) || 8192;
 
   // Tools are static for the life of this client (graphMode is fixed per
   // request). Mark the LAST tool with cache_control so the whole tool block —
@@ -267,6 +280,7 @@ function createClaudeClient(
       onDone,
       onToolStart,
       onToolResult,
+      onToolPartial,
       onLoopStart,
       onStatus,
       onPlan
@@ -311,10 +325,18 @@ function createClaudeClient(
         const atCap = iteration >= MAX_ITERATIONS;
         await emitIterationStatus(iteration, atCap, onLoopStart, onStatus);
 
-        // Per-turn accumulators — reset each iteration.
+        // Per-turn accumulators — reset each iteration. `lastPartialAt` throttles
+        // the onToolPartial stream (one SSE frame per ~120ms per tool, not one per
+        // token); `streamable` caches the STREAMABLE_RENDER_TOOLS check per block.
         const pendingTools = new Map<
           number,
-          { id: string; name: string; inputChunks: string[] }
+          {
+            id: string;
+            name: string;
+            inputChunks: string[];
+            streamable: boolean;
+            lastPartialAt: number;
+          }
         >();
         const textBlocks: { type: "text"; text: string }[] = [];
         let currentText = "";
@@ -347,6 +369,10 @@ function createClaudeClient(
                 id: event.content_block.id,
                 name: event.content_block.name,
                 inputChunks: [],
+                streamable: STREAMABLE_RENDER_TOOLS.has(
+                  event.content_block.name
+                ),
+                lastPartialAt: 0,
               });
             } else if (event.content_block.type === "server_tool_use") {
               // Server-side tool starting (e.g. web_search) — fire onToolStart so
@@ -367,15 +393,34 @@ function createClaudeClient(
               await onToken(event.delta.text);
               currentText += event.delta.text;
             } else if (event.delta.type === "input_json_delta") {
-              // Accumulate partial JSON — parse only when the block is complete.
-              pendingTools
-                .get(event.index)
-                ?.inputChunks.push(event.delta.partial_json);
+              // Accumulate partial JSON. For a streamable render tool, also forward
+              // the snapshot-so-far (throttled) so the widget paints as it streams.
+              // We parse only when the block is complete (below / after the loop).
+              const t = pendingTools.get(event.index);
+              if (t) {
+                t.inputChunks.push(event.delta.partial_json);
+                if (t.streamable && onToolPartial) {
+                  const now = Date.now();
+                  const snapshot = t.inputChunks.join("");
+                  // Skip empty snapshots (the very first delta can fire before any
+                  // JSON has accumulated) — nothing to paint from "".
+                  if (snapshot && now - t.lastPartialAt >= 120) {
+                    t.lastPartialAt = now;
+                    await onToolPartial(t.name, snapshot, false);
+                  }
+                }
+              }
             }
           } else if (event.type === "content_block_stop") {
             if (currentText) {
               textBlocks.push({ type: "text", text: currentText });
               currentText = "";
+            }
+            // Final partial for a streamable tool: the full, now-complete input.
+            // (The authoritative onToolResult still fires post-execute below.)
+            const done = pendingTools.get(event.index);
+            if (done?.streamable && onToolPartial) {
+              await onToolPartial(done.name, done.inputChunks.join(""), true);
             }
           } else if (event.type === "message_delta") {
             stopReason = event.delta.stop_reason ?? null;
@@ -395,10 +440,29 @@ function createClaudeClient(
           `[usage] iter=${iteration} model=${model} input=${inputTokens} output=${outputTokens} cache_read=${cacheReadTokens} cache_creation=${cacheCreationTokens}`
         );
 
-        // Truncated by the output budget. Any pending tool_use JSON is partial
-        // and unparseable — don't try to parse it (that would throw and kill the
-        // turn silently). Fail loudly so the cause is visible, not a frozen UI.
+        // Truncated by the output budget. The pending tool_use JSON is partial.
+        // Rather than throw away the whole turn, try to SALVAGE: if a streamable
+        // render tool's partial input can be best-effort closed and parsed, emit it
+        // as a final tool_partial so the widget keeps what streamed, and finish the
+        // turn with a soft status instead of the hard red error. Only throw when
+        // there's nothing salvageable at all (e.g. truncated plain text, no widget).
         if (stopReason === "max_tokens") {
+          console.warn(
+            `[max_tokens] iter=${iteration} truncated; attempting salvage of ${pendingTools.size} pending tool(s)`
+          );
+          let salvaged = false;
+          for (const [, tool] of pendingTools) {
+            if (!tool.streamable) continue;
+            const closed = closeTruncatedJson(tool.inputChunks.join(""));
+            if (parseBestEffort(closed) === undefined) continue;
+            await onToolPartial?.(tool.name, closed, true);
+            salvaged = true;
+          }
+          if (salvaged) {
+            await onStatus?.("That ran long — showing what came through.");
+            await onDone();
+            return;
+          }
           throw new Error(
             "The model hit its output limit before finishing (stop_reason=max_tokens). " +
               "Raise ANTHROPIC_MAX_TOKENS or ask for a smaller result."
@@ -560,6 +624,7 @@ function createOpenAICompatClient(
       onDone,
       onToolStart,
       onToolResult,
+      onToolPartial,
       onLoopStart,
       onStatus,
       onPlan
@@ -600,6 +665,8 @@ function createOpenAICompatClient(
             name: string;
             argChunks: string[];
             thoughtSignature?: string;
+            streamable: boolean;
+            lastPartialAt: number;
           }
         >();
         let assistantText = "";
@@ -644,16 +711,45 @@ function createOpenAICompatClient(
                   ? [tc.function.arguments]
                   : [],
                 thoughtSignature: sig,
+                streamable: STREAMABLE_RENDER_TOOLS.has(
+                  tc.function?.name ?? ""
+                ),
+                lastPartialAt: 0,
               });
+            }
+            // Forward the growing render-tool spec (throttled) so the widget paints
+            // as it streams — same as the Claude client. OpenAI has no per-tool stop
+            // event, so the final (isComplete) partial is emitted post-loop below.
+            const t = pendingTools.get(tc.index);
+            if (t?.streamable && onToolPartial) {
+              const now = Date.now();
+              if (now - t.lastPartialAt >= 120) {
+                t.lastPartialAt = now;
+                await onToolPartial(t.name, t.argChunks.join(""), false);
+              }
             }
           }
 
           if (choice.finish_reason) finishReason = choice.finish_reason;
         }
 
-        // Output budget exhausted — mirrors the Claude client's max_tokens guard.
-        // Any pending tool JSON is partial; fail loudly rather than parse garbage.
+        // Output budget exhausted — mirrors the Claude client's max_tokens guard,
+        // including the salvage path: best-effort close any streamable render tool's
+        // partial input and keep what streamed instead of throwing the whole turn.
         if (finishReason === "length") {
+          let salvaged = false;
+          for (const [, tool] of pendingTools) {
+            if (!tool.streamable) continue;
+            const closed = closeTruncatedJson(tool.argChunks.join(""));
+            if (parseBestEffort(closed) === undefined) continue;
+            await onToolPartial?.(tool.name, closed, true);
+            salvaged = true;
+          }
+          if (salvaged) {
+            await onStatus?.("That ran long — showing what came through.");
+            await onDone();
+            return;
+          }
           throw new Error(
             "The model hit its output limit before finishing (finish_reason=length). " +
               "Raise LLM_MAX_TOKENS or ask for a smaller result."
@@ -703,6 +799,14 @@ function createOpenAICompatClient(
               : {}),
           })),
         });
+
+        // Final (complete) partial for each streamable tool — the analogue of the
+        // Claude client's content_block_stop emit. OpenAI gives no per-tool stop, so
+        // we do it here once the full arg stream is assembled.
+        for (const tool of sortedTools) {
+          if (tool.streamable && onToolPartial)
+            await onToolPartial(tool.name, tool.argChunks.join(""), true);
+        }
 
         const executed: { id: string; name: string; result: string }[] = [];
         for (const tool of sortedTools) {

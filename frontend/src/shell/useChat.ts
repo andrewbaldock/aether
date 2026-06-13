@@ -263,6 +263,8 @@ export function useChat({
             tool?: string;
             input?: unknown;
             result?: string;
+            partialJson?: string;
+            isComplete?: boolean;
             iteration?: number;
             label?: string;
             plan?: CompositionPlan;
@@ -301,6 +303,16 @@ export function useChat({
               result: event.result ?? "",
             });
             updateAssistant((m) => ({ ...m, toolActivity: undefined }));
+          } else if (event.type === "tool_partial" && event.tool) {
+            // Streamed render-tool spec — widgets re-parse it to paint as it
+            // arrives. Bus-only: no message-state change (no transcript text), so
+            // non-subscribers don't re-render mid-stream.
+            bus.emit({
+              type: "tool_partial",
+              tool: event.tool,
+              partialJson: event.partialJson ?? "",
+              isComplete: event.isComplete ?? false,
+            });
           } else if (event.type === "loop_start") {
             bus.emit({ type: "loop_start", iteration: event.iteration ?? 0 });
           } else if (event.type === "plan" && event.plan) {
