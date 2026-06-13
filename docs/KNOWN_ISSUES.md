@@ -4,16 +4,12 @@ Known rough edges, not yet fixed. Tagged `website:` for the portfolio site; unta
 
 ## Aether
 
-- **Explore further not working on mobile** — the "explore further" affordance doesn't function on mobile.
+- **Explore further not working on mobile** — the "explore further" affordance is a right-click context menu (`WithContextMenu` → `onContextMenu`), which never fires on touch. Best fixed by the **shared menu/select primitive** in [ROADMAP.md](./ROADMAP.md) (one Radix dropdown replaces this menu, the sidebar kebab, and — via Radix select — the model picker), rather than patching the context menu alone.
 - **No mobile portrait layout** — on portrait/mobile, the conversation and capability columns should stack vertically instead of sitting side by side.
-- **incomplete mobile affordance** scan for all hover-only controls that need mobile equivalents.  No way to rename or delete conversations on mobiel for example.
-- **Resize handle not discoverable** — the column resize needs a visible handle on hover.
+- **Incomplete mobile affordance scan** — sweep for any remaining hover-only controls that still need touch equivalents. (Sidebar rename/delete and the conversation-title edit affordance are now touch-visible; the send/stop control too — but the full audit isn't finished.)
 - **Help panel animation only works if already open** — opening the Welcome/help panel mid-query skips its open animation; it only animates correctly when opened before asking a question.
 - **"Working" dialogs don't name the active tool** — the in-progress status should say which tool/data source is running right now, not a generic "working" message.
-- **Chart x-axis labels render poorly** — labels are cramped and some are dropped; needs a better strategy so every label shows legibly (rotate, stagger, or otherwise fit them all).
 
 ## Website
 
-- **Resume copy/paste spacing** — selecting and pasting resume text produces weird spacing.
 - **Needs better marketing assets** — better screenshots, updated copy, GIFs, and screen captures of the mobile experience in action.
-- **Case study missing byline** — the case study needs my name on it.

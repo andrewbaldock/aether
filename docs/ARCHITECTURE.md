@@ -3,7 +3,7 @@
 How Aether fits together. **Keep this current:** update it in the same commit that changes how
 the pieces connect.
 
-Last updated: Health dashboard (System Health widget + `/api/health/full` route).
+Last updated: Health-gated model picker (`/api/models` tags each model `available` via a cached live provider probe).
 
 ---
 
@@ -92,7 +92,7 @@ The backend is a Hono server (`backend/src/index.ts`) served by **bun's native s
 
 - `GET /api/health` → `{ ok: true }` — liveness, works before any API key is set.
 - `GET /api/health/full` → full plumbing check: Supabase + all four LLM provider keys, run in parallel with a 5 s timeout each. Powers the System Health widget.
-- `GET /api/models` → `{ models }` — the selectable model list for the picker.
+- `GET /api/models` → `{ models }` — the model allowlist for the picker, each tagged `available` by a **live provider health probe** (`checkProviders()` — the four billable 1-token LLM checks, split out of `/api/health/full`), cached in memory (~60 s TTL). The picker hides unavailable providers but the full list is always returned so past sessions can still resolve their saved model's label. If Claude (the default) is down, all are marked available rather than blanking the picker.
 - `POST /api/chat` — one chat turn, streamed as SSE.
 - `POST /api/sessions` — create a new session; returns `{ id }`.
 - `GET /api/sessions?userId=...` — list sessions for a user (most-recent-first).
