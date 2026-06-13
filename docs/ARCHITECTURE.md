@@ -316,18 +316,20 @@ New experiences plug in by adding a catalog entry + registering a renderer; noth
 
 ## Data flow
 
-**Lit up as of Commit 5** (agent loop + tools):
+One chat turn, end to end:
 
 ```
 user message
-   → frontend POST /api/chat                    ← built
-   → Hono handler (streamSSE)                   ← built
-   → Claude call via connector (stream)         ← built
-   → SSE token events → frontend reader         ← built
-   → tokens appended live in the chat           ← built
-   → agent loop: tool_use? → executeTool        ← built (Commit 5)
-       → feed tool_result back → continue       ← built (Commit 5)
-       → exits when stop_reason !== "tool_use"  ← built (Commit 5)
+   → frontend POST /api/chat
+   → Hono handler (streamSSE)
+   → Claude call via connector (stream)
+   → SSE token events → frontend reader
+   → tokens appended live in the chat
+   → agent loop: tool_use? → executeTool
+       → render tool? → stream tool_partial as the JSON arrives (progressive paint)
+       → feed tool_result back → continue
+       → exits when stop_reason !== "tool_use"
+       → on max_tokens: salvage the partial render spec, end with a soft status
 ```
 
 SSE wire format — all event types:
@@ -345,15 +347,15 @@ stream is render-tools-only — see the progressive-rendering and salvage notes 
 The agent loop runs entirely on the backend; the frontend sees only SSE events. Tool
 definitions live in `backend/src/tools.ts`; the loop in `backend/src/llm.ts`.
 
-**Persistence layer** (added in M9):
+**Persistence layer:**
 
 ```
 user message
-   → frontend POST /api/chat (with sessionId + userId)   ← built
+   → frontend POST /api/chat (with sessionId + userId)
    → [DONE] received
-   → backend saves user + assistant messages to Supabase  ← built
-   → sidebar fetches GET /api/sessions?userId=...         ← built
-   → clicking a session loads GET /api/sessions/:id/messages ← built
+   → backend saves user + assistant messages to Supabase
+   → sidebar fetches GET /api/sessions?userId=...
+   → clicking a session loads GET /api/sessions/:id/messages
 ```
 
 Anonymous identity: a UUID stored in `localStorage` under `aether_user_id` (created on first
@@ -388,10 +390,4 @@ away every already-saved blob for that tool. **Don't** bump for purely additive 
 read those defensively (`x ?? default`). The shape guard is the safety net for corruption that slips
 through without a bump.
 
-Still ahead:
-
-```
-   → frontend renders widgets (chart / graph / 3D)
-```
-
-See [ROADMAP.md](./ROADMAP.md) for the build sequence.
+See [ROADMAP.md](./ROADMAP.md) for what's next.
