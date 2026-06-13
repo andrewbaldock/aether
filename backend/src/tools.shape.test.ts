@@ -42,13 +42,46 @@ describe("toolStatusLabel", () => {
     expect(toolStatusLabel("openalex_search", { search: "graphene" })).toBe(
       "Searching scholarly works: “graphene”…"
     );
-    expect(toolStatusLabel("wikipedia_summary", { title: "Apollo 11" })).toBe(
-      "Reading Wikipedia: “Apollo 11”…"
-    );
     // query wins when several are present.
     expect(
       toolStatusLabel("wikidata_query", { query: "a", search: "b", title: "c" })
     ).toBe("Querying Wikidata: “a”…");
+  });
+
+  it("names the article(s) for wikipedia_summary's `titles` array", () => {
+    expect(
+      toolStatusLabel("wikipedia_summary", { titles: ["Marie Curie"] })
+    ).toBe("Reading Wikipedia: “Marie Curie”…");
+    // Several titles → name the first, count the rest.
+    expect(
+      toolStatusLabel("wikipedia_summary", {
+        titles: ["Marie Curie", "Pierre Curie", "Radium"],
+      })
+    ).toBe("Reading Wikipedia: “Marie Curie” +2 more…");
+    // Empty / all-blank → bare label.
+    expect(toolStatusLabel("wikipedia_summary", { titles: [] })).toBe(
+      "Reading Wikipedia…"
+    );
+    expect(toolStatusLabel("wikipedia_summary", { titles: ["  "] })).toBe(
+      "Reading Wikipedia…"
+    );
+  });
+
+  it("names the indicator + countries for world_bank", () => {
+    expect(
+      toolStatusLabel("world_bank", {
+        countries: ["FR", "DE"],
+        indicator: "SP.POP.TOTL",
+      })
+    ).toBe("Fetching World Bank data: “SP.POP.TOTL — FR, DE”…");
+    // >2 countries collapse to a count; missing indicator drops the dash.
+    expect(
+      toolStatusLabel("world_bank", { countries: ["FR", "DE", "ES", "IT"] })
+    ).toBe("Fetching World Bank data: “4 countries”…");
+    // No countries → bare label.
+    expect(toolStatusLabel("world_bank", { indicator: "SP.POP.TOTL" })).toBe(
+      "Fetching World Bank data…"
+    );
   });
 
   it("uses 'for' phrasing for the search tools", () => {

@@ -133,7 +133,12 @@ async function checkKeylessHttp(
     });
     const latencyMs = Date.now() - t0;
     if (!res.ok) {
-      return { ok: false, configured: true, latencyMs, error: `HTTP ${res.status}` };
+      return {
+        ok: false,
+        configured: true,
+        latencyMs,
+        error: `HTTP ${res.status}`,
+      };
     }
     return { ok: true, configured: true, latencyMs };
   } catch (err) {
@@ -162,7 +167,12 @@ async function checkUnsplash(): Promise<ProviderResult> {
     );
     const latencyMs = Date.now() - t0;
     if (!res.ok) {
-      return { ok: false, configured: true, latencyMs, error: `HTTP ${res.status}` };
+      return {
+        ok: false,
+        configured: true,
+        latencyMs,
+        error: `HTTP ${res.status}`,
+      };
     }
     return { ok: true, configured: true, latencyMs };
   } catch (err) {
@@ -219,7 +229,10 @@ export async function checkHealth(): Promise<HealthResult> {
     checkKeylessHttp(
       "https://query.wikidata.org/sparql?format=json&query=" +
         encodeURIComponent("SELECT ?x WHERE { ?x ?p ?o } LIMIT 1"),
-      { Accept: "application/sparql-results+json", "User-Agent": WIKIMEDIA_USER_AGENT }
+      {
+        Accept: "application/sparql-results+json",
+        "User-Agent": WIKIMEDIA_USER_AGENT,
+      }
     ),
     // The wbsearchentities resolver lives on www.wikidata.org (the wiki API),
     // a different host from the query service above — probe it separately.

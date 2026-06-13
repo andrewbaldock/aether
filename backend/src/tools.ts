@@ -427,7 +427,8 @@ export const WIKIDATA_SEARCH_TOOL: ToolDefinition = {
     properties: {
       search: {
         type: "string",
-        description: "the name or label to look up, e.g. 'Douglas Adams' or 'date of birth'",
+        description:
+          "the name or label to look up, e.g. 'Douglas Adams' or 'date of birth'",
       },
       type: {
         type: "string",
@@ -587,8 +588,58 @@ const TOOL_STATUS_LABELS: Record<string, string> = {
   render_images: "Laying out images",
 };
 
+// A non-blank trimmed string, or null. Used to pull a display subject out of the
+// model-supplied input — defensive, since the field may be missing or odd-typed.
+function trimmedString(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+// The display subject for a tool's status: the quoted `name` plus an optional
+// unquoted `extra` (e.g. "+2 more") that must sit OUTSIDE the closing quote.
+type StatusSubject = { name: string; extra?: string };
+
+// First non-blank entry of a string[] field (e.g. Wikipedia `titles`), with a
+// "+N more" tail when the model passed several — so a multi-title fetch reads
+// "Reading Wikipedia: “Marie Curie” +2 more…" rather than dropping the subject.
+function arraySubject(v: unknown): StatusSubject | null {
+  if (!Array.isArray(v)) return null;
+  const names = v.map(trimmedString).filter((s): s is string => s !== null);
+  const [first, ...others] = names;
+  if (!first) return null;
+  return {
+    name: first,
+    extra: others.length ? `+${others.length} more` : undefined,
+  };
+}
+
+// Pull the most natural display subject out of a tool's input. Tools name their
+// subject field differently (query/search/title singular; Wikipedia `titles`
+// array; World Bank `countries`+`indicator`), so this normalises across them.
+// Returns null when there's nothing meaningful to name.
+function statusSubject(
+  name: string,
+  obj: Record<string, unknown>
+): StatusSubject | null {
+  if (name === "wikipedia_summary") return arraySubject(obj.titles);
+  if (name === "world_bank") {
+    const codes = Array.isArray(obj.countries)
+      ? obj.countries.map(trimmedString).filter((s): s is string => s !== null)
+      : [];
+    if (!codes.length) return null;
+    const where =
+      codes.length > 2 ? `${codes.length} countries` : codes.join(", ");
+    const indicator = trimmedString(obj.indicator);
+    return { name: indicator ? `${indicator} — ${where}` : where };
+  }
+  const single =
+    trimmedString(obj.query) ??
+    trimmedString(obj.search) ??
+    trimmedString(obj.title);
+  return single ? { name: single } : null;
+}
+
 // Build the status blurb shown while a tool runs. Where the input carries a
-// query/title we fold it in ("Searching the web for "…"") for a more specific,
+// subject we fold it in ("Searching the web for "…"") for a more specific,
 // varied message; otherwise we use the bare label. Defensive about the input
 // shape since it's model-supplied — a missing/odd field just drops the suffix.
 export function toolStatusLabel(name: string, input?: unknown): string {
@@ -597,21 +648,15 @@ export function toolStatusLabel(name: string, input?: unknown): string {
     input && typeof input === "object"
       ? (input as Record<string, unknown>)
       : null;
-  const subject =
-    obj && typeof obj.query === "string" && obj.query.trim()
-      ? obj.query.trim()
-      : obj && typeof obj.search === "string" && obj.search.trim()
-        ? obj.search.trim()
-        : obj && typeof obj.title === "string" && obj.title.trim()
-          ? obj.title.trim()
-          : null;
+  const subject = obj ? statusSubject(name, obj) : null;
 
   if (!subject) return `${base}…`;
-  // Search tools read naturally with "for"; the rest don't take a subject suffix.
-  if (name === "search_images" || name === "web_search") {
-    return `${base} for “${subject}”…`;
-  }
-  return `${base}: “${subject}”…`;
+  const tail = subject.extra ? ` ${subject.extra}` : "";
+  const quoted = `“${subject.name}”${tail}`;
+  // Search tools read naturally with "for"; the rest take a colon.
+  const joiner =
+    name === "search_images" || name === "web_search" ? " for " : ": ";
+  return `${base}${joiner}${quoted}…`;
 }
 
 // An honest, human-readable "got N results" status for the slow fetch tools, or
@@ -620,7 +665,10 @@ export function toolStatusLabel(name: string, input?: unknown): string {
 // emitted right after the tool resolves. Defensive about result shape: anything
 // odd just yields null (no false "got 0…" on a healthy-but-differently-shaped
 // result). Only the data tools are handled; render_* echoes need no count.
-export function toolResultStatus(name: string, resultJson: string): string | null {
+export function toolResultStatus(
+  name: string,
+  resultJson: string
+): string | null {
   let data: unknown;
   try {
     data = JSON.parse(resultJson);
@@ -1385,7 +1433,8 @@ async function fetchOneWikipediaSummary(
   };
   if (data.description) row.description = capCell(data.description);
   if (data.thumbnail?.source) row.thumbnail = data.thumbnail.source;
-  if (data.content_urls?.desktop?.page) row.url = data.content_urls.desktop.page;
+  if (data.content_urls?.desktop?.page)
+    row.url = data.content_urls.desktop.page;
   return row;
 }
 
@@ -1403,9 +1452,7 @@ async function wikipediaSummary(input: unknown): Promise<string> {
     });
   }
   const settled = await Promise.all(list.map(fetchOneWikipediaSummary));
-  const rows = settled.filter(
-    (r): r is Record<string, string> => r !== null
-  );
+  const rows = settled.filter((r): r is Record<string, string> => r !== null);
   return JSON.stringify({ rows });
 }
 
