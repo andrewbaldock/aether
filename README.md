@@ -13,10 +13,14 @@ best — table, chart, relationship graph, or 3D scene.
 
 ## Documentation
 
+- **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)** — clone-to-running, step by step:
+  toolchain, accounts/keys (minimum vs. full set), DB migrations, run, verify, common snags.
+- **[docs/RUNBOOK.md](docs/RUNBOOK.md)** — day-to-day commands for dev, build, deploy, and
+  management once you're set up, plus the Traps & Notes gotcha list.
 - **[docs/STACK.md](docs/STACK.md)** — every dependency, what it does, why it was chosen, and
   its version. Kept current with the actual stack.
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — how the frontend and backend fit together,
-  the two-runtime model, and the `/api` proxy wiring.
+  the two-runtime model, the `/api` proxy wiring, and the testing strategy.
 
 ---
 

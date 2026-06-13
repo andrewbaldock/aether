@@ -22,12 +22,23 @@ export function AdminTabs() {
     { id: WELCOME_WIDGET.id, label: "Welcome" },
     { id: SETTINGS_WIDGET.id, label: "Settings" },
     { id: HEALTH_WIDGET.id, label: "Health" },
+    // Dev-only Screenshots tab. The id is the literal "screenshots" (matching
+    // SCREENSHOTS_WIDGET.id) rather than an import, so prod never pulls the gallery
+    // module into its bundle. In prod the tab simply isn't in the array.
+    ...(import.meta.env.DEV
+      ? [{ id: "screenshots", label: "Screenshots" }]
+      : []),
   ];
 
   return (
+    // bg-surface-raised gives the bar its own muted grey-green track (the same
+    // token the sidebar uses), so it reads identically on every admin page instead
+    // of inheriting whatever each page renders behind it. The active tab's
+    // bg-surface (white) then reads as a raised selected pill on that track — a
+    // clean segmented-control look.
     <nav
       aria-label="Admin pages"
-      className="inline-flex rounded-lg border border-border p-0.5"
+      className="inline-flex rounded-lg border border-border bg-surface-raised p-0.5"
     >
       {TABS.map((tab) => {
         const active = activeId === tab.id;

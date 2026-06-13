@@ -15,6 +15,10 @@ const UTILITY_TITLES: Record<string, string> = {
   [WELCOME_WIDGET.id]: WELCOME_WIDGET.title,
   [SETTINGS_WIDGET.id]: SETTINGS_WIDGET.title,
   [HEALTH_WIDGET.id]: HEALTH_WIDGET.title,
+  // Dev-only Screenshots admin page. Literal id (not an import) so the gallery
+  // module stays out of the prod bundle; the renderer is only registered in dev,
+  // and the tab that activates it is dev-gated too.
+  screenshots: "Screenshots",
 };
 
 // Right zone: the capability host. A fixed toolbar of capability chips drives a

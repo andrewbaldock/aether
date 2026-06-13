@@ -60,10 +60,27 @@ function readCapabilitySize(): number {
 // SessionProvider so it can call loadSession.
 function RouteBootstrap() {
   const { loadSession } = useSessionContext();
+  const { activate } = useCapabilities();
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only — subsequent navigation is driven by user actions
   useEffect(() => {
     const route = parseRoute(location.pathname);
     if (route.type === "conversation") loadSession(route.sessionId);
+    // Dev-only deep link: bring the Screenshots admin page forward on load. The
+    // renderer is only registered in dev; in prod activating "screenshots" just
+    // shows the empty-renderer fallback, so this is harmless either way.
+    //
+    // Import the dev-only Screenshots widget (registering its renderer), THEN
+    // activate it. Awaiting the import matters: the registry has no React
+    // subscription, so a renderer that lands after the column has rendered won't
+    // re-render it — activating only once it's registered avoids the
+    // "No renderer registered" flash. The import resolving also lands us a tick
+    // after ChatPanel's mount-time reset() (which sets the initial null-session
+    // view to home base), so the deep link wins rather than being clobbered.
+    else if (route.type === "screenshots" && import.meta.env.DEV) {
+      void import("../capabilities/widgets/Screenshots").then(() =>
+        activate("screenshots")
+      );
+    }
   }, []);
   return null;
 }

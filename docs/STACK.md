@@ -55,6 +55,7 @@ source. See [ARCHITECTURE.md](./ARCHITECTURE.md#two-runtimes).
 | `@testing-library/react` | ^16.3.2 | React testing utils | `renderHook`/`render` for hook + component tests. |
 | `@testing-library/user-event` | ^14.6.1 | User-interaction simulation | Realistic event firing in tests. |
 | `jsdom` | ^29.x | DOM in Node | The vitest `environment` so React renders without a browser. |
+| `@playwright/test` | ^1.60 | E2E test runner | Browser-level tests in `frontend/e2e/` (`bun run test:e2e`). Mocks `/api` at the network layer (canned SSE) — no backend, no tokens, deterministic. Drives a 7-project viewport matrix (desktop + iPhone/iPad/Pixel × portrait/landscape; WebKit for Safari, Chromium for Chrome/Android). The same matrix + mock power the dev-only `/screenshots` contact sheet (`bun run screenshots`). Browsers installed via `bunx playwright install chromium webkit`. |
 
 ### TypeScript config layout
 

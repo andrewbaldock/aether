@@ -16,6 +16,7 @@ import "./capabilities/widgets/Settings";
 import "./capabilities/widgets/Table";
 import "./capabilities/widgets/Timeline";
 import "./capabilities/widgets/Welcome";
+import { Toaster } from "sonner";
 import { BigsailPlanProvider } from "./capabilities/widgets/Bigsail/BigsailPlanProvider";
 import { ChartProvider } from "./capabilities/widgets/Chart/useChartState";
 import { ImagesProvider } from "./capabilities/widgets/Images/useImagesState";
@@ -27,9 +28,16 @@ import { AgentEventProvider } from "./shell/AgentEventContext";
 import { BackendStatusBanner } from "./shell/BackendStatusBanner";
 import { Shell } from "./shell/Shell";
 import { useIsMobile } from "./shell/useIsMobile";
-import { Toaster } from "sonner";
 import { AppearanceProvider } from "./theme/useAppearance";
 import { ThemeProvider, useTheme } from "./theme/useTheme";
+
+// Dev-only: registers the Screenshots admin widget's renderer. Guarded so the
+// gallery (and its manifest fetch) never ships to production — Vite tree-shakes
+// the dynamic import out of the prod bundle since the condition is statically
+// false. Runs after all imports so the import group stays contiguous.
+if (import.meta.env.DEV) {
+  void import("./capabilities/widgets/Screenshots");
+}
 
 // App toasts. Mounted inside ThemeProvider so it can match light/dark; styled
 // via CSS vars to ride the app's semantic colour tokens rather than sonner's

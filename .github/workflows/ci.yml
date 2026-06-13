@@ -1,0 +1,87 @@
+name: CI
+
+# Net-new CI: neither package's tests ran in CI before this. Wires all three test
+# layers as parallel jobs, gating PRs (and pushes to main) with a green check.
+# The E2E job is fully self-contained — /api is mocked at the network layer and
+# Playwright boots the preview build itself — so it needs no secrets, no backend,
+# and no LLM tokens.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same ref so a force-push doesn't pile up.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-unit:
+    name: Frontend unit (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install deps
+        run: bun install --frozen-lockfile
+        working-directory: frontend
+      - name: Run vitest
+        run: bun run test:run
+        working-directory: frontend
+
+  backend-unit:
+    name: Backend unit (bun:test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install deps
+        run: bun install --frozen-lockfile
+        working-directory: backend
+      - name: Run bun test
+        run: bun test
+        working-directory: backend
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install deps
+        run: bun install --frozen-lockfile
+        working-directory: frontend
+      # Cache the Playwright browser binaries across runs (keyed on the installed
+      # @playwright/test version) so we don't re-download Chromium + WebKit each time.
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(bun pm ls 2>/dev/null | grep -oE '@playwright/test@[0-9.]+' | head -1 | cut -d@ -f3)" >> "$GITHUB_OUTPUT"
+        working-directory: frontend
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium webkit
+        working-directory: frontend
+      - name: Run E2E
+        run: bun run test:e2e
+        working-directory: frontend
+      # The webServer (build:app + preview) is started by Playwright itself; no
+      # separate step needed. Upload the report + traces only on failure for triage.
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 7

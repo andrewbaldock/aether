@@ -217,6 +217,68 @@ So "just add it to `.gitignore`" only ever configures git. To stop Biome linting
 needs its own rule (`files.includes` with `!dist`). To stop tsc checking something, it needs
 `exclude`. Three separate mechanisms for three separate tools.
 
+(This bit the test setup too: Vitest's config has its own `exclude` for `e2e/**`, because
+those are Playwright specs — see Testing below.)
+
+---
+
+## Testing
+
+Three layers, each owning a different question. Run commands live in `RUNBOOK.md`; this is
+*what* each layer covers and *why it's shaped this way*.
+
+| Layer | Runner | Lives in | Answers |
+|-------|--------|----------|---------|
+| Frontend unit | Vitest + jsdom | `frontend/src/**/*.test.ts(x)` | Does this parser/hook/state-reducer compute the right value? |
+| Backend unit | `bun:test` | `backend/src/**/*.test.ts` | Does this tool-shape / planner / JSON-salvage logic hold? |
+| End-to-end | Playwright | `frontend/e2e/**/*.spec.ts` | Does the real app, in a real browser, actually work — desktop **and** mobile? |
+
+**Unit tests** cover the pure, value-producing pieces: SSE parsing (`parseSseChunk`), spec
+parsers (`parseTableSpec`, `parseChartSpec`), the capability/streaming-entries state math,
+and on the backend the tool input shapes, planner, and `bestEffortJson` salvage. They run
+without a browser (jsdom) or a network. `bun run build` runs the frontend unit suite first,
+so a failing unit test blocks the build.
+
+**E2E** is the layer that guards the paths that kept regressing — especially mobile. Its
+defining choice: **`/api` is mocked at the network layer**, not hit for real.
+
+- `e2e/fixtures/sse.ts` builds canned SSE bodies in the exact wire format the frontend
+  expects — `data: <json>\n` per line, terminated by `data: [DONE]\n` (the framing
+  `parseSseChunk` parses), with the real tool names (`render_table`, not `table`).
+- `e2e/fixtures/mockApi.ts` is a composable `page.route("**/api/**")` handler exposed as a
+  Playwright fixture. It serves every route the app touches on load (sessions, models,
+  health, messages, graph, widgets) and streams a chosen chat scenario (`streamText`,
+  `streamTable`, `holdChat` for the stop/abort path). Tests override per-route as needed.
+- Result: **no backend process, no LLM tokens, deterministic** — fits the light-budget demo
+  and lets CI run with zero secrets. Stop the Hono server and the suite still passes.
+
+**The viewport matrix** (`e2e/devices.ts`) is the other half of the strategy: one desktop
+project plus iPhone/iPad/Pixel each in **portrait and landscape** = 7 projects. WebKit backs
+the iPhone/iPad (Safari, the regression-prone surface); Chromium backs desktop + Android.
+This same matrix powers the dev-only `/screenshots` contact sheet, so the gallery never
+drifts from what the tests exercise. The mobile-only specs (`mobile-layout`, `sidebar`) gate
+on viewport **width < 768px** (the `useIsMobile` breakpoint) — they `test.skip` on desktop,
+iPad, and landscape phones, because the drawer/canvas-overlay shell only exists below `md`.
+
+**Specs** (`frontend/e2e/`): `smoke` (loads, no console errors — every viewport), `chat-flow`
+(send + stop/abort), `render-tool` (one full SSE→bus→provider→widget round trip), and the
+mobile-gated `mobile-layout` (drawer, canvas overlay, orientation, touch targets) and
+`sidebar` (rename + delete from the drawer).
+
+**Two timing realities worth knowing** (both bit during bring-up):
+- *Don't render-tool from the home route.* A first message creates the session mid-stream,
+  and `WidgetPersistenceBridge`'s clear-on-session-change can race — and wipe — an incoming
+  `tool_result`. The render-tool spec sends from an already-loaded session so there's no
+  session change to race.
+- *The dev server flakes under full parallel load* (it compiles live). The robust full run
+  uses the built preview server (the default `test:e2e` / CI); the `:dev` variants are for
+  watching one flow in UI mode. Local runs get 1 retry (CI 2) to absorb the odd hiccup —
+  safe because the mock is deterministic, so a retry can't paper over a real bug.
+
+**CI** (`.github/workflows/ci.yml`) runs all three layers as parallel jobs (`frontend-unit`,
+`backend-unit`, `e2e`) on every PR and push to `main` — the first automated gate this repo
+has had. The e2e job builds its own preview server and needs no secrets.
+
 ---
 
 ## The shell — three-zone layout

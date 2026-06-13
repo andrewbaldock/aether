@@ -510,6 +510,43 @@ app.post("/api/chat", async (c) => {
   });
 });
 
+// Dev-only: re-run the frontend's screenshot capture on demand, so the
+// /screenshots admin tab's "Run now" button works without a terminal. Registered
+// ONLY in local dev — never on Fly (FLY_APP_NAME is set there) and never under
+// NODE_ENV=production. Playwright can't run in the serverless/prod backend anyway,
+// so dev-only is the honest boundary. The capture script itself writes into the
+// frontend (which is gitignored); we just shell out to it.
+const IS_DEV =
+  !process.env.FLY_APP_NAME && process.env.NODE_ENV !== "production";
+
+if (IS_DEV) {
+  app.post("/api/screenshots/run", async (c) => {
+    try {
+      // The backend runs from backend/ (bun run --watch src/index.ts); the
+      // capture lives in the sibling frontend package.
+      const proc = Bun.spawn(["bun", "run", "screenshots"], {
+        cwd: new URL("../../frontend", import.meta.url).pathname,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const exitCode = await proc.exited;
+      if (exitCode !== 0) {
+        const stderr = await new Response(proc.stderr).text();
+        console.error("screenshot capture failed:", stderr);
+        return c.json(
+          { error: `Capture exited ${exitCode}: ${stderr.slice(-500)}` },
+          500
+        );
+      }
+      return c.json({ ok: true });
+    } catch (err) {
+      console.error("POST /api/screenshots/run failed:", err);
+      const message = err instanceof Error ? err.message : "Capture failed";
+      return c.json({ error: message }, 500);
+    }
+  });
+}
+
 function isChatMessageArray(value: unknown): value is ChatMessage[] {
   return (
     Array.isArray(value) &&

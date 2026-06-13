@@ -12,5 +12,10 @@ dist/
 # Logs
 *.log
 
+# Playwright E2E artifacts + dev-only screenshot contact sheet (never committed)
+frontend/playwright-report/
+frontend/test-results/
+frontend/public/screenshots-out/
+
 # macOS
 .DS_Store

@@ -16,6 +16,12 @@ A single reference for dev, build, deploy, and management across both projects. 
 | Health check | `GET https://aether-ab-api.fly.dev/api/health` |
 | Full health dashboard | Open Aether → Welcome tab → "System health →" (or open the **System Health** tab directly) |
 
+### First-time setup
+
+Fresh machine or starting from a clone? → **[GETTING_STARTED.md](GETTING_STARTED.md)** walks
+the whole thing: toolchain, accounts/keys (minimum vs. full set), DB migrations, run, verify.
+This RUNBOOK assumes you're already set up.
+
 ### Dev
 
 | Location | Command | Port |
@@ -31,11 +37,14 @@ on 8000 in dev. Override with `PORT` only if you also update the proxy target.
 
 **Frontend:**
 ```bash
-bun run build        # runs: vitest run && tsc -b && vite build
+bun run build        # runs: vitest run && tsc -b && vite build  (the real build — run before push)
+bun run build:app    # runs: tsc -b && vite build  (skips vitest; used by the E2E preview server)
 bun run typecheck    # runs: tsc -b --noEmit
 ```
 
-`build` runs the tests first, so a failing test blocks the build.
+`build` runs the tests first, so a failing test blocks the build. `build:app` is the same
+build *without* the vitest step — Playwright's `webServer` uses it so booting the preview for
+E2E doesn't re-run the unit suite (that's a separate CI job). Use `build` for a real ship.
 
 ⚠️ **Always run `bun run build` before push.** The `typecheck` and `build` commands use different TS configs; a green typecheck can still fail the build.
 
@@ -190,10 +199,56 @@ bun run check:fix     # auto-fix
 
 ### Test
 
-Frontend only:
+Unit (frontend, from `frontend/`):
 ```bash
-bun run test          # Vitest
+bun run test          # Vitest, watch mode
+bun run test:run      # Vitest, single run (what CI runs)
 ```
+
+Unit (backend, from `backend/`):
+```bash
+bun test              # bun:test
+```
+
+End-to-end (Playwright, from `frontend/`):
+```bash
+bun run test:e2e         # all 7 viewport projects; builds a preview server + mocks /api
+bun run test:e2e:ui      # interactive UI mode against the preview build
+bun run test:e2e:dev     # headless, against the running dev server (5174) — no build wait
+bun run test:e2e:dev:ui  # UI mode, against the dev server — fastest way to watch a flow
+```
+- The plain `test:e2e` / `test:e2e:ui` **build their own preview server** (`build:app` +
+  `vite preview` on 5174) — this is what CI runs and the most robust for a full run.
+- The `:dev` variants set `E2E_BASE_URL=http://localhost:5174` so Playwright skips the
+  build and drives your **already-running dev server**. Great for UI mode / watching one
+  flow; under heavy parallel load the dev server can flake (it compiles live), so prefer
+  the preview build for a clean full run. A local run gets 1 retry (CI gets 2) to absorb
+  the odd load hiccup — the mock is deterministic, so a retry never hides a real bug.
+
+⚠️ **UI mode requires `node` on PATH.** Playwright's `--ui` mode re-spawns itself under
+`node`; with bun-only it dies silently and the window hangs on "Loading…". Node is
+installed (Homebrew) — if a fresh machine hits this, `brew install node`.
+
+E2E is fully self-contained: `/api` is mocked at the network layer with canned SSE
+(`e2e/fixtures/mockApi.ts` + `e2e/fixtures/sse.ts`), so **no backend, no LLM tokens,
+deterministic**. To prove it, stop the Hono dev server first — the tests still pass.
+Run one project: `bun run test:e2e --project=iphone-15-portrait`.
+
+**Adding a new SSE fixture / scenario:** the wire format is `data: <json>\n` per event,
+terminated by `data: [DONE]\n` (the frontend's `parseSseChunk` only keeps `data:`-
+prefixed lines). Add a builder in `e2e/fixtures/sse.ts` (mirror `tableTurn` — note the
+tool name must be the real one, e.g. `render_table`, not `table`), expose it via a
+`MockApi.streamX()` helper (NB: not `use*` — that prefix trips Biome's react-hooks
+lint), then drive it from a spec. The 7-viewport matrix lives in `e2e/devices.ts` and is
+shared by the test config and the screenshots script.
+
+**Screenshots contact sheet (dev only):** with the dev servers running, open the
+**Screenshots** admin tab (or `/screenshots`) and hit **Run now**, or from `frontend/`:
+```bash
+bun run screenshots   # captures all 7 viewports → public/screenshots-out/ (gitignored)
+```
+The tab and its `/api/screenshots/run` endpoint exist **only in dev** — absent from any
+prod build.
 
 ---
 
@@ -269,7 +324,9 @@ bun run lint         # ESLint
 
 ## Traps & Notes
 
-- **`bun` only** — `npm` and `node` not on PATH. Use `bun` or `bunx` for all commands.
+- **Prefer `bun`** — use `bun`/`bunx` for all package + script commands. `node` and `npm` ARE installed now (Homebrew, for Playwright UI mode — see below), but bun is the default for everything Aether.
+- **Playwright UI mode needs `node`** — `test:e2e:ui` re-spawns itself under `node`; without node on PATH the window hangs forever on "Loading…" (no error). Node is installed; if a fresh machine hits this, `brew install node`. Headless `test:e2e` does NOT need node.
+- **E2E full runs: use the built preview server, not the dev server** — `test:e2e` builds its own preview (robust). The `:dev` variants drive the live dev server, which can flake under full parallel load (it compiles on demand) — fine for watching one flow, not ideal for a clean full run.
 - **Two Vite servers are normal** — Aether frontend on 5174, website on 5173. These run concurrently.
 - **Aether build has two TS configs** — `tsc --noEmit` (typecheck) and `tsc -b && vite build` (build) use different settings. A green typecheck doesn't guarantee a successful build. Always run `bun run build` before pushing.
 - **react-resizable-panels v4 gotcha** — `resize()` reads bare numbers as **pixels**, not percent. Always pass `"32%"` (string with unit).

@@ -11,7 +11,13 @@
     "check:fix": "biome check --write .",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "build:app": "tsc -b && vite build",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:dev": "E2E_BASE_URL=http://localhost:5174 playwright test",
+    "test:e2e:dev:ui": "E2E_BASE_URL=http://localhost:5174 playwright test --ui",
+    "screenshots": "bun run e2e/screenshots.ts"
   },
   "dependencies": {
     "@radix-ui/react-dropdown-menu": "^2.1.17",
@@ -37,6 +43,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/vite": "^4.3.0",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
