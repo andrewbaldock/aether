@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
 import { apiFetch, logApiError } from "../../../lib/queryClient";
+import { stamp, validate } from "../../../lib/schemaVersion";
+import { notifyStateReset } from "../../../shell/toast";
 import { useSessionContext } from "../../../shell/SessionContext";
-import {
-  type GraphSnapshot,
-  useKnowledgeGraphState,
-} from "./useKnowledgeGraphState";
+import { hasSavedContent, isGraphSnapshot } from "./graphGuard";
+import { useKnowledgeGraphState } from "./useKnowledgeGraphState";
 
 const SAVE_DEBOUNCE_MS = 900;
 
@@ -47,14 +47,21 @@ export function GraphPersistenceBridge() {
     loadedSessionRef.current = null; // block saves until the load resolves
     (async () => {
       try {
-        const snapshot = await apiFetch<GraphSnapshot>(
+        const raw = await apiFetch<unknown>(
           `/api/sessions/${sessionId}/graph`
         );
         if (cancelled) return;
-        loadGraph({
-          nodes: snapshot.nodes ?? [],
-          links: snapshot.links ?? [],
-        });
+        // Discard a snapshot from an older shape (or corrupt one) and fall back
+        // to first-run empty state; the next turn repopulates it. A brand-new
+        // session legitimately has no stamp yet but also no nodes, so only toast
+        // when there was actual saved content to reset.
+        const valid = validate("graph", raw, isGraphSnapshot);
+        if (valid) {
+          loadGraph({ nodes: valid.nodes ?? [], links: valid.links ?? [] });
+        } else {
+          clearGraph();
+          if (hasSavedContent(raw)) notifyStateReset();
+        }
       } catch (err) {
         logApiError(`graph load ${sessionId}`, err);
         // Clear so we don't show a stale graph for a session whose load failed.
@@ -82,7 +89,7 @@ export function GraphPersistenceBridge() {
       apiFetch<void>(`/api/sessions/${sessionId}/graph`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(snapshot),
+        body: JSON.stringify(stamp("graph", snapshot)),
       }).catch((err) => logApiError(`graph save ${sessionId}`, err));
     }, SAVE_DEBOUNCE_MS);
 

@@ -42,10 +42,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(getInitialTheme);
 
   // Apply to <html> and persist whenever the theme changes. Idempotent, so the
-  // StrictMode double-run in dev is harmless.
+  // StrictMode double-run in dev is harmless. Also swap the favicon so the tab
+  // icon's background matches the app theme (mirrors the seed in index.html).
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
     localStorage.setItem(STORAGE_KEY, theme);
+    const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (icon) {
+      icon.href = theme === "dark" ? "/favicon.svg" : "/favicon-light.svg";
+    }
   }, [theme]);
 
   // Follow live OS changes, but only while the user hasn't made an explicit

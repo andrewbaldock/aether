@@ -135,7 +135,8 @@ export function MobileShell() {
             </button>
           </div>
           <div className="min-h-0 flex-1">
-            <CapabilityColumn />
+            {/* Mobile is a single-column overlay — no collapsed sidebar to clear. */}
+            <CapabilityColumn sidebarCollapsed={false} />
           </div>
         </div>
       )}

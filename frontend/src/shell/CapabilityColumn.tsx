@@ -25,7 +25,11 @@ const UTILITY_TITLES: Record<string, string> = {
 //
 // The Knowledge Graph is home base (first chip, the default active view). The
 // Welcome/help page is pinned to the right; the (?) icon elsewhere activates it.
-export function CapabilityColumn() {
+export function CapabilityColumn({
+  sidebarCollapsed,
+}: {
+  sidebarCollapsed: boolean;
+}) {
   const { activeId, unseen, isFullscreen, activate, setFullscreen } =
     useCapabilities();
   const hasContent = useCapabilityContent();
@@ -53,7 +57,14 @@ export function CapabilityColumn() {
           a second row while the right cluster stays pinned top-right. Chips are
           tap-sized on mobile. `items-start` keeps the right cluster top-aligned
           when the left group grows to two rows. */}
-      <div className="@container flex items-start gap-1 border-b border-border px-2 py-1.5">
+      <div
+        className={`@container flex items-start gap-1 border-b border-border px-2 py-1.5${
+          // When the sidebar is collapsed AND this column is fullscreen, it
+          // becomes the leftmost panel and the floating "Open sidebar" button
+          // (absolute left-2 top-3) overlaps the first chip. Reserve space.
+          sidebarCollapsed && isFullscreen ? " pl-12" : ""
+        }`}
+      >
         <div className="flex flex-1 flex-wrap items-center gap-1">
           {CAPABILITIES.map((cap) => (
             <CapabilityChip

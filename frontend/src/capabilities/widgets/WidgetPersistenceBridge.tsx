@@ -1,10 +1,13 @@
 import { useEffect, useRef } from "react";
 import { apiFetch, logApiError } from "../../lib/queryClient";
+import { stamp, validate } from "../../lib/schemaVersion";
+import { notifyStateReset } from "../../shell/toast";
 import { useSessionContext } from "../../shell/SessionContext";
 import { useChartState } from "./Chart/useChartState";
 import { useImagesState } from "./Images/useImagesState";
 import { useTableState } from "./Table/useTableState";
 import { useTimelineState } from "./Timeline/useTimelineState";
+import { hasSavedWidgets, isWidgetSnapshot } from "./widgetGuard";
 
 const SAVE_DEBOUNCE_MS = 900;
 
@@ -62,13 +65,22 @@ export function WidgetPersistenceBridge() {
     loadedSessionRef.current = null;
     (async () => {
       try {
-        const snapshot = await apiFetch<{
-          table: unknown[] | null;
-          chart: unknown[] | null;
-          timeline: unknown[] | null;
-          images: unknown[] | null;
-        }>(`/api/sessions/${sessionId}/widgets`);
+        const raw = await apiFetch<unknown>(
+          `/api/sessions/${sessionId}/widgets`
+        );
         if (cancelled) return;
+        // Discard widget specs from an older shape (or corrupt ones) and fall
+        // back to empty; the next turn repopulates. Only toast when there were
+        // genuinely saved widgets being reset (a new session is just empty).
+        const snapshot = validate("widgets", raw, isWidgetSnapshot);
+        if (!snapshot) {
+          clearTable();
+          clearChart();
+          clearTimeline();
+          clearImages();
+          if (hasSavedWidgets(raw)) notifyStateReset();
+          return;
+        }
         // The stored entries have specs but stale ids — loadEntries reassigns ids.
         if (snapshot.table)
           loadTable(snapshot.table as Parameters<typeof loadTable>[0]);
@@ -127,12 +139,14 @@ export function WidgetPersistenceBridge() {
       apiFetch<void>(`/api/sessions/${sessionId}/widgets`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          table: tableEntries.length > 0 ? tableEntries : null,
-          chart: chartEntries.length > 0 ? chartEntries : null,
-          timeline: timelineEntries.length > 0 ? timelineEntries : null,
-          images: imageEntries.length > 0 ? imageEntries : null,
-        }),
+        body: JSON.stringify(
+          stamp("widgets", {
+            table: tableEntries.length > 0 ? tableEntries : null,
+            chart: chartEntries.length > 0 ? chartEntries : null,
+            timeline: timelineEntries.length > 0 ? timelineEntries : null,
+            images: imageEntries.length > 0 ? imageEntries : null,
+          })
+        ),
       }).catch((err) => logApiError(`widget save ${sessionId}`, err));
     }, SAVE_DEBOUNCE_MS);
 

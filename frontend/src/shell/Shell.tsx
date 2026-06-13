@@ -12,14 +12,19 @@ import { Sidebar, SidebarToggleIcon } from "./Sidebar";
 import { Tooltip } from "./Tooltip";
 import { useIsMobile } from "./useIsMobile";
 
-// The resize handle: a wide-enough-to-grab hit zone (w-2.5) that's transparent
-// at rest, with an always-visible grip pill centered in it so the divider is
-// discoverable without hovering. The pill and hit zone both brighten on
+// The resize handle: a wide-enough-to-grab hit zone (w-2.5) centered on the
+// divider. A full-height hairline (the `before` pseudo) draws the actual border
+// between the panels; a small grip pill sits on top of it carrying three dot
+// bumps so it reads as a draggable. Line, grip, and dots all brighten on
 // hover/drag. `group` lets the inner grip react to the separator's hover state.
 const handle =
-  "group relative flex w-2.5 shrink-0 cursor-col-resize items-center justify-center";
+  "group relative flex w-2.5 shrink-0 cursor-col-resize items-center justify-center before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-border before:transition-colors group-hover:before:bg-border-strong group-data-[separator-state=hover]:before:bg-border-strong group-data-[separator-state=drag]:before:bg-content-subtle";
+// The grip: a rounded pill riding on the hairline, holding three dot bumps. Its
+// background matches the panels so the hairline appears to break around it.
 const handleGrip =
-  "h-8 w-1 rounded-full bg-border transition-colors group-hover:bg-border-strong group-data-[separator-state=hover]:bg-border-strong group-data-[separator-state=drag]:bg-content-subtle";
+  "relative flex flex-col items-center gap-1 rounded-full bg-surface px-[3px] py-1.5";
+const handleDot =
+  "h-1 w-1 rounded-full bg-border transition-colors group-hover:bg-border-strong group-data-[separator-state=hover]:bg-border-strong group-data-[separator-state=drag]:bg-content-subtle";
 
 const SIDEBAR_COLLAPSED_KEY = "aether-sidebar-collapsed";
 const SIDEBAR_WIDTH = 240; // px — fixed so the wordmark never gets cramped
@@ -131,7 +136,11 @@ function ShellInner() {
               <ChatPanel />
             </Panel>
             <Separator className={handle}>
-              <span aria-hidden="true" className={handleGrip} />
+              <span aria-hidden="true" className={handleGrip}>
+                <span className={handleDot} />
+                <span className={handleDot} />
+                <span className={handleDot} />
+              </span>
             </Separator>
           </>
         )}
@@ -159,7 +168,7 @@ function ShellInner() {
             }
           }}
         >
-          <CapabilityColumn />
+          <CapabilityColumn sidebarCollapsed={sidebarCollapsed} />
         </Panel>
       </Group>
 

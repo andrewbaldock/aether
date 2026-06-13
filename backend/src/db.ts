@@ -43,6 +43,11 @@ export type UiState = {
   // (keyed by the stable card id `${capability}:${entryId}`); GridStack's
   // save()/load() shape. Absent = auto-place everything (no manual arrangement yet).
   tilesLayout?: TilesLayoutItem[];
+  // Schema version stamp for the persisted tilesLayout (frontend-owned; the
+  // backend just round-trips it). The frontend discards the saved arrangement on
+  // a version mismatch. Sibling rather than inline because the array shape is
+  // awkward to stamp. Absent on legacy rows → treated as a mismatch.
+  tilesLayoutVersion?: number;
 };
 
 // One placed card in the Tiles layout. Grid units (columns/rows), not pixels, so

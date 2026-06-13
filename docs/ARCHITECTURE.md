@@ -324,6 +324,34 @@ Anonymous identity: a UUID stored in `localStorage` under `aether_user_id` (crea
 visit, stable across reloads). No login required. `SessionContext` owns the session lifecycle;
 `useSession` creates a new session on mount and on "+ New conversation" clicks.
 
+### Persisted-JSON schema versioning (`lib/schemaVersion.ts`)
+
+Every tool that persists structured JSON — the knowledge graph (`graph_data`), the render-tool
+widget specs (`widget_data`), and the Tiles layout (`ui_state.tilesLayout`) — stamps its blob with
+a per-tool `schemaVersion` integer. On load we compare the stamp against the tool's current version
+and run a shallow shape guard. A mismatch (old version, missing stamp, corrupt shape) means we
+**discard the blob and fall back to first-run empty state**, then surface a single subtle toast:
+_"Your saved state was from an older version and has been reset."_
+
+The backend never interprets these shapes — it round-trips opaque jsonb — so versioning lives
+entirely on the frontend, inside the existing blob (the graph/widget stamp rides inline as a
+sibling key; Tiles uses `ui_state.tilesLayoutVersion` because its array is awkward to stamp inline).
+No DB migration: legacy rows simply lack the stamp and get discarded on next load, which is the
+intended behavior.
+
+**Regeneration, not migration.** "Discard and regenerate" does **not** mean firing a Claude call on
+load. These snapshots are byproducts of a conversation turn (the model emits tool calls that build
+them); there's no standalone regen endpoint, and auto-spending tokens on every stale load is exactly
+what a light-budget demo must avoid. So regenerate = clear to empty → let the user's next turn
+naturally repopulate it. There is no forward-migration chain and no global app version — each tool
+owns its integer independently.
+
+**Version-bump policy:** bump a tool's number in `SCHEMA_VERSIONS` on a **breaking** shape change
+(rename/remove a field, change a type, restructure nesting) — that's the deliberate lever to blow
+away every already-saved blob for that tool. **Don't** bump for purely additive optional fields;
+read those defensively (`x ?? default`). The shape guard is the safety net for corruption that slips
+through without a bump.
+
 Still ahead:
 
 ```

@@ -16,6 +16,11 @@ export interface Session {
   ui_state: {
     activeWidget?: string | null;
     tilesLayout?: TilesLayoutItem[];
+    // Schema version of the persisted tilesLayout. Stored as a sibling (rather
+    // than inline on the array) since the array shape is awkward to stamp. A
+    // mismatch on load → ignore the saved arrangement and auto-place. See
+    // lib/schemaVersion.ts.
+    tilesLayoutVersion?: number;
   } | null;
   created_at: string;
   updated_at: string;

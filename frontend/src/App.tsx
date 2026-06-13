@@ -27,8 +27,30 @@ import { AgentEventProvider } from "./shell/AgentEventContext";
 import { BackendStatusBanner } from "./shell/BackendStatusBanner";
 import { Shell } from "./shell/Shell";
 import { useIsMobile } from "./shell/useIsMobile";
+import { Toaster } from "sonner";
 import { AppearanceProvider } from "./theme/useAppearance";
-import { ThemeProvider } from "./theme/useTheme";
+import { ThemeProvider, useTheme } from "./theme/useTheme";
+
+// App toasts. Mounted inside ThemeProvider so it can match light/dark; styled
+// via CSS vars to ride the app's semantic colour tokens rather than sonner's
+// defaults. Callers use the helpers in shell/toast.ts.
+function AppToaster() {
+  const { theme } = useTheme();
+  return (
+    <Toaster
+      theme={theme}
+      position="bottom-center"
+      duration={5000}
+      toastOptions={{
+        style: {
+          background: "var(--color-surface)",
+          color: "var(--color-content)",
+          border: "1px solid var(--color-border)",
+        },
+      }}
+    />
+  );
+}
 
 // Set once a visitor has seen the welcome panel, so it auto-opens only on the
 // very first arrival. After that it's reachable from the help (?) icon.
@@ -55,6 +77,7 @@ function FirstArrivalWelcome() {
 export default function App() {
   return (
     <ThemeProvider>
+      <AppToaster />
       <AppearanceProvider>
         {/* One shared tooltip provider for the whole app, so Radix can coordinate
           hover timing (skip the open-delay when moving between adjacent

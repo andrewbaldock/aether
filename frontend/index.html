@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Aether</title>
+    <!-- Tab title by environment: prod shows the tagline, dev is flagged so the
+         two tabs are easy to tell apart. Vite's dev server runs on localhost or
+         the aether-dev host (see vite.config.ts allowedHosts). -->
+    <script>
+      (() => {
+        const host = location.hostname;
+        const isDev =
+          host === "localhost" || host === "127.0.0.1" || host.endsWith("-dev");
+        document.title = isDev ? "Aether-dev" : "Aether • Ask Anything";
+      })();
+    </script>
     <meta name="description" content="Aether — a conversational AI explorer by Andrew Baldock." />
     <link rel="canonical" href="https://aether.andrewbaldock.com" />
     <meta property="og:type" content="website" />
@@ -25,6 +36,14 @@
           }
           if (t === "dark") el.classList.add("dark");
 
+          // Seed the favicon to match the theme so the tab icon doesn't flash
+          // the wrong background on load (kept in sync after mount by useTheme).
+          const icon = document.createElement("link");
+          icon.rel = "icon";
+          icon.type = "image/svg+xml";
+          icon.href = t === "dark" ? "/favicon.svg" : "/favicon-light.svg";
+          document.head.appendChild(icon);
+
           // Typography prefs — mirrors useAppearance.tsx (TEXT_SIZE_PX/FONT_STACK).
           // Seeded pre-paint so text size and body font don't flash on load.
           const sizes = { xs: 14, sm: 15, md: 16, lg: 18 };
@@ -41,7 +60,6 @@
         } catch {}
       })();
     </script>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
