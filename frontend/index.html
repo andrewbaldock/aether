@@ -17,6 +17,14 @@
     </script>
     <meta name="description" content="Aether — a conversational AI explorer by Andrew Baldock." />
     <link rel="canonical" href="https://aether.andrewbaldock.com" />
+    <!-- PWA: vite-plugin-pwa injects <link rel="manifest"> automatically. These
+         tags cover the bits it doesn't: iOS standalone behavior and the OS
+         status-bar tint. theme-color matches the manifest (near-black shell). -->
+    <meta name="theme-color" content="#110d1a" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Aether" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://aether.andrewbaldock.com" />
     <meta property="og:title" content="Aether" />
