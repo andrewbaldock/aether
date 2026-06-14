@@ -23,10 +23,17 @@ import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { ExploreMenu, WithContextMenu } from "../ContextMenu";
 import { useFillFromConversation } from "../useFillFromConversation";
+import { useQueuedExplore } from "../useQueuedExplore";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
+import { WidgetReloadHeader } from "../WidgetReloadHeader";
 import type { ChartSpec } from "./types";
 import { useChartState } from "./useChartState";
+
+// The rich "build the best chart you can" instruction, shared by the empty-panel
+// fill and the populated-widget reload. Kept as a const so both stay in lockstep.
+const CHART_BUILD_PROMPT =
+  "Build the best chart you can about what we've been discussing. Visualize the quantitative shape of the subject — trends, distributions, or comparisons — and broaden from what was literally said: chart the real numbers the topic involves, fetching figures from your data sources if needed rather than only plotting numbers someone typed. Choose the form and comparison that fit — line for trends, a multi-series or stacked bar for real comparisons, horizontal bars for rankings, a rate or share on the value axis when that's the truer story — not always a vertical bar of raw counts. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call render_chart now. Only skip if the subject genuinely has no quantitative dimension at all.";
 
 // Named palette for line/bar/area series (up to ~12 before cycling). Anchored to
 // the brand neons then spreads across the spectrum so adjacent series are distinct.
@@ -68,18 +75,28 @@ function seriesColor(color: string | undefined, index: number): string {
 // scrollable tab. Recharts for the rendering; brand colors as defaults. The
 // `widget` prop is unused; state is live.
 export function ChartWidget(_props: { widget: Widget }) {
-  const { entries } = useChartState();
+  const { entries, clearEntries } = useChartState();
   const bus = useAgentEvents();
   const busy = useAgentBusy();
   const { messages } = useSessionContext();
   const fill = useFillFromConversation({
     hasContent: entries.length > 0,
-    gentlePrompt:
-      "Build the best chart you can about what we've been discussing. Visualize the quantitative shape of the subject — trends, distributions, or comparisons — and broaden from what was literally said: chart the real numbers the topic involves, fetching figures from your data sources if needed rather than only plotting numbers someone typed. Choose the form and comparison that fit — line for trends, a multi-series or stacked bar for real comparisons, horizontal bars for rankings, a rate or share on the value axis when that's the truer story — not always a vertical bar of raw counts. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call render_chart now. Only skip if the subject genuinely has no quantitative dimension at all.",
+    gentlePrompt: CHART_BUILD_PROMPT,
     forcedPrompt:
       "Call the render_chart tool right now to visualize the most chart-worthy numbers from our conversation so far.",
     displayText: "Update the Chart from our conversation.",
   });
+
+  // Reload = clear the current charts and rebuild fresh from the conversation.
+  // Queues (latest-wins) if a turn's in flight rather than greying out.
+  const reload = useQueuedExplore();
+  function onReload() {
+    reload.enqueue({
+      prompt: CHART_BUILD_PROMPT,
+      displayText: "Rebuild the Chart from our conversation.",
+      onFire: clearEntries,
+    });
+  }
 
   if (entries.length === 0) {
     if (busy) return <WidgetLoading label="Drawing a chart…" />;
@@ -95,82 +112,89 @@ export function ChartWidget(_props: { widget: Widget }) {
   }
 
   return (
-    <div className="flex h-full flex-col gap-4 overflow-auto bg-surface p-4">
-      {entries.map(({ id, spec }) => {
-        const label = spec.title ?? `${spec.type} chart`;
-        const chart = (
-          <section className="flex flex-col gap-1">
-            {spec.title && (
-              <h2 className="font-display text-sm font-semibold text-content">
-                {spec.title}
-              </h2>
-            )}
-            <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <SpecChart spec={spec} />
-              </ResponsiveContainer>
-            </div>
-            {/* Explore surface. A pie's single series IS the whole chart, so it
+    <div className="flex h-full flex-col bg-surface">
+      <WidgetReloadHeader
+        onReload={onReload}
+        queued={reload.queued}
+        label="Rebuild the chart from the conversation"
+      />
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
+        {entries.map(({ id, spec }) => {
+          const label = spec.title ?? `${spec.type} chart`;
+          const chart = (
+            <section className="flex flex-col gap-1">
+              {spec.title && (
+                <h2 className="font-display text-sm font-semibold text-content">
+                  {spec.title}
+                </h2>
+              )}
+              <div className="h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <SpecChart spec={spec} />
+                </ResponsiveContainer>
+              </div>
+              {/* Explore surface. A pie's single series IS the whole chart, so it
                 gets one whole-chart target; line/bar/area get one chip per
                 series. Recharts' SVG internals don't take a DOM wrapper, so the
                 explore affordance lives in these chips (a kebab beside the
                 label), not on the plotted marks. */}
-            {spec.type !== "pie" && (
-              <ul className="flex flex-wrap gap-1.5 pt-1">
-                {spec.series.map((s, i) => (
-                  <li key={s.key}>
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border py-0.5 pr-0.5 pl-2 text-xs text-content-muted">
-                      <span
-                        className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: seriesColor(s.color, i) }}
-                        aria-hidden
-                      />
-                      {s.label ?? s.key}
-                      <ExploreMenu
-                        label={`Explore the ${s.label ?? s.key} series`}
-                        items={[
-                          {
-                            label: "Explore further",
-                            onClick: () =>
-                              bus.emit({
-                                type: "explore_request",
-                                prompt: `Tell me more about the "${s.label ?? s.key}" series in the "${label}" chart — what the trend means and what to explore next.`,
-                              }),
-                          },
-                        ]}
-                      />
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        );
-
-        // Pie: keep a single whole-chart explore target.
-        if (spec.type === "pie") {
-          return (
-            <WithContextMenu
-              key={id}
-              label={`Explore the ${label}`}
-              items={[
-                {
-                  label: "Explore further",
-                  onClick: () =>
-                    bus.emit({
-                      type: "explore_request",
-                      prompt: `Tell me more about the data in the "${label}" — what's interesting, what the trends mean, and what I should explore next.`,
-                    }),
-                },
-              ]}
-            >
-              {chart}
-            </WithContextMenu>
+              {spec.type !== "pie" && (
+                <ul className="flex flex-wrap gap-1.5 pt-1">
+                  {spec.series.map((s, i) => (
+                    <li key={s.key}>
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-border py-0.5 pr-0.5 pl-2 text-xs text-content-muted">
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: seriesColor(s.color, i) }}
+                          aria-hidden
+                        />
+                        {s.label ?? s.key}
+                        <ExploreMenu
+                          label={`Explore the ${s.label ?? s.key} series`}
+                          items={[
+                            {
+                              label: "Explore further",
+                              onClick: () =>
+                                bus.emit({
+                                  type: "explore_request",
+                                  prompt: `Tell me more about the "${s.label ?? s.key}" series in the "${label}" chart — what the trend means and what to explore next.`,
+                                }),
+                            },
+                          ]}
+                        />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           );
-        }
 
-        return <div key={id}>{chart}</div>;
-      })}
+          // Pie: keep a single whole-chart explore target.
+          if (spec.type === "pie") {
+            return (
+              <WithContextMenu
+                key={id}
+                label={`Explore the ${label}`}
+                items={[
+                  {
+                    label: "Explore further",
+                    onClick: () =>
+                      bus.emit({
+                        type: "explore_request",
+                        prompt: `Tell me more about the data in the "${label}" — what's interesting, what the trends mean, and what I should explore next.`,
+                      }),
+                  },
+                ]}
+              >
+                {chart}
+              </WithContextMenu>
+            );
+          }
+
+          return <div key={id}>{chart}</div>;
+        })}
+      </div>
     </div>
   );
 }

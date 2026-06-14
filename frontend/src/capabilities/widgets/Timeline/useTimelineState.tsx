@@ -82,7 +82,9 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <TimelineContext.Provider value={value}>{children}</TimelineContext.Provider>
+    <TimelineContext.Provider value={value}>
+      {children}
+    </TimelineContext.Provider>
   );
 }
 

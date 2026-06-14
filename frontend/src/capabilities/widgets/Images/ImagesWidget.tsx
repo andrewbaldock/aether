@@ -5,41 +5,56 @@ import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { WithContextMenu } from "../ContextMenu";
 import { useFillFromConversation } from "../useFillFromConversation";
+import { useQueuedExplore } from "../useQueuedExplore";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
+import { WidgetReloadHeader } from "../WidgetReloadHeader";
 import type { ImageItem, ImagesSpec } from "./types";
 import { useImagesState } from "./useImagesState";
 
+// Shared by the empty-panel fill and the populated-widget reload so they stay aligned.
+const IMAGES_BUILD_PROMPT =
+  "Build the best gallery you can about what we've been discussing. Search the web for real images of the subject — and broaden from what was literally said: illustrate the topic itself, its people, places, and objects, not only things named outright. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call search_images and then render_images now. Only skip if the subject genuinely can't be illustrated at all.";
+
 export function ImagesWidget(_props: { widget: Widget }) {
-  const { entries } = useImagesState();
+  const { entries, clearEntries } = useImagesState();
   const busy = useAgentBusy();
-  const bus = useAgentEvents();
   const { messages } = useSessionContext();
   const fill = useFillFromConversation({
     hasContent: entries.length > 0,
-    gentlePrompt:
-      "Build the best gallery you can about what we've been discussing. Search the web for real images of the subject — and broaden from what was literally said: illustrate the topic itself, its people, places, and objects, not only things named outright. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call search_images and then render_images now. Only skip if the subject genuinely can't be illustrated at all.",
+    gentlePrompt: IMAGES_BUILD_PROMPT,
     forcedPrompt:
       "Call the render_images tool right now to find and display images related to our conversation so far.",
     displayText: "Update the Images from our conversation.",
   });
 
-  // Broaden the image search around what's already shown and append the results.
+  // Both "Get more" (append) and reload (replace) queue through one hook so a click
+  // mid-turn fires when the turn settles (latest-wins) instead of being dropped.
+  const action = useQueuedExplore();
+
+  // Broaden the image search around what's already shown and APPEND the results.
   // Reuses the explore_request → sendMessage → render_images → append pipeline; the
   // backend search_images has no offset, so this asks for a wider/related batch (not
   // exact pagination), which matches the append-only design. Grounds the prompt in
   // the most recent gallery's title/blurb so the broaden stays on-topic.
   function getMore() {
-    if (busy) return; // never stack onto an in-flight turn (mirrors ChatPanel)
     const recent = entries[entries.length - 1]?.spec;
     const subject = recent?.title ?? recent?.blurb ?? "what's already shown";
-    bus.emit({
-      type: "explore_request",
+    action.enqueue({
       prompt:
         `Broaden the image search around "${subject}" and call render_images to show MORE ` +
         `images than what's already displayed — different facets, related subjects, alternate ` +
         `angles, wider context. Don't repeat images already shown; add a fresh gallery of additional results.`,
       displayText: "Get more images.",
+    });
+  }
+
+  // Reload = clear the galleries and rebuild fresh from the conversation.
+  function onReload() {
+    action.enqueue({
+      prompt: IMAGES_BUILD_PROMPT,
+      displayText: "Rebuild the Images from our conversation.",
+      onFire: clearEntries,
     });
   }
 
@@ -57,27 +72,34 @@ export function ImagesWidget(_props: { widget: Widget }) {
   }
 
   return (
-    <div className="flex h-full flex-col gap-6 overflow-auto bg-surface p-4">
-      {entries.map(({ id, spec }, i) => (
-        // "Get more" rides the first gallery's title row, top-right, so there's a
-        // single header line. Subsequent galleries render plain.
-        <SpecImages
-          key={id}
-          spec={spec}
-          action={
-            i === 0 ? (
-              <button
-                type="button"
-                onClick={getMore}
-                disabled={busy}
-                className="shrink-0 rounded border border-border px-3 py-1 text-xs text-content-subtle transition-colors hover:border-content-subtle hover:text-content disabled:opacity-50"
-              >
-                {busy ? "Searching…" : "Get more"}
-              </button>
-            ) : undefined
-          }
-        />
-      ))}
+    <div className="flex h-full flex-col bg-surface">
+      <WidgetReloadHeader
+        onReload={onReload}
+        queued={action.queued}
+        label="Rebuild the gallery from the conversation"
+      />
+      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto p-4">
+        {entries.map(({ id, spec }, i) => (
+          // "Get more" rides the first gallery's title row, top-right, so there's a
+          // single header line. Subsequent galleries render plain. It queues rather
+          // than disabling mid-turn, so it stays clickable while a turn is in flight.
+          <SpecImages
+            key={id}
+            spec={spec}
+            action={
+              i === 0 ? (
+                <button
+                  type="button"
+                  onClick={getMore}
+                  className="shrink-0 rounded border border-border px-3 py-1 text-xs text-content-subtle transition-colors hover:border-content-subtle hover:text-content"
+                >
+                  {action.queued ? "Queued…" : busy ? "Searching…" : "Get more"}
+                </button>
+              ) : undefined
+            }
+          />
+        ))}
+      </div>
     </div>
   );
 }

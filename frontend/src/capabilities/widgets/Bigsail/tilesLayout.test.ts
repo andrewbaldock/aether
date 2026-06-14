@@ -133,14 +133,22 @@ describe("autoLayout — fixed role-based template", () => {
   });
 
   it("is deterministic", () => {
-    const cards = [card("t", "timeline"), card("c", "chart"), card("kg", "knowledge-graph")];
+    const cards = [
+      card("t", "timeline"),
+      card("c", "chart"),
+      card("kg", "knowledge-graph"),
+    ];
     expect(autoLayout(cards, false)).toEqual(autoLayout(cards, false));
   });
 });
 
 describe("autoLayout — stacked (skinny viewport)", () => {
   it("makes every card full-width and stacks them one per row", () => {
-    const cards = [card("a", "chart"), card("b", "table"), card("c", "timeline")];
+    const cards = [
+      card("a", "chart"),
+      card("b", "table"),
+      card("c", "timeline"),
+    ];
     const placed = autoLayout(cards, true);
     expect(placed.every((p) => p.w === GRID_COLUMNS && p.x === 0)).toBe(true);
     const ys = placed.map((p) => p.y!);

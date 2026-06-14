@@ -17,9 +17,7 @@ function isEntryArrayOrNull(v: unknown): boolean {
   if (!Array.isArray(v)) return false;
   if (v.length === 0) return true;
   const first = v[0] as Record<string, unknown>;
-  return (
-    typeof first === "object" && first !== null && "spec" in first
-  );
+  return typeof first === "object" && first !== null && "spec" in first;
 }
 
 export function isWidgetSnapshot(v: unknown): v is WidgetSnapshot {

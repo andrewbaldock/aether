@@ -18,6 +18,45 @@ export interface ContextMenuItem {
   destructive?: boolean;
 }
 
+// The dropdown panel + its items — the shared LOOK of every menu in the app
+// (Explore further, sidebar rename/delete, the knowledge-graph node menu). Split
+// out from ExploreMenu so callers that supply their OWN Radix Trigger (e.g. the
+// ForceGraph's canvas-anchored phantom trigger) get the identical panel without
+// duplicating the markup. Render it inside a <DropdownMenu.Root>.
+export function MenuItems({
+  items,
+  align = "end",
+  side,
+}: {
+  items: ContextMenuItem[];
+  align?: DropdownMenu.DropdownMenuContentProps["align"];
+  side?: DropdownMenu.DropdownMenuContentProps["side"];
+}) {
+  return (
+    <DropdownMenu.Portal>
+      <DropdownMenu.Content
+        align={align}
+        side={side}
+        sideOffset={4}
+        className="z-9999 min-w-44 rounded-lg border border-border-strong bg-surface-raised py-1 shadow-lg"
+      >
+        {items.map((item) => (
+          <DropdownMenu.Item
+            key={item.label}
+            onSelect={item.onClick}
+            className={`flex cursor-pointer select-none items-center gap-2 px-3 py-2 text-sm outline-none data-highlighted:bg-elevated ${
+              item.destructive ? "text-danger-content" : "text-content"
+            }`}
+          >
+            {item.icon}
+            {item.label}
+          </DropdownMenu.Item>
+        ))}
+      </DropdownMenu.Content>
+    </DropdownMenu.Portal>
+  );
+}
+
 // The kebab trigger + its dropdown. Drop it wherever the target's layout has room
 // (a table cell, the corner of a tile, beside a chip). ≥44px tap target per the
 // mobile-first rule; `aria-label` names what it acts on for screen readers.
@@ -55,27 +94,7 @@ export function ExploreMenu({
           <MoreVertical className="h-4 w-4" aria-hidden />
         </button>
       </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          align={align}
-          side={side}
-          sideOffset={4}
-          className="z-9999 min-w-44 rounded-lg border border-border-strong bg-surface-raised py-1 shadow-lg"
-        >
-          {items.map((item) => (
-            <DropdownMenu.Item
-              key={item.label}
-              onSelect={item.onClick}
-              className={`flex cursor-pointer select-none items-center gap-2 px-3 py-2 text-sm outline-none data-highlighted:bg-elevated ${
-                item.destructive ? "text-danger-content" : "text-content"
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </DropdownMenu.Item>
-          ))}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
+      <MenuItems items={items} align={align} side={side} />
     </DropdownMenu.Root>
   );
 }

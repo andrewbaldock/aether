@@ -37,9 +37,9 @@ describe("isWidgetSnapshot", () => {
 
 describe("hasSavedWidgets", () => {
   it("is true when any provider has entries", () => {
-    expect(
-      hasSavedWidgets({ ...empty, images: [{ id: 1, spec: {} }] })
-    ).toBe(true);
+    expect(hasSavedWidgets({ ...empty, images: [{ id: 1, spec: {} }] })).toBe(
+      true
+    );
   });
 
   it("is false for all-null / all-empty", () => {

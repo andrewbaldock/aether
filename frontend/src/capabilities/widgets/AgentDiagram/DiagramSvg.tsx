@@ -119,7 +119,10 @@ function NodeLabel({
   // overflow the chip. ~7.2px/char at size 13 estimates rendered width; the
   // 16px padding keeps it off the rounded corners. Authored labels are short
   // and stay at the full size.
-  const fitSize = Math.min(13, ((node.w - 16) / (node.label.length * 7.2)) * 13);
+  const fitSize = Math.min(
+    13,
+    ((node.w - 16) / (node.label.length * 7.2)) * 13
+  );
   return (
     <g className="pointer-events-none select-none">
       <text

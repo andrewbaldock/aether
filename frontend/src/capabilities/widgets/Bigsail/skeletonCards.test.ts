@@ -34,7 +34,10 @@ describe("planToSkeletons", () => {
 
   it("gives stable, distinct ids to repeated capabilities", () => {
     const skels = planToSkeletons(plan(["chart", "chart"]));
-    expect(skels.map((s) => s.id)).toEqual(["skeleton:chart:0", "skeleton:chart:1"]);
+    expect(skels.map((s) => s.id)).toEqual([
+      "skeleton:chart:0",
+      "skeleton:chart:1",
+    ]);
     // Deterministic across calls.
     expect(planToSkeletons(plan(["chart", "chart"]))).toEqual(skels);
   });
@@ -51,7 +54,9 @@ describe("mergeWithSkeletons", () => {
     const skels = planToSkeletons(plan(["table", "chart", "knowledge-graph"]));
     const merged = mergeWithSkeletons(real, skels);
     // Real table first, then the two still-pending skeletons.
-    expect(merged.map((c) => [c.capabilityType, c.placeholder ?? false])).toEqual([
+    expect(
+      merged.map((c) => [c.capabilityType, c.placeholder ?? false])
+    ).toEqual([
       ["table", false],
       ["chart", true],
       ["knowledge-graph", true],

@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 // Lazy per-icon loader: resolves a model-chosen icon by name on demand without
 // bundling all ~1500 icons. Unknown names render its fallback, so an invalid
 // model suggestion degrades gracefully.
+import { MenuItems } from "../ContextMenu";
 import { DynamicIcon, resolveIconName } from "../lucideIcon";
 import { TYPE_COLOR } from "./colors";
 import { dedupeNodes, filterDanglingLinks } from "./sanitize";
@@ -623,28 +624,24 @@ export function ForceGraph({
           className="pointer-events-none absolute h-0 w-0 p-0"
           style={{ left: menu?.x ?? 0, top: menu?.y ?? 0 }}
         />
-        <DropdownMenu.Portal>
-          <DropdownMenu.Content
-            align="start"
-            sideOffset={4}
-            className="z-9999 min-w-44 rounded-lg border border-border-strong bg-surface-raised py-1 shadow-lg"
-          >
-            <DropdownMenu.Item
-              onSelect={() => menuNode && onExplore?.(menuNode)}
-              className="flex cursor-pointer select-none items-center gap-2 px-3 py-2 text-sm text-content outline-none data-highlighted:bg-elevated"
-            >
-              <Compass className="h-4 w-4" aria-hidden />
-              Explore further
-            </DropdownMenu.Item>
-            <DropdownMenu.Item
-              onSelect={() => menuNode && onRemove?.(menuNode.id)}
-              className="flex cursor-pointer select-none items-center gap-2 px-3 py-2 text-sm text-danger-content outline-none data-highlighted:bg-elevated"
-            >
-              <Trash2 className="h-4 w-4" aria-hidden />
-              Remove from graph
-            </DropdownMenu.Item>
-          </DropdownMenu.Content>
-        </DropdownMenu.Portal>
+        {/* Same panel as every other menu (shared MenuItems) — only the trigger
+            differs, because this one is anchored to a canvas press point. */}
+        <MenuItems
+          align="start"
+          items={[
+            {
+              label: "Explore further",
+              icon: <Compass className="h-4 w-4" aria-hidden />,
+              onClick: () => menuNode && onExplore?.(menuNode),
+            },
+            {
+              label: "Remove from graph",
+              icon: <Trash2 className="h-4 w-4" aria-hidden />,
+              destructive: true,
+              onClick: () => menuNode && onRemove?.(menuNode.id),
+            },
+          ]}
+        />
       </DropdownMenu.Root>
 
       {/* Fit-to-view: frames every node perfectly. Icon-only and tiny; disabled

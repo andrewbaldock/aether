@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { apiFetch, logApiError } from "../../../lib/queryClient";
 import { stamp, validate } from "../../../lib/schemaVersion";
-import { notifyStateReset } from "../../../shell/toast";
 import { useSessionContext } from "../../../shell/SessionContext";
+import { notifyStateReset } from "../../../shell/toast";
 import { hasSavedContent, isGraphSnapshot } from "./graphGuard";
 import { useKnowledgeGraphState } from "./useKnowledgeGraphState";
 
@@ -47,9 +47,7 @@ export function GraphPersistenceBridge() {
     loadedSessionRef.current = null; // block saves until the load resolves
     (async () => {
       try {
-        const raw = await apiFetch<unknown>(
-          `/api/sessions/${sessionId}/graph`
-        );
+        const raw = await apiFetch<unknown>(`/api/sessions/${sessionId}/graph`);
         if (cancelled) return;
         // Render the saved graph whenever its SHAPE is usable — a stale/missing
         // version stamp never discards it (we heal the stamp instead). Only a

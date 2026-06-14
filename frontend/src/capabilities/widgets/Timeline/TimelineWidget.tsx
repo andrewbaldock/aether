@@ -5,23 +5,38 @@ import type { Widget } from "../../registry";
 import { ExploreMenu } from "../ContextMenu";
 import { DynamicIcon, resolveIconName } from "../lucideIcon";
 import { useFillFromConversation } from "../useFillFromConversation";
+import { useQueuedExplore } from "../useQueuedExplore";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
+import { WidgetReloadHeader } from "../WidgetReloadHeader";
 import type { TimelineItem, TimelineSpec } from "./types";
 import { useTimelineState } from "./useTimelineState";
 
+// Shared by the empty-panel fill and the populated-widget reload so they stay aligned.
+const TIMELINE_BUILD_PROMPT =
+  "Build the best timeline you can about what we've been discussing. Draw on the events, dates, periods, and developments in the subject so far — and broaden from what was literally said: lay out the real chronology of the topic, not only dates someone typed. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call render_timeline now. Only skip if the subject genuinely has no chronological dimension at all.";
+
 export function TimelineWidget(_props: { widget: Widget }) {
-  const { entries } = useTimelineState();
+  const { entries, clearEntries } = useTimelineState();
   const busy = useAgentBusy();
   const { messages } = useSessionContext();
   const fill = useFillFromConversation({
     hasContent: entries.length > 0,
-    gentlePrompt:
-      "Build the best timeline you can about what we've been discussing. Draw on the events, dates, periods, and developments in the subject so far — and broaden from what was literally said: lay out the real chronology of the topic, not only dates someone typed. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call render_timeline now. Only skip if the subject genuinely has no chronological dimension at all.",
+    gentlePrompt: TIMELINE_BUILD_PROMPT,
     forcedPrompt:
       "Call the render_timeline tool right now to lay out the most timeline-worthy events from our conversation so far.",
     displayText: "Update the Timeline from our conversation.",
   });
+
+  // Reload = clear and rebuild fresh; queues if a turn's in flight (latest-wins).
+  const reload = useQueuedExplore();
+  function onReload() {
+    reload.enqueue({
+      prompt: TIMELINE_BUILD_PROMPT,
+      displayText: "Rebuild the Timeline from our conversation.",
+      onFire: clearEntries,
+    });
+  }
 
   if (entries.length === 0) {
     if (busy) return <WidgetLoading label="Laying out a timeline…" />;
@@ -37,10 +52,17 @@ export function TimelineWidget(_props: { widget: Widget }) {
   }
 
   return (
-    <div className="flex h-full flex-col gap-6 overflow-auto bg-surface p-4">
-      {entries.map(({ id, spec }) => (
-        <SpecTimeline key={id} spec={spec} />
-      ))}
+    <div className="flex h-full flex-col bg-surface">
+      <WidgetReloadHeader
+        onReload={onReload}
+        queued={reload.queued}
+        label="Rebuild the timeline from the conversation"
+      />
+      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto p-4">
+        {entries.map(({ id, spec }) => (
+          <SpecTimeline key={id} spec={spec} />
+        ))}
+      </div>
     </div>
   );
 }

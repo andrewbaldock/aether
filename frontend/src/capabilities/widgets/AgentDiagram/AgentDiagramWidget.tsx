@@ -1,6 +1,6 @@
-import type { Widget } from "../../registry";
 import { useModelLabel } from "../../../shell/ModelPicker";
 import { useSessionContext } from "../../../shell/SessionContext";
+import type { Widget } from "../../registry";
 import { DiagramSvg } from "./DiagramSvg";
 import { Legend } from "./Legend";
 import { NODES, type Role } from "./nodes";
