@@ -10,6 +10,7 @@ import {
   getSessionGraph,
   getSessionWidgets,
   listSessions,
+  mergeWidgetSnapshot,
   saveMessage,
   type UiState,
   updateSessionGraphData,
@@ -19,7 +20,6 @@ import {
   updateSessionTitleIfEmpty,
   updateSessionUiState,
   updateSessionWidgetData,
-  type WidgetSnapshot,
 } from "./db";
 import { checkHealth, checkProviders } from "./health";
 import { type ChatMessage, createClient, generateTitle } from "./llm";
@@ -308,6 +308,7 @@ app.put("/api/sessions/:id/widgets", async (c) => {
   }
   const b = body as {
     schemaVersion?: unknown;
+    reset?: unknown;
     table?: unknown;
     chart?: unknown;
     timeline?: unknown;
@@ -317,19 +318,12 @@ app.put("/api/sessions/:id/widgets", async (c) => {
     return c.json({ error: "Expected { table, chart, timeline }" }, 400);
   }
   try {
-    const snapshot: WidgetSnapshot = {
-      // Preserve the frontend's stamp; dropping it makes load-time validation
-      // always fail (undefined !== current version) → resets + toast on reload.
-      ...(typeof b.schemaVersion === "number"
-        ? { schemaVersion: b.schemaVersion }
-        : {}),
-      table: Array.isArray(b.table) ? b.table : null,
-      chart: Array.isArray(b.chart) ? b.chart : null,
-      timeline: Array.isArray(b.timeline) ? b.timeline : null,
-      // images added later; treat a missing key as "none" so older clients
-      // that don't send it still save cleanly.
-      images: Array.isArray(b.images) ? b.images : null,
-    };
+    // Merge against the stored row so a null/empty incoming field can never wipe
+    // real saved widgets unless the client passes `reset: true`. See
+    // mergeWidgetSnapshot. We skip the read entirely on an explicit reset.
+    const existing =
+      b.reset === true ? null : await getSessionWidgets(id).catch(() => null);
+    const snapshot = mergeWidgetSnapshot(b, existing);
     await updateSessionWidgetData(id, snapshot);
     return c.json({ ok: true });
   } catch (err) {

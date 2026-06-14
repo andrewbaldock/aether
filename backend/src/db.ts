@@ -25,6 +25,45 @@ export type WidgetSnapshot = {
   images: unknown[] | null; // ImagesEntry[] (serialised)
 };
 
+// Self-healing backstop for the widget PUT: a save must never SILENTLY destroy
+// saved widgets. If an incoming field is null/absent but the STORED row holds a
+// non-empty array for it, we keep the stored data (merge) rather than nulling it —
+// unless the client explicitly passes `reset: true`, which is how the legitimate
+// clear paths signal intent. This makes the column robust to any frontend timing
+// bug (e.g. a rebuild that clears-then-fails) corrupting good data. Pure + exported
+// for unit testing.
+export function mergeWidgetSnapshot(
+  incoming: {
+    schemaVersion?: unknown;
+    reset?: unknown;
+    table?: unknown;
+    chart?: unknown;
+    timeline?: unknown;
+    images?: unknown;
+  },
+  existing: WidgetSnapshot | null
+): WidgetSnapshot {
+  const reset = incoming.reset === true;
+  const field = (value: unknown, prev: unknown[] | null | undefined) => {
+    if (Array.isArray(value)) return value;
+    if (!reset && Array.isArray(prev) && prev.length > 0) return prev;
+    return null;
+  };
+  return {
+    // Preserve the frontend's stamp; dropping it makes load-time validation
+    // always fail (undefined !== current version) → resets + toast on reload.
+    ...(typeof incoming.schemaVersion === "number"
+      ? { schemaVersion: incoming.schemaVersion }
+      : {}),
+    table: field(incoming.table, existing?.table),
+    chart: field(incoming.chart, existing?.chart),
+    timeline: field(incoming.timeline, existing?.timeline),
+    // images added later; treat a missing key as "none" so older clients
+    // that don't send it still save cleanly.
+    images: field(incoming.images, existing?.images),
+  };
+}
+
 // Backend-owned per-conversation image state, stored in the `image_data` jsonb
 // column. Distinct from `widget_data` (frontend-owned, written only after a turn)
 // so the backend can read/increment it mid-turn without racing the frontend.

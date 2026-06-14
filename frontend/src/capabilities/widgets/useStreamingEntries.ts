@@ -32,6 +32,7 @@ export function useStreamingEntries<Spec>(
   entries: StreamingEntry<Spec>[];
   setEntries: React.Dispatch<React.SetStateAction<StreamingEntry<Spec>[]>>;
   nextId: React.MutableRefObject<number>;
+  requestReplace: () => void;
 } {
   const bus = useAgentEvents();
   const [entries, setEntries] = useState<StreamingEntry<Spec>[]>([]);
@@ -40,6 +41,24 @@ export function useStreamingEntries<Spec>(
   // The id of the entry currently being streamed for THIS in-flight render, or null
   // between renders. Lets a partial update the same entry rather than appending.
   const streamingId = useRef<number | null>(null);
+  // Set by a "Rebuild" action: replace-on-arrival. We do NOT clear the existing
+  // entries up front (that would blink the canvas tile out and risk an empty state
+  // being persisted over good data). Instead we drop the prior entries the instant
+  // the FIRST parseable spec of the rebuild turn actually lands — so the old table
+  // stays visible until the new one supersedes it, and stays put if the rebuild
+  // yields nothing.
+  const replaceOnArrival = useRef(false);
+  // Arm on a microtask, not synchronously. requestReplace is fired from
+  // useQueuedExplore's settle handler — i.e. INSIDE the prior turn's done/idle
+  // dispatch, the very dispatch whose done handler (below) disarms the latch.
+  // Deferring past the current dispatch means we arm cleanly for the upcoming
+  // rebuild turn without that same done clearing us first. (Synchronous idle
+  // clicks dispatch nothing, so the microtask still lands before any spec.)
+  const requestReplace = useRef(() => {
+    queueMicrotask(() => {
+      replaceOnArrival.current = true;
+    });
+  }).current;
 
   useEffect(() => {
     function handle(event: AgentEvent) {
@@ -53,6 +72,10 @@ export function useStreamingEntries<Spec>(
         event.type === "idle"
       ) {
         streamingId.current = null;
+        // A rebuild that ended without ever producing a parseable spec keeps the
+        // old entries; disarm the latch so a LATER unrelated turn can't replace
+        // them. (When a spec did arrive, the latch already consumed itself.)
+        replaceOnArrival.current = false;
         return;
       }
 
@@ -82,14 +105,19 @@ export function useStreamingEntries<Spec>(
           streamingId.current = id;
         }
         const targetId = id;
+        // A pending rebuild replaces the prior set with this fresh entry the moment
+        // it arrives, then behaves normally for the rest of the turn.
+        const replacing = replaceOnArrival.current;
+        if (replacing) replaceOnArrival.current = false;
         setEntries((prev) => {
-          const idx = prev.findIndex((e) => e.id === targetId);
+          const base = replacing ? [] : prev;
+          const idx = base.findIndex((e) => e.id === targetId);
           if (idx !== -1) {
-            const next = prev.slice();
+            const next = base.slice();
             next[idx] = { id: targetId, spec: parsed };
             return next;
           }
-          return [...prev, { id: targetId, spec: parsed }];
+          return [...base, { id: targetId, spec: parsed }];
         });
       }
 
@@ -98,5 +126,5 @@ export function useStreamingEntries<Spec>(
     return bus.subscribe(handle);
   }, [bus, toolName, parse]);
 
-  return { entries, setEntries, nextId };
+  return { entries, setEntries, nextId, requestReplace };
 }

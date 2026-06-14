@@ -30,7 +30,7 @@ const TABLE_BUILD_PROMPT =
 // plain styled <table> for the markup so it themes with the app's Tailwind tokens.
 // The `widget` prop is unused; state is live.
 export function TableWidget(_props: { widget: Widget }) {
-  const { entries, clearEntries } = useTableState();
+  const { entries, requestReplace } = useTableState();
   const busy = useAgentBusy();
   const { messages } = useSessionContext();
   const fill = useFillFromConversation({
@@ -41,13 +41,16 @@ export function TableWidget(_props: { widget: Widget }) {
     displayText: "Update the Table from our conversation.",
   });
 
-  // Reload = clear and rebuild fresh; queues if a turn's in flight (latest-wins).
+  // Reload = rebuild fresh; queues if a turn's in flight (latest-wins). Replace-on-
+  // arrival: the current table stays visible until the new spec lands (then it
+  // supersedes the old), so the canvas tile never blinks out and an empty/failed
+  // rebuild can't wipe it. See useStreamingEntries.requestReplace.
   const reload = useQueuedExplore();
   function onReload() {
     reload.enqueue({
       prompt: TABLE_BUILD_PROMPT,
       displayText: "Rebuild the Table from our conversation.",
-      onFire: clearEntries,
+      onFire: requestReplace,
     });
   }
 

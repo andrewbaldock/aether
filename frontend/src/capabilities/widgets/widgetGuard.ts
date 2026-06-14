@@ -12,7 +12,7 @@ export interface WidgetSnapshot {
 // purpose — the schemaVersion bump is the primary signal for breaking spec-shape
 // changes; this guard catches corruption / wrong-shape blobs. Additive optional
 // fields inside a spec pass through untouched.
-function isEntryArrayOrNull(v: unknown): boolean {
+export function isEntryArrayOrNull(v: unknown): boolean {
   if (v === null) return true;
   if (!Array.isArray(v)) return false;
   if (v.length === 0) return true;

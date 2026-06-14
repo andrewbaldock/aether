@@ -17,7 +17,7 @@ const TIMELINE_BUILD_PROMPT =
   "Build the best timeline you can about what we've been discussing. Draw on the events, dates, periods, and developments in the subject so far — and broaden from what was literally said: lay out the real chronology of the topic, not only dates someone typed. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call render_timeline now. Only skip if the subject genuinely has no chronological dimension at all.";
 
 export function TimelineWidget(_props: { widget: Widget }) {
-  const { entries, clearEntries } = useTimelineState();
+  const { entries, requestReplace } = useTimelineState();
   const busy = useAgentBusy();
   const { messages } = useSessionContext();
   const fill = useFillFromConversation({
@@ -28,13 +28,15 @@ export function TimelineWidget(_props: { widget: Widget }) {
     displayText: "Update the Timeline from our conversation.",
   });
 
-  // Reload = clear and rebuild fresh; queues if a turn's in flight (latest-wins).
+  // Reload = rebuild fresh; queues if a turn's in flight (latest-wins). Replace-on-
+  // arrival: the current timeline stays until the new one lands, so an empty/failed
+  // rebuild can't wipe the canvas tile.
   const reload = useQueuedExplore();
   function onReload() {
     reload.enqueue({
       prompt: TIMELINE_BUILD_PROMPT,
       displayText: "Rebuild the Timeline from our conversation.",
-      onFire: clearEntries,
+      onFire: requestReplace,
     });
   }
 

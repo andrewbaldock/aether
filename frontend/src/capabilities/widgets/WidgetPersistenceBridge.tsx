@@ -7,9 +7,28 @@ import { useChartState } from "./Chart/useChartState";
 import { useImagesState } from "./Images/useImagesState";
 import { useTableState } from "./Table/useTableState";
 import { useTimelineState } from "./Timeline/useTimelineState";
-import { hasSavedWidgets, isWidgetSnapshot } from "./widgetGuard";
+import {
+  hasSavedWidgets,
+  isEntryArrayOrNull,
+  isWidgetSnapshot,
+} from "./widgetGuard";
+import {
+  computeSavePayload,
+  EMPTY_GOOD,
+  type FieldSnapshot,
+} from "./widgetSavePayload";
 
 const SAVE_DEBOUNCE_MS = 900;
+// A failed GET means "we don't know yet" — never the same as "empty". We keep the
+// tiles on screen and retry once after a short delay so a backend cold-start (Fly
+// scale-to-zero, see the 502 history) self-corrects without the user reloading.
+const LOAD_RETRY_MS = 1500;
+
+// lastGoodRef holds the last snapshot we know is GOOD for the active session —
+// seeded on a successful load, refreshed on every successful save. The save path
+// uses it as the floor (see computeSavePayload) so an empty in-memory state can
+// never overwrite real saved widgets. Self-healing: if a conversation's data
+// exists, it stays persisted.
 
 // Bridges the root-level Table and Chart state to per-session persistence,
 // mirroring GraphPersistenceBridge. Lives inside SessionProvider so it can
@@ -44,6 +63,7 @@ export function WidgetPersistenceBridge() {
 
   const loadedSessionRef = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastGoodRef = useRef<FieldSnapshot>(EMPTY_GOOD);
 
   // Load (or clear) when the active session changes.
   useEffect(() => {
@@ -54,6 +74,7 @@ export function WidgetPersistenceBridge() {
 
     if (!sessionId) {
       loadedSessionRef.current = null;
+      lastGoodRef.current = EMPTY_GOOD;
       clearTable();
       clearChart();
       clearTimeline();
@@ -62,72 +83,83 @@ export function WidgetPersistenceBridge() {
     }
 
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
     loadedSessionRef.current = null;
-    (async () => {
+    lastGoodRef.current = EMPTY_GOOD;
+
+    // Load one field defensively: a valid array/null loads (or clears) and becomes
+    // the new last-good; a corrupt field is LEFT ALONE (we never wipe the tile over
+    // one bad field) and flagged so the caller can dev-toast. Returns the value we
+    // consider good for that field.
+    function applyField<T>(
+      value: unknown,
+      load: (entries: T) => void,
+      clear: () => void
+    ): { good: unknown[] | null; corrupt: boolean } {
+      if (!isEntryArrayOrNull(value)) return { good: null, corrupt: true };
+      if (Array.isArray(value) && value.length > 0) {
+        load(value as T);
+        return { good: value, corrupt: false };
+      }
+      clear();
+      return { good: null, corrupt: false };
+    }
+
+    async function run(isRetry: boolean) {
       try {
         const raw = await apiFetch<unknown>(
           `/api/sessions/${sessionId}/widgets`
         );
         if (cancelled) return;
         // Render saved widgets whenever the SHAPE is usable — a stale/missing
-        // version stamp never discards them (we heal the stamp instead). Only a
-        // shape-guard failure (truly corrupt) falls back to empty + dev toast.
-        const { data: snapshot, stale } = validate(
-          "widgets",
-          raw,
-          isWidgetSnapshot
-        );
-        if (!snapshot) {
-          clearTable();
-          clearChart();
-          clearTimeline();
-          clearImages();
-          if (hasSavedWidgets(raw)) notifyStateReset();
-          return;
-        }
+        // version stamp never discards them (we heal the stamp instead). The guard
+        // is now per-field: a single corrupt field heals on its own without taking
+        // the other three tiles down with it.
+        const { stale } = validate("widgets", raw, isWidgetSnapshot);
+        const s = (raw && typeof raw === "object" ? raw : {}) as Record<
+          string,
+          unknown
+        >;
         // The stored entries have specs but stale ids — loadEntries reassigns ids.
-        if (snapshot.table)
-          loadTable(snapshot.table as Parameters<typeof loadTable>[0]);
-        else clearTable();
-        if (snapshot.chart)
-          loadChart(snapshot.chart as Parameters<typeof loadChart>[0]);
-        else clearChart();
-        if (snapshot.timeline)
-          loadTimeline(snapshot.timeline as Parameters<typeof loadTimeline>[0]);
-        else clearTimeline();
-        if (snapshot.images)
-          loadImages(snapshot.images as Parameters<typeof loadImages>[0]);
-        else clearImages();
-        // Heal a stale stamp in the DB now rather than waiting for the next
-        // turn's save, so the version mismatch resolves on its own.
-        if (stale)
+        const t = applyField(s.table, loadTable, clearTable);
+        const c = applyField(s.chart, loadChart, clearChart);
+        const tl = applyField(s.timeline, loadTimeline, clearTimeline);
+        const im = applyField(s.images, loadImages, clearImages);
+        lastGoodRef.current = {
+          table: t.good,
+          chart: c.good,
+          timeline: tl.good,
+          images: im.good,
+        };
+        const anyCorrupt = t.corrupt || c.corrupt || tl.corrupt || im.corrupt;
+        if (anyCorrupt && hasSavedWidgets(raw)) notifyStateReset();
+        // Heal in the DB now — a stale stamp OR a dropped corrupt field — rather
+        // than waiting for the next turn's save, so the mismatch resolves itself.
+        if (stale || anyCorrupt)
           apiFetch<void>(`/api/sessions/${sessionId}/widgets`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(
-              stamp("widgets", {
-                table: snapshot.table,
-                chart: snapshot.chart,
-                timeline: snapshot.timeline,
-                images: snapshot.images,
-              })
+              stamp("widgets", { ...lastGoodRef.current, reset: true })
             ),
           }).catch((err) => logApiError(`widget heal ${sessionId}`, err));
+        loadedSessionRef.current = sessionId;
       } catch (err) {
         logApiError(`widget load ${sessionId}`, err);
-        if (!cancelled) {
-          clearTable();
-          clearChart();
-          clearTimeline();
-          clearImages();
+        if (cancelled) return;
+        // A failed GET is "unknown", not "empty" — never clear the tiles. Retry
+        // once (cold start), then give up gracefully leaving the screen as-is.
+        if (!isRetry) {
+          retryTimer = setTimeout(() => run(true), LOAD_RETRY_MS);
         }
-      } finally {
-        if (!cancelled) loadedSessionRef.current = sessionId;
       }
-    })();
+    }
+
+    run(false);
 
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
   }, [
     sessionId,
@@ -141,31 +173,39 @@ export function WidgetPersistenceBridge() {
     clearImages,
   ]);
 
-  // Debounce-save when either widget's entries change — but only once the
-  // active session's data has been loaded (loadedSessionRef matches).
+  // Debounce-save when any widget's entries change — but only once the active
+  // session's data has been loaded (loadedSessionRef matches).
+  //
+  // SELF-HEALING SAVE: a field is persisted as its live value when non-empty, but
+  // when it momentarily goes empty (rebuild mid-flight, a transient blip) we persist
+  // its LAST-GOOD value instead of null — an empty in-memory state can never
+  // overwrite real saved data. The only legitimate emptying is a session switch,
+  // which the load effect handles (it never runs this save for the new session
+  // until its own load completes). The backend PUT also merges defensively as a
+  // backstop. Each non-empty live field refreshes last-good.
   useEffect(() => {
     if (!sessionId || loadedSessionRef.current !== sessionId) return;
-    if (
-      tableEntries.length === 0 &&
-      chartEntries.length === 0 &&
-      timelineEntries.length === 0 &&
-      imageEntries.length === 0
-    )
-      return;
+
+    const payload = computeSavePayload(
+      {
+        table: tableEntries,
+        chart: chartEntries,
+        timeline: timelineEntries,
+        images: imageEntries,
+      },
+      lastGoodRef.current
+    );
+    // Nothing to persist (a fresh session that's still empty) and nothing good to
+    // protect — skip the PUT entirely.
+    if (!payload) return;
 
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
+      lastGoodRef.current = payload;
       apiFetch<void>(`/api/sessions/${sessionId}/widgets`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          stamp("widgets", {
-            table: tableEntries.length > 0 ? tableEntries : null,
-            chart: chartEntries.length > 0 ? chartEntries : null,
-            timeline: timelineEntries.length > 0 ? timelineEntries : null,
-            images: imageEntries.length > 0 ? imageEntries : null,
-          })
-        ),
+        body: JSON.stringify(stamp("widgets", payload)),
       }).catch((err) => logApiError(`widget save ${sessionId}`, err));
     }, SAVE_DEBOUNCE_MS);
 

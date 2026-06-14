@@ -17,7 +17,7 @@ const IMAGES_BUILD_PROMPT =
   "Build the best gallery you can about what we've been discussing. Search the web for real images of the subject — and broaden from what was literally said: illustrate the topic itself, its people, places, and objects, not only things named outright. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call search_images and then render_images now. Only skip if the subject genuinely can't be illustrated at all.";
 
 export function ImagesWidget(_props: { widget: Widget }) {
-  const { entries, clearEntries } = useImagesState();
+  const { entries, requestReplace } = useImagesState();
   const busy = useAgentBusy();
   const { messages } = useSessionContext();
   const fill = useFillFromConversation({
@@ -49,12 +49,14 @@ export function ImagesWidget(_props: { widget: Widget }) {
     });
   }
 
-  // Reload = clear the galleries and rebuild fresh from the conversation.
+  // Reload = rebuild fresh from the conversation. Replace-on-arrival: the current
+  // galleries stay until the new set lands, so an empty/failed rebuild can't wipe
+  // the canvas tile.
   function onReload() {
     action.enqueue({
       prompt: IMAGES_BUILD_PROMPT,
       displayText: "Rebuild the Images from our conversation.",
-      onFire: clearEntries,
+      onFire: requestReplace,
     });
   }
 

@@ -75,7 +75,7 @@ function seriesColor(color: string | undefined, index: number): string {
 // scrollable tab. Recharts for the rendering; brand colors as defaults. The
 // `widget` prop is unused; state is live.
 export function ChartWidget(_props: { widget: Widget }) {
-  const { entries, clearEntries } = useChartState();
+  const { entries, requestReplace } = useChartState();
   const bus = useAgentEvents();
   const busy = useAgentBusy();
   const { messages } = useSessionContext();
@@ -87,14 +87,15 @@ export function ChartWidget(_props: { widget: Widget }) {
     displayText: "Update the Chart from our conversation.",
   });
 
-  // Reload = clear the current charts and rebuild fresh from the conversation.
-  // Queues (latest-wins) if a turn's in flight rather than greying out.
+  // Reload = rebuild fresh from the conversation. Queues (latest-wins) if a turn's
+  // in flight rather than greying out. Replace-on-arrival: the current charts stay
+  // until the new ones land, so an empty/failed rebuild can't wipe the canvas tile.
   const reload = useQueuedExplore();
   function onReload() {
     reload.enqueue({
       prompt: CHART_BUILD_PROMPT,
       displayText: "Rebuild the Chart from our conversation.",
-      onFire: clearEntries,
+      onFire: requestReplace,
     });
   }
 

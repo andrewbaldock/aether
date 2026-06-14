@@ -129,6 +129,54 @@ describe("useStreamingEntries", () => {
     expect(r.current.streaming.entries[1]?.spec.rows[0]?.v).toBe(5);
   });
 
+  // requestReplace arms on a microtask (see the hook) so it lands cleanly after the
+  // settle dispatch that fires it. Flush microtasks before driving the rebuild turn.
+  async function arm(r: {
+    current: { streaming: { requestReplace: () => void } };
+  }) {
+    await act(async () => {
+      r.current.streaming.requestReplace();
+      await Promise.resolve();
+    });
+  }
+
+  it("replace-on-arrival: keeps old entries until the rebuild's first spec lands", async () => {
+    const { result: r } = setup();
+    const { bus } = r.current;
+
+    // A prior table exists.
+    result(bus, '{"rows":[{"v":1}]}');
+    expect(r.current.streaming.entries).toHaveLength(1);
+
+    // User hits Rebuild: requestReplace arms replace-on-arrival but does NOT clear —
+    // the old table stays visible meanwhile.
+    await arm(r);
+    expect(r.current.streaming.entries).toHaveLength(1);
+    expect(r.current.streaming.entries[0]?.spec.rows[0]?.v).toBe(1);
+
+    // The first spec of the rebuild turn REPLACES the prior set (not append).
+    partial(bus, '{"rows":[{"v":2}]}');
+    expect(r.current.streaming.entries).toHaveLength(1);
+    expect(r.current.streaming.entries[0]?.spec.rows[0]?.v).toBe(2);
+
+    // Subsequent renders this turn append normally (latch was one-shot).
+    result(bus, '{"rows":[{"v":2}]}');
+    partial(bus, '{"rows":[{"v":3}]}');
+    expect(r.current.streaming.entries).toHaveLength(2);
+  });
+
+  it("replace-on-arrival: a rebuild that yields nothing leaves the old entries", async () => {
+    const { result: r } = setup();
+    const { bus } = r.current;
+
+    result(bus, '{"rows":[{"v":1}]}');
+    await arm(r);
+    // Turn ends with no parseable spec (agent error / empty rebuild).
+    emit(bus, { type: "done" });
+    expect(r.current.streaming.entries).toHaveLength(1);
+    expect(r.current.streaming.entries[0]?.spec.rows[0]?.v).toBe(1);
+  });
+
   it("ignores events for other tools", () => {
     const { result: r } = setup();
     const { bus } = r.current;
