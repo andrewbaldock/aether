@@ -20,12 +20,24 @@ describe("autoLayout — fixed role-based template", () => {
     expect(autoLayout([], false)).toEqual([]);
   });
 
-  it("places KG half-width in the top-left", () => {
+  it("promotes a lone KG to full width (no half-gap beside it)", () => {
+    // No timeline partner → the KG fills the whole top row rather than sitting
+    // half-width with a dead gap on the right.
     const placed = autoLayout([card("kg", "knowledge-graph")], false);
     const kg = find(placed, "kg");
     expect(kg.x).toBe(0);
-    expect(kg.w).toBe(HALF);
+    expect(kg.w).toBe(GRID_COLUMNS);
     expect(kg.y).toBe(0);
+  });
+
+  it("promotes a lone Timeline to full width at x=0", () => {
+    // No KG partner → the timeline fills the top row from the left edge (not its
+    // usual right-half slot), so there's no empty half on either side.
+    const placed = autoLayout([card("t", "timeline")], false);
+    const t = find(placed, "t");
+    expect(t.x).toBe(0);
+    expect(t.w).toBe(GRID_COLUMNS);
+    expect(t.y).toBe(0);
   });
 
   it("puts KG and Timeline side by side in the top row", () => {
@@ -73,13 +85,14 @@ describe("autoLayout — fixed role-based template", () => {
   });
 
   it("collapses a missing capability's slot (no gap, deterministic)", () => {
-    // No timeline → KG still anchors the top row; table follows it directly.
+    // No timeline → KG anchors the top row at full width; table follows directly.
     const placed = autoLayout(
       [card("kg", "knowledge-graph"), card("tbl", "table")],
       false
     );
     const kg = find(placed, "kg");
     const tbl = find(placed, "tbl");
+    expect(kg.w).toBe(GRID_COLUMNS); // promoted — no half-gap
     expect(tbl.y).toBe(kg.y! + kg.h);
   });
 

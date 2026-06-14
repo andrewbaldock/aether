@@ -127,21 +127,27 @@ export function autoLayout(cards: Card[], stacked: boolean): PlacedCard[] {
 
   let y = 0;
 
-  // 1. Top row: KG and Timeline side by side. Each takes half the width; the row
-  //    is one standard slot tall. If only one of them exists it still takes its
-  //    half (left), leaving a clean gap rather than reflowing — keeps the template
-  //    shape recognisable. If NEITHER exists the row collapses (no gap).
+  // 1. Top row: KG and Timeline side by side. When BOTH exist each takes half the
+  //    width. When only ONE exists the survivor promotes to FULL width rather than
+  //    leaving a dead half-gap — the template shape stays recognisable but no slot
+  //    sits empty. This is what closes the "lone KG above the fold" gap: during
+  //    streaming the absent partner is still a skeleton card in the set (so both
+  //    render half-width, partner shimmering); once the turn settles and an
+  //    unfilled skeleton is dropped, the lone real card reflows to full width here.
+  //    If NEITHER exists the row collapses (no gap).
   const kgCard = kg[0];
   const timelineCard = timelines[0];
+  const topRowPaired = Boolean(kgCard && timelineCard);
+  const topRowW = topRowPaired ? HALF_W : FULL_W;
   if (kgCard) {
-    out.push({ card: kgCard, x: 0, y, w: HALF_W, h: SLOT_H, autoPlace: true });
+    out.push({ card: kgCard, x: 0, y, w: topRowW, h: SLOT_H, autoPlace: true });
   }
   if (timelineCard) {
     out.push({
       card: timelineCard,
-      x: HALF_W,
+      x: topRowPaired ? HALF_W : 0,
       y,
-      w: HALF_W,
+      w: topRowW,
       h: SLOT_H,
       autoPlace: true,
     });
