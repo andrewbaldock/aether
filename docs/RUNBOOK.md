@@ -75,6 +75,48 @@ fly deploy       # builds Docker image, pushes, rolling restart (~60s)
 curl https://aether-ab-api.fly.dev/api/health
 ```
 
+### PWA / Service Worker
+
+Aether is an installable PWA — it can be added to the home screen / dock and launches
+standalone (no browser chrome). Wired via **`vite-plugin-pwa`** (config in `frontend/vite.config.ts`).
+
+**How it works:**
+- `registerType: "autoUpdate"` — the service worker updates **silently in the background** and
+  takes over on the next load. There is no "new version available" prompt to maintain; visitors
+  always converge on the latest deploy after one extra reload.
+- The build emits `dist/sw.js` + `dist/workbox-*.js` (Workbox precache) and
+  `dist/manifest.webmanifest`. The plugin auto-injects `<link rel="manifest">` and the SW
+  registration script into `index.html` — no manual `<script>` to add.
+- **`/api/*` is excluded** from the SPA navigation fallback (`workbox.navigateFallbackDenylist`),
+  so API calls always hit the network and never get served the cached `index.html`.
+- The SW is **disabled in `vite dev`** (`devOptions.enabled: false`) to avoid stale-cache
+  surprises while iterating. To exercise the real SW locally, build + preview:
+  ```bash
+  bun run build:app
+  bunx vite preview        # serves dist/ with the SW active
+  ```
+
+**Icons & manifest assets** live in `frontend/public/`:
+- `icon-source.svg` — the build source (512px, the dark favicon glyph with safe-area padding).
+- `pwa-192x192.png`, `pwa-512x512.png` — standard (`purpose: any`) icons.
+- `maskable-512x512.png` — maskable icon (Android adaptive masks).
+- `apple-touch-icon.png` (180px) — iOS home-screen icon.
+
+**Regenerating icons** (after editing `icon-source.svg`) — uses macOS `sips`, no extra tooling:
+```bash
+cd ~/Code/aether/frontend/public
+sips -s format png --resampleHeightWidth 192 192 icon-source.svg --out pwa-192x192.png
+sips -s format png --resampleHeightWidth 512 512 icon-source.svg --out pwa-512x512.png
+sips -s format png --resampleHeightWidth 512 512 icon-source.svg --out maskable-512x512.png
+sips -s format png --resampleHeightWidth 180 180 icon-source.svg --out apple-touch-icon.png
+```
+The manifest `theme_color`/`background_color` are `#110d1a` (the near-black brand shell) and are
+mirrored by the `theme-color` meta + iOS `apple-mobile-web-app-*` tags in `index.html`.
+
+**Deploy:** nothing extra — the SW and manifest are static `dist/` assets that ride the normal
+Vercel push. Worth an install test on a real device (Add to Home Screen on iOS Safari / Chrome
+install prompt) after a deploy that touches the manifest or icons.
+
 ### Manage Fly.io
 
 Fly.io hosts the Aether **backend API** as a Docker container. It handles compute, TLS, health checks, and auto-scaling (including scale-to-zero). Secrets (API keys) live here, never in the repo.
@@ -331,4 +373,5 @@ bun run lint         # ESLint
 - **Aether build has two TS configs** — `tsc --noEmit` (typecheck) and `tsc -b && vite build` (build) use different settings. A green typecheck doesn't guarantee a successful build. Always run `bun run build` before pushing.
 - **react-resizable-panels v4 gotcha** — `resize()` reads bare numbers as **pixels**, not percent. Always pass `"32%"` (string with unit).
 - **Fly cold starts** — App scales to zero when idle; first request after idle takes 5–10s.
+- **Service worker is off in dev, on in preview/prod** — `vite dev` never registers the SW (`devOptions.enabled: false`). To test PWA/offline behavior, `bun run build:app && bunx vite preview`. After a deploy, the SW updates in the background (`autoUpdate`); a hard-stuck old version usually clears with one reload, or DevTools → Application → Service Workers → Unregister.
 - **ASO `.htaccess` is server-only** — it's not in `dist/` and not in the git repo. Don't try to deploy it; it's already on the server and should stay untouched.

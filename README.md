@@ -21,6 +21,8 @@ best — table, chart, relationship graph, or 3D scene.
   its version. Kept current with the actual stack.
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — how the frontend and backend fit together,
   the two-runtime model, the `/api` proxy wiring, and the testing strategy.
+- **[docs/MOBILE.md](docs/MOBILE.md)** — mobile/responsive behavior, the PWA (installable +
+  service worker), icon assets, and how mobile is tested.
 
 ---
 

@@ -3,7 +3,7 @@
 Every dependency in Aether, what it does, and why it was chosen. **Keep this current:** when a
 commit adds, removes, or upgrades a dependency, update this file in the same commit.
 
-Last updated: Health dashboard widget + `/api/health/full` route.
+Last updated: PWA support (`vite-plugin-pwa`, installable + service worker).
 
 ---
 
@@ -55,6 +55,7 @@ source. See [ARCHITECTURE.md](./ARCHITECTURE.md#two-runtimes).
 | `@testing-library/react` | ^16.3.2 | React testing utils | `renderHook`/`render` for hook + component tests. |
 | `@testing-library/user-event` | ^14.6.1 | User-interaction simulation | Realistic event firing in tests. |
 | `jsdom` | ^29.x | DOM in Node | The vitest `environment` so React renders without a browser. |
+| `vite-plugin-pwa` | ^1.3.0 | PWA / service worker generator | Makes Aether an installable PWA. Generates the Workbox service worker (`dist/sw.js`) + web manifest from config in `vite.config.ts`, and auto-injects the manifest link + SW registration into `index.html`. `autoUpdate` mode — SW refreshes silently, no update prompt. SW is off in `vite dev`, on in `preview`/prod. See [RUNBOOK.md](./RUNBOOK.md#pwa--service-worker) and [MOBILE.md](./MOBILE.md). |
 | `@playwright/test` | ^1.60 | E2E test runner | Browser-level tests in `frontend/e2e/` (`bun run test:e2e`). Mocks `/api` at the network layer (canned SSE) — no backend, no tokens, deterministic. Drives a 7-project viewport matrix (desktop + iPhone/iPad/Pixel × portrait/landscape; WebKit for Safari, Chromium for Chrome/Android). The same matrix + mock power the dev-only `/screenshots` contact sheet (`bun run screenshots`). Browsers installed via `bunx playwright install chromium webkit`. |
 
 ### TypeScript config layout

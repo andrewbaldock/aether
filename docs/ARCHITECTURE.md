@@ -64,6 +64,14 @@ places, each needing a different runtime.
 So: the browser handles the last mile of the frontend; **bun handles everything a developer
 does** — install, compile, run the server, run tests.
 
+There's also a **third thing** running in the browser in production: a **service worker**. Aether
+is an installable PWA — `vite-plugin-pwa` generates a Workbox SW (`dist/sw.js`) that precaches the
+built assets so the app shell loads instantly and works offline-ish, and a web manifest so it can
+be installed to the home screen / dock. The SW is a separate browser-managed script (not part of
+the React tree); it's off in `vite dev` and active in preview/prod. `/api/*` is excluded from its
+cache so data calls always hit the network. See [MOBILE.md](./MOBILE.md) for the full mobile/PWA
+story and [RUNBOOK.md](./RUNBOOK.md#pwa--service-worker) for the operational details.
+
 ---
 
 ## Frontend ↔ backend wiring (the `/api` proxy)
