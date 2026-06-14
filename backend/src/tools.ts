@@ -789,6 +789,27 @@ export function isDegenerate(toolName: string, resultJson: string): boolean {
       return emptyArray(obj.items);
     case "render_images":
       return emptyArray(obj.images);
+    case "build_knowledge_graph": {
+      // A graph is only worth drawing if it CONNECTS things. A lone node (or two
+      // orphan nodes with no edge) reads as broken — the whole point is the links.
+      // We treat <2 entities OR 0 relationships as degenerate so the self-
+      // correction loop prompts the model to enrich it (e.g. promote the table's
+      // own rows into connected nodes) rather than ship a single floating node.
+      // NOTE: this is an ADDITIVE-merge tool — a later call that only adds edges to
+      // an already-populated graph legitimately sends entities:[] with
+      // relationships. Only flag the degenerate case where there's nothing to add
+      // AND nothing connects: no relationships and fewer than 2 new entities.
+      const entities = Array.isArray(obj.entities) ? obj.entities : [];
+      const relationships = Array.isArray(obj.relationships)
+        ? obj.relationships
+        : [];
+      const hasMergeOrRemove =
+        (Array.isArray(obj.merge) && obj.merge.length > 0) ||
+        (Array.isArray(obj.remove) && obj.remove.length > 0);
+      // A maintenance-only call (merge/remove) is intentional, not degenerate.
+      if (hasMergeOrRemove) return false;
+      return relationships.length === 0 && entities.length < 2;
+    }
     case "wikidata_query":
       return emptyArray(obj.rows);
     case "world_bank":
@@ -805,6 +826,16 @@ export function isDegenerate(toolName: string, resultJson: string): boolean {
 // The corrective directive appended to a degenerate tool_result so the model
 // self-heals on the next iteration. Terse — it re-enters context.
 export function correctionDirective(toolName: string): string {
+  if (toolName === "build_knowledge_graph") {
+    return (
+      `\n\n[system] That build_knowledge_graph call made a degenerate graph — a single ` +
+      `node (or nodes with no links). A graph is only worth showing when it CONNECTS ` +
+      `things. Call build_knowledge_graph again with at least 3 connected entities and ` +
+      `the relationships between them — draw them from what's already in this answer ` +
+      `(e.g. the rows/items you just rendered) and how they relate. Only bow out if the ` +
+      `subject genuinely has no connectable entities, and then say so in one short sentence.`
+    );
+  }
   return (
     `\n\n[system] That ${toolName} call produced no usable rows/data. ` +
     `Either re-derive it correctly from the conversation, switch to a more fitting ` +

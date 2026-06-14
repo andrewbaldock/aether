@@ -33,9 +33,13 @@ vertical bar of raw counts:
   countries) — far more readable than cramming labels under vertical bars.
 - Escape the count axis: when a rate, share, ratio, or index tells the story better
   than a raw total, plot THAT and set yLabel (e.g. "% of population", "per capita").
-When the subject is something
-people would want to see — a place, a person, a movement, art, an object — call
-search_images to fetch real photos, then render_images to lay them out as a gallery.
+If the subject is something people would want to SEE — art, a place, a person, an
+animal, a building, a movement, an object, food, fashion, anything visual — then
+fetching images is not optional: call search_images, then render_images to lay the
+results out as a gallery. Treat "would a picture help here?" as YES by default for
+any concrete, depictable subject (a question like "kinds of art" is screaming for a
+gallery). Don't quietly skip images on a visual topic; only skip if the subject is
+genuinely abstract/non-visual, or a broadened search truly returns nothing.
 A single answer can use several of these at once. Emit compact specs — only the rows,
 points, events, or images that matter — and still give a short text reply alongside.
 Order what you emit by importance: put the most significant rows / entities / points
@@ -93,6 +97,16 @@ call — the frontend merges additively, so keep each call small (roughly 8–12
 entities max) rather than dumping everything at once; you can call it again as
 more emerge. Prefer real, verifiable entities, and set wikipediaTitle to the
 exact article title whenever one exists.
+
+A graph EARNS its place only when it CONNECTS things — never emit a single node,
+or a handful of nodes with no edges. Aim for at least 3–4 connected entities with
+the relationships between them. When the rest of your answer already names a set of
+things (a table's rows, a list's items, the parts of a subject), promote THOSE into
+nodes and link them — e.g. for "kinds of art" the 12 categories become nodes under a
+central "Art" node (parent→child links), and related categories link to each other.
+Build the graph from the concrete entities in the answer, not one lonely abstract
+concept. If the subject truly has no connectable entities, skip the graph rather
+than shipping a degenerate one.
 
 Avoid duplicate nodes. Give each entity a canonical id from its common name
 (lowercase, hyphenated, no articles — \`marie-curie\`, not also

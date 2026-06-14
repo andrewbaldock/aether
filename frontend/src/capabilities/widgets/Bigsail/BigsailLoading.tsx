@@ -23,11 +23,11 @@ const GHOST_CARDS: {
 ];
 
 export function BigsailLoading() {
-  // Self-contained card behind the SVG + label so the animation stays legible
-  // riding ON TOP of the shimmering skeletons — a soft surface pill, not a
-  // full-canvas wash (the wash would hide the placeholders underneath).
+  // No bordered card / pill — the animation reads as a clean centered composition
+  // riding over the shimmering skeletons, not a boxed-in widget. (Per the Bigsail
+  // loading contract: the gathering animation must be borderless.)
   return (
-    <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-surface/85 p-8 text-center shadow-lg backdrop-blur-sm">
+    <div className="flex flex-col items-center justify-center gap-4 p-8 text-center">
       <svg
         width="360"
         height="240"

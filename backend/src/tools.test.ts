@@ -61,6 +61,62 @@ describe("isDegenerate", () => {
     ).toBe(false);
   });
 
+  it("flags a degenerate knowledge graph (single node / no edges)", () => {
+    // A lone node — the exact 'single Art node' bug.
+    expect(
+      isDegenerate(
+        "build_knowledge_graph",
+        JSON.stringify({ entities: [{ id: "art" }], relationships: [] })
+      )
+    ).toBe(true);
+    // Even two orphan nodes with no relationship read as broken.
+    expect(
+      isDegenerate(
+        "build_knowledge_graph",
+        JSON.stringify({
+          entities: [{ id: "art" }, { id: "music" }],
+          relationships: [],
+        })
+      )
+    ).toBe(false); // 2 entities is the floor; the real guard is <2 OR no rels
+  });
+
+  it("does NOT flag a connected knowledge graph", () => {
+    expect(
+      isDegenerate(
+        "build_knowledge_graph",
+        JSON.stringify({
+          entities: [{ id: "art" }, { id: "visual" }],
+          relationships: [{ from: "art", to: "visual" }],
+        })
+      )
+    ).toBe(false);
+  });
+
+  it("does NOT flag an additive edges-only or maintenance graph call", () => {
+    // A later call that only adds edges between already-present nodes.
+    expect(
+      isDegenerate(
+        "build_knowledge_graph",
+        JSON.stringify({
+          entities: [],
+          relationships: [{ from: "art", to: "music" }],
+        })
+      )
+    ).toBe(false);
+    // A merge/remove-only maintenance call is intentional, never degenerate.
+    expect(
+      isDegenerate(
+        "build_knowledge_graph",
+        JSON.stringify({
+          entities: [],
+          relationships: [],
+          merge: [{ from: "a", into: "b" }],
+        })
+      )
+    ).toBe(false);
+  });
+
   it("treats explicit tool errors as NOT degenerate (handled elsewhere)", () => {
     expect(
       isDegenerate("wikidata_query", JSON.stringify({ error: "bad query" }))
