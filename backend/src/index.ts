@@ -343,12 +343,15 @@ app.post("/api/chat", async (c) => {
     return c.json({ error: "Request body must be JSON" }, 400);
   }
 
-  const { messages, sessionId, userId, graphMode, model } = body as {
+  const { messages, sessionId, userId, graphMode, model, clarified } = body as {
     messages?: unknown;
     sessionId?: unknown;
     userId?: unknown;
     graphMode?: unknown;
     model?: unknown;
+    // True when this turn is the answer to a prior clarifier — threaded to the
+    // planner so it won't clarify again (no interrogation loops).
+    clarified?: unknown;
   };
 
   if (!isChatMessageArray(messages)) {
@@ -489,7 +492,21 @@ app.post("/api/chat", async (c) => {
           await stream.writeSSE({
             data: JSON.stringify({ type: "plan", plan }),
           });
-        }
+        },
+        async (clarify) => {
+          // Thin-but-explodable turn: the planner asked ONE expanding question
+          // instead of composing. The question already streamed as assistant text
+          // (via onToken); this carries the tappable options so the frontend can
+          // render chips. The turn ends here — no agent loop, no widgets.
+          await stream.writeSSE({
+            data: JSON.stringify({
+              type: "clarify",
+              question: clarify.question,
+              options: clarify.options,
+            }),
+          });
+        },
+        clarified === true
       );
     } catch (err) {
       console.error("POST /api/chat stream failed:", err);

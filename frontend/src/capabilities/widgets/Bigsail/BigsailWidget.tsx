@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUpdateSession } from "../../../hooks/useUpdateSession";
 import { SCHEMA_VERSIONS } from "../../../lib/schemaVersion";
+import { useAgentEvents } from "../../../shell/AgentEventContext";
 import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
@@ -35,7 +36,22 @@ export function BigsailWidget(_props: { widget: Widget }) {
   const { entries: timeline } = useTimelineState();
   const { entries: images } = useImagesState();
   const busy = useAgentBusy();
+  const bus = useAgentEvents();
   const { userId, sessionId, sessions, messages } = useSessionContext();
+
+  // Awaiting a clarifier answer: the planner asked ONE question instead of
+  // composing, so the canvas shows a calm "let's aim this first" state rather than
+  // the empty-canvas copy. This is a deliberate wait-on-user, NOT an in-flight turn
+  // — busy is false here (the clarify turn ended with [DONE]), per the loading
+  // contract. Set on `clarify`; cleared the moment the next turn begins
+  // (`request_start`) — whether the user tapped a chip or typed a free-form answer.
+  const [awaitingClarification, setAwaitingClarification] = useState(false);
+  useEffect(() => {
+    return bus.subscribe((event) => {
+      if (event.type === "clarify") setAwaitingClarification(true);
+      else if (event.type === "request_start") setAwaitingClarification(false);
+    });
+  }, [bus]);
   const updateSession = useUpdateSession(userId);
 
   const currentSession = useMemo(
@@ -216,6 +232,19 @@ export function BigsailWidget(_props: { widget: Widget }) {
           placed={placed}
           onLayoutChange={persistLayout}
         />
+      ) : awaitingClarification ? (
+        // Calm wait-on-user state — NOT the empty copy, NOT the gathering animation.
+        // The clarifier question + tappable options live in the chat panel; here we
+        // just signal that the canvas is poised to fill once the user aims it.
+        <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+          <p className="font-display text-base font-semibold text-content">
+            Let's aim this first.
+          </p>
+          <p className="max-w-sm text-sm text-content-muted">
+            Pick a direction in the chat and I'll compose the canvas around it —
+            tables, charts, a timeline, images, the works.
+          </p>
+        </div>
       ) : !busy ? (
         <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
           <p className="font-display text-base font-semibold text-content">

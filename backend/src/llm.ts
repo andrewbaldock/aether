@@ -2,7 +2,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { closeTruncatedJson, parseBestEffort } from "./bestEffortJson";
 import { DEFAULT_MODEL, type Provider, providerForModel } from "./models";
-import { type CompositionPlan, planPreamble, planTurn } from "./planner";
+import {
+  type ClarifyResult,
+  type CompositionPlan,
+  planPreamble,
+  planTurn,
+} from "./planner";
 import { buildSystemPrompt } from "./prompt";
 import {
   buildTools,
@@ -70,7 +75,16 @@ export interface LlmClient {
     // for this turn (complex turns only). Carries WHICH capabilities + how they
     // relate — never coordinates. The host forwards it as the `plan` SSE event;
     // Bigsail consumes it. Absent on simple turns (the planner is gated).
-    onPlan?: (plan: CompositionPlan) => Promise<void>
+    onPlan?: (plan: CompositionPlan) => Promise<void>,
+    // Fired once, pre-loop, when the planner decides the turn is thin-but-explodable
+    // and asks ONE clarifying question INSTEAD of composing. When this fires, the
+    // turn ends WITHOUT entering the agent loop: the question streams as the
+    // assistant's text (via onToken) and the host forwards `clarify` as an SSE so
+    // the frontend can render tappable options. Mutually exclusive with onPlan.
+    onClarify?: (clarify: ClarifyResult) => Promise<void>,
+    // True when this turn is the answer to a prior clarifier — threaded into the
+    // planner so it won't clarify again (no interrogation loops).
+    clarified?: boolean
   ): Promise<void>;
 }
 
@@ -93,23 +107,52 @@ const MAX_ITERATIONS = Number(process.env.LLM_MAX_ITERATIONS) || 6;
 // wire formats. These small helpers hold the wire-format-independent logic so it
 // lives in ONE place and can't drift between the clients.
 
-// The planner pre-pass, gated. On a complex turn, decompose the request into an
-// abstract composition plan, emit it (→ `plan` SSE / Bigsail), and return a short
-// preamble string to fold into the conversation so the loop is STEERED by it.
-// Best-effort — returns null on simple turns or any failure → plain ReAct. The
-// caller appends the preamble to the conversation prefix ONCE (not per iteration),
-// so the cached system/tools prefix is untouched and (on Claude) the preamble
-// rides the conversation cache on iterations 2+.
+// The outcome of the gated planner pre-pass, for the stream entry point to act on:
+// - "preamble": fold this steering string into the conversation and run the loop.
+// - "clarify":  DON'T run the loop — ask one expanding question and end the turn.
+// - "none":     plain ReAct (no plan, no clarifier).
+type PrePassOutcome =
+  | { kind: "preamble"; preamble: string }
+  | { kind: "clarify"; clarify: ClarifyResult }
+  | { kind: "none" };
+
+// The planner pre-pass, gated. ONE Haiku call judges the turn and yields one of:
+// a composition plan (emit it → `plan` SSE / Bigsail, return a steering preamble),
+// a clarifier (a thin-but-explodable turn → ask one question first, see
+// PrePassOutcome "clarify"), or nothing (plain ReAct). Best-effort — any failure
+// degrades to "none". `clarified` is true when this turn is itself a clarifier
+// answer, suppressing a second clarifier (no interrogation loops). The preamble is
+// appended to the conversation prefix ONCE by the caller (not per iteration), so
+// the cached system/tools prefix is untouched and (on Claude) it rides the
+// conversation cache on iterations 2+.
 async function runPlannerPrePass(
   messages: ChatMessage[],
-  onPlan?: (plan: CompositionPlan) => Promise<void>
-): Promise<string | null> {
+  onPlan?: (plan: CompositionPlan) => Promise<void>,
+  clarified?: boolean
+): Promise<PrePassOutcome> {
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
-  if (!lastUser) return null;
-  const plan = await planTurn(lastUser.content);
-  if (!plan) return null;
-  await onPlan?.(plan);
-  return planPreamble(plan);
+  if (!lastUser) return { kind: "none" };
+  const result = await planTurn(lastUser.content, { clarified });
+  if (!result) return { kind: "none" };
+  if (result.kind === "clarify")
+    return { kind: "clarify", clarify: result.clarify };
+  await onPlan?.(result.plan);
+  return { kind: "preamble", preamble: planPreamble(result.plan) };
+}
+
+// End a turn as a clarifier WITHOUT running the agent loop: stream the question as
+// the assistant's text (so it lands in the transcript like any reply), fire
+// onClarify (→ `clarify` SSE, carrying the tappable options), then close the turn.
+// Shared by both clients so the early-exit can't drift between them.
+async function emitClarifyTurn(
+  clarify: ClarifyResult,
+  onToken: (token: string) => Promise<void>,
+  onDone: () => Promise<void>,
+  onClarify?: (clarify: ClarifyResult) => Promise<void>
+): Promise<void> {
+  await onToken(clarify.question);
+  await onClarify?.(clarify);
+  await onDone();
 }
 
 // Status emitted at the top of each iteration, filling dead-air windows. Iteration
@@ -283,7 +326,9 @@ function createClaudeClient(
       onToolPartial,
       onLoopStart,
       onStatus,
-      onPlan
+      onPlan,
+      onClarify,
+      clarified
     ) {
       // The agent loop: call the API, handle tool_use if the model requests it,
       // feed results back, and repeat until the model produces a terminal response.
@@ -292,11 +337,18 @@ function createClaudeClient(
         content: m.content,
       }));
 
-      // Conditional planner pre-pass (gated) — appended ONCE to the conversation
-      // prefix, so the cached system/tools prefix is untouched and the preamble
-      // rides the conversation cache on iterations 2+. See runPlannerPrePass.
-      const preamble = await runPlannerPrePass(messages, onPlan);
-      if (preamble) history.push({ role: "user", content: preamble });
+      // Conditional planner pre-pass (gated). It yields a steering preamble (run the
+      // loop), a clarifier (end the turn asking ONE question — no loop), or nothing.
+      const prePass = await runPlannerPrePass(messages, onPlan, clarified);
+      if (prePass.kind === "clarify") {
+        await emitClarifyTurn(prePass.clarify, onToken, onDone, onClarify);
+        return;
+      }
+      // Preamble appended ONCE to the conversation prefix, so the cached
+      // system/tools prefix is untouched and it rides the conversation cache on
+      // iterations 2+. See runPlannerPrePass.
+      if (prePass.kind === "preamble")
+        history.push({ role: "user", content: prePass.preamble });
 
       // Counts trips through the loop. Iteration 1 is the initial call; every
       // increment past that means tool results were fed back and we're calling
@@ -627,7 +679,9 @@ function createOpenAICompatClient(
       onToolPartial,
       onLoopStart,
       onStatus,
-      onPlan
+      onPlan,
+      onClarify,
+      clarified
     ) {
       // The agent loop — identical control flow to the Claude client, parsing
       // OpenAI chunk deltas instead of Anthropic stream events.
@@ -637,9 +691,15 @@ function createOpenAICompatClient(
       // Conditional planner pre-pass (gated), same as the Claude client. The plan
       // is appended to history as an extra user message; there's no prompt cache
       // here, so this just steers the model. The planner itself always runs on
-      // Haiku, so non-Claude conversations still get planning + the `plan` event.
-      const preamble = await runPlannerPrePass(messages, onPlan);
-      if (preamble) history.push({ role: "user", content: preamble });
+      // Haiku, so non-Claude conversations still get planning + the `plan` event —
+      // and the clarifier early-exit.
+      const prePass = await runPlannerPrePass(messages, onPlan, clarified);
+      if (prePass.kind === "clarify") {
+        await emitClarifyTurn(prePass.clarify, onToken, onDone, onClarify);
+        return;
+      }
+      if (prePass.kind === "preamble")
+        history.push({ role: "user", content: prePass.preamble });
 
       let iteration = 0;
       // In-loop self-correction counter for this turn (see MAX_CORRECTIONS).

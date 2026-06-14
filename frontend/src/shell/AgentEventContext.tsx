@@ -29,13 +29,24 @@ export type AgentEvent =
   // `partialJson` is the growing tool input; widgets re-parse it (defensively —
   // mid-token JSON just yields null) to paint progressively. tool_result remains
   // the authoritative final, so observers that only want settled data ignore this.
-  | { type: "tool_partial"; tool: string; partialJson: string; isComplete: boolean }
+  | {
+      type: "tool_partial";
+      tool: string;
+      partialJson: string;
+      isComplete: boolean;
+    }
   | { type: "loop_start"; iteration: number }
   // The backend planner's abstract composition plan for this turn — which
   // capabilities participate and how they relate (never coordinates). Emitted
   // pre-loop on complex turns. BigsailPlanProvider stores the latest; the canvas
   // consumes it to order cards and draw flowchart edges.
   | { type: "plan"; plan: CompositionPlan }
+  // The planner asked ONE clarifying question instead of composing this turn (a
+  // thin-but-explodable request). The question text already streamed as the
+  // assistant's reply; this carries the tappable options. ChatPanel renders chips;
+  // Bigsail shows a calm "let's aim this first" wait-state. Side-channel, not a
+  // phase event — replaying it to a late subscriber would be noise.
+  | { type: "clarify"; question: string; options: string[] }
   | { type: "done" }
   | { type: "error"; message: string }
   | { type: "idle" }

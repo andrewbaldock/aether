@@ -30,6 +30,9 @@ describe("isPhaseEvent", () => {
       { type: "tool_result", tool: "wikidata_query", result: "{}" },
       { type: "error", message: "boom" },
       { type: "explore_request", prompt: "more" },
+      // clarify is a side-channel signal, NOT a phase — replaying it to a late
+      // subscriber would be noise, and it must never read as turn activity.
+      { type: "clarify", question: "Which?", options: ["a", "b"] },
     ];
     for (const e of nonPhases) expect(isPhaseEvent(e)).toBe(false);
   });

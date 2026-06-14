@@ -38,6 +38,24 @@ export interface CompositionPlan {
   relationships: PlanRelationship[];
 }
 
+// A clarifying pre-pass result: when a request is THIN but one well-aimed question
+// would massively expand a rich answer ("explode the concept"), the planner asks
+// that ONE question first — with concrete, tappable options — instead of composing
+// a flat reply. 2–4 options; the frontend also always allows a free-form answer.
+export interface ClarifyResult {
+  question: string;
+  options: string[];
+}
+
+// The planner's verdict for a turn. Exactly one of:
+// - { kind: "plan" }    — today's composition path (multi-capability turn)
+// - { kind: "clarify" } — ask one expanding question first, then compose next turn
+// - null                — plain ReAct (most turns)
+export type PlannerResult =
+  | { kind: "plan"; plan: CompositionPlan }
+  | { kind: "clarify"; clarify: ClarifyResult }
+  | null;
+
 const PLANNER_MODEL = "claude-haiku-4-5-20251001";
 
 const VALID_CAPABILITIES: ReadonlySet<string> = new Set<PlanCapability>([
@@ -81,6 +99,33 @@ export function mightNeedPlan(message: string): boolean {
   return trimmed.length > 160 || clauses >= 3;
 }
 
+// --- Clarifier gate --------------------------------------------------------
+// A SEPARATE, looser gate from mightNeedPlan: the clarifier's target is exactly
+// the short, broad question mightNeedPlan skips ("how many kinds of art are
+// there?"). So this can't inherit the <40-char bail. We still want to stay cheap,
+// so we cull the turns a clarifier could never help: greetings/acks, and
+// trivially-closed questions (arithmetic, yes/no, single-fact lookups) that have
+// one right answer no clarification could expand. Everything else is a candidate —
+// the Haiku call itself makes the real "is it explodable?" judgment.
+
+// Greetings / acknowledgements — no question to explode.
+const CLARIFY_SKIP_GREETING =
+  /^(hi|hey|hello|yo|sup|thanks?|thank you|thx|ok(ay)?|cool|nice|great|got it|sure|yes|no|nope|yeah|yep)\b[\s!.?]*$/i;
+
+// Looks like simple arithmetic ("what's 2+2", "12 * 7?") — one right answer.
+const CLARIFY_SKIP_ARITHMETIC = /^[\s\d+\-*/^().,%×÷=]+\??$/;
+const CLARIFY_ARITHMETIC_WITH_LEAD =
+  /^(what'?s|whats|calculate|compute|how much is)\b[\s\d+\-*/^().,%×÷=]+\??$/i;
+
+export function mightClarify(message: string): boolean {
+  const trimmed = message.trim();
+  if (!trimmed) return false;
+  if (CLARIFY_SKIP_GREETING.test(trimmed)) return false;
+  if (CLARIFY_SKIP_ARITHMETIC.test(trimmed)) return false;
+  if (CLARIFY_ARITHMETIC_WITH_LEAD.test(trimmed)) return false;
+  return true;
+}
+
 // --- Planner ---------------------------------------------------------------
 // One structured Haiku call. Asks for the ordered capabilities a good answer would
 // compose and how they relate, as strict JSON. Best-effort: returns null on any
@@ -102,7 +147,15 @@ Rules:
 - intents: ordered; each capability is one of the five above; subject is a short phrase (optional).
 - relationships: index pairs into intents (from/to), with an optional short label; only include real relationships, often none.
 - Prefer 1-4 intents. If the request needs only a plain text reply, return {"intents":[],"relationships":[]}.
-- NEVER include coordinates, sizes, or layout — only which capabilities and how they relate.`;
+- NEVER include coordinates, sizes, or layout — only which capabilities and how they relate.
+
+BEFORE planning, judge how fruitful this request is AS ASKED. If the request is THIN
+but a single clarifying question would massively expand a rich answer (pick a
+sub-area, a lens, a scope, an era), return a clarify object INSTEAD of a plan:
+{"clarify":{"question":"one short question","options":["concrete option","concrete option","concrete option"]}}
+- Only clarify when it genuinely EXPLODES the concept — e.g. "how many kinds of art are there?" → ask which tradition/era/medium to explore. Never clarify a request already rich or specific enough to answer well (a comparison, a named subject, a clear scope).
+- question: ONE short, friendly question. options: 2–4 concrete, tempting choices (not vague). The user can always answer free-form too, so make the options inviting starting points, not a cage.
+- When you return a clarify object, return ONLY that object (no intents/relationships).`;
 
 // Validate + coerce the model's JSON into a CompositionPlan, dropping anything
 // malformed. Returns null if there's nothing usable (so callers skip the plan).
@@ -167,13 +220,54 @@ export function parsePlan(raw: string): CompositionPlan | null {
   return { intents, relationships };
 }
 
-// Run the router + planner for a turn. Returns the plan when the turn warrants one,
-// else null. `message` is the user's latest turn content. Best-effort throughout —
-// never throws; a failure just means no plan (plain ReAct).
+// Extract a clarify object from the model's JSON, if present and well-formed.
+// Returns null when there's no usable clarifier (no `clarify` key, empty/blank
+// question, or no concrete options) so callers fall through to plan-or-ReAct.
+// Exported for unit testing. We cap options at 4 and drop blanks — the prompt
+// asks for 2–4, but the parse is the guardrail, not the prompt.
+export function parseClarify(raw: string): ClarifyResult | null {
+  let data: unknown;
+  try {
+    const match = raw.match(/\{[\s\S]*\}/);
+    data = JSON.parse(match ? match[0] : raw);
+  } catch {
+    return null;
+  }
+  if (data == null || typeof data !== "object") return null;
+  const clarify = (data as Record<string, unknown>).clarify;
+  if (clarify == null || typeof clarify !== "object") return null;
+
+  const question = (clarify as Record<string, unknown>).question;
+  if (typeof question !== "string" || !question.trim()) return null;
+
+  const rawOptions = (clarify as Record<string, unknown>).options;
+  const options = (Array.isArray(rawOptions) ? rawOptions : [])
+    .filter((o): o is string => typeof o === "string" && o.trim().length > 0)
+    .map((o) => o.trim())
+    .slice(0, 4);
+  // A clarifier with no concrete options is just an open question — that's worse
+  // than answering. Require at least two tappable choices to be worth the wait.
+  if (options.length < 2) return null;
+
+  return { question: question.trim(), options };
+}
+
+// Run the router + planner for a turn. Returns a PlannerResult: a clarifier when
+// the turn is thin-but-explodable, a plan when it warrants composition, else null
+// (plain ReAct). `message` is the user's latest turn content. `clarified` is true
+// when this turn is itself the answer to a prior clarifier — it suppresses a second
+// clarifier so we never interrogate in a loop (the turn still gets a plan). The two
+// gates are independent: the clarifier targets the SHORT/broad turns mightNeedPlan
+// skips, so on a turn that passes only the clarifier gate we still make the call.
+// Best-effort throughout — never throws; any failure means no plan/clarify.
 export async function planTurn(
-  message: string
-): Promise<CompositionPlan | null> {
-  if (!message || !mightNeedPlan(message)) return null;
+  message: string,
+  opts: { clarified?: boolean } = {}
+): Promise<PlannerResult> {
+  if (!message) return null;
+  const canClarify = !opts.clarified && mightClarify(message);
+  const canPlan = mightNeedPlan(message);
+  if (!canClarify && !canPlan) return null;
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
@@ -191,7 +285,16 @@ export async function planTurn(
       .map((b) => b.text)
       .join("")
       .trim();
-    return parsePlan(text);
+
+    // Clarifier takes precedence on a thin-but-explodable turn — but only when
+    // this turn isn't already a clarifier answer, and only when the model
+    // actually returned a well-formed clarify object.
+    if (canClarify) {
+      const clarify = parseClarify(text);
+      if (clarify) return { kind: "clarify", clarify };
+    }
+    const plan = parsePlan(text);
+    return plan ? { kind: "plan", plan } : null;
   } catch (err) {
     console.error("planTurn failed:", err);
     return null;

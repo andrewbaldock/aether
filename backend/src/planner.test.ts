@@ -1,6 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import type { CompositionPlan } from "./planner";
-import { mightNeedPlan, parsePlan, planPreamble } from "./planner";
+import {
+  mightClarify,
+  mightNeedPlan,
+  parseClarify,
+  parsePlan,
+  planPreamble,
+} from "./planner";
 
 describe("mightNeedPlan (router heuristic)", () => {
   it("skips short trivial turns", () => {
@@ -26,6 +32,80 @@ describe("mightNeedPlan (router heuristic)", () => {
         "I'd love to understand the history of the Roman empire, its major emperors, how the territory expanded, and the key turning points along the way"
       )
     ).toBe(true);
+  });
+});
+
+describe("mightClarify (clarifier gate)", () => {
+  it("fires on the short, broad questions mightNeedPlan SKIPS", () => {
+    // The whole point: the clarifier targets exactly the thin asks the plan gate
+    // bails on (its <40-char rule), because those are the explodable ones.
+    expect(mightNeedPlan("how many kinds of art are there?")).toBe(false);
+    expect(mightClarify("how many kinds of art are there?")).toBe(true);
+    expect(mightClarify("tell me about music")).toBe(true);
+  });
+
+  it("skips greetings and acknowledgements", () => {
+    expect(mightClarify("hi")).toBe(false);
+    expect(mightClarify("thanks!")).toBe(false);
+    expect(mightClarify("ok")).toBe(false);
+    expect(mightClarify("yep")).toBe(false);
+  });
+
+  it("skips trivially-closed arithmetic with one right answer", () => {
+    expect(mightClarify("2+2")).toBe(false);
+    expect(mightClarify("what's 12 * 7?")).toBe(false);
+    expect(mightClarify("   ")).toBe(false);
+  });
+});
+
+describe("parseClarify", () => {
+  it("parses a well-formed clarify object", () => {
+    const clarify = parseClarify(
+      '{"clarify":{"question":"Which tradition?","options":["Western","East Asian","African"]}}'
+    );
+    expect(clarify).toEqual({
+      question: "Which tradition?",
+      options: ["Western", "East Asian", "African"],
+    });
+  });
+
+  it("extracts clarify JSON from a prose/fenced reply", () => {
+    const raw =
+      'Sure:\n```json\n{"clarify":{"question":"Which era?","options":["Ancient","Modern"]}}\n```';
+    expect(parseClarify(raw)).toEqual({
+      question: "Which era?",
+      options: ["Ancient", "Modern"],
+    });
+  });
+
+  it("drops blank options and caps at 4", () => {
+    const clarify = parseClarify(
+      '{"clarify":{"question":"Pick","options":["a","","b","c","d","e"]}}'
+    );
+    expect(clarify?.options).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("returns null when there are fewer than two concrete options", () => {
+    expect(
+      parseClarify('{"clarify":{"question":"Pick","options":["only one"]}}')
+    ).toBeNull();
+    expect(
+      parseClarify('{"clarify":{"question":"Pick","options":[]}}')
+    ).toBeNull();
+  });
+
+  it("returns null when the question is missing or blank", () => {
+    expect(
+      parseClarify('{"clarify":{"question":"  ","options":["a","b"]}}')
+    ).toBeNull();
+    expect(parseClarify('{"clarify":{"options":["a","b"]}}')).toBeNull();
+  });
+
+  it("returns null for a plain plan reply (no clarify key)", () => {
+    expect(
+      parseClarify('{"intents":[{"capability":"table"}],"relationships":[]}')
+    ).toBeNull();
+    expect(parseClarify("not json")).toBeNull();
   });
 });
 

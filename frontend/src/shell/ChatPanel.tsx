@@ -500,6 +500,31 @@ export function ChatPanel() {
                     >
                       {m.text}
                     </ReactMarkdown>
+                    {/* Clarifier chips: the planner asked ONE expanding question
+                        this turn (m.text is the question). Tapping a chip sends the
+                        pick as the next turn, flagged clarified so the planner won't
+                        clarify again. A free-form typed answer counts too — it just
+                        flows through the normal composer. Chips are an accelerator,
+                        not a gate. Guard against double-fire while a turn streams. */}
+                    {m.clarifyOptions && m.clarifyOptions.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {m.clarifyOptions.map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            disabled={isLoading}
+                            onClick={() =>
+                              sendMessage(option, undefined, {
+                                clarified: true,
+                              })
+                            }
+                            className="rounded-full border border-border-strong px-3 py-1 text-xs text-content-muted transition-colors hover:bg-elevated hover:text-content disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </>
                 )}
               </div>

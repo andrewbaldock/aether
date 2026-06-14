@@ -8,6 +8,11 @@ export interface Message {
   role: "user" | "assistant";
   text: string;
   toolActivity?: string;
+  // Tappable clarifier options, set when the planner asked ONE expanding question
+  // this turn (the question is the message `text`). ChatPanel renders these as
+  // chips; tapping one sends a follow-up turn flagged `clarified` so the planner
+  // won't clarify again. Absent on every normal turn.
+  clarifyOptions?: string[];
 }
 
 interface UseChatOptions {
@@ -30,8 +35,14 @@ export interface UseChatResult {
   // `text` is sent to the model; `displayText`, when given, is what's shown in the
   // transcript instead (e.g. a terse "Update the Timeline" bubble standing in for a
   // long fill instruction the user shouldn't have to read). The model never sees
-  // displayText; the transcript never shows the verbose text.
-  sendMessage: (text: string, displayText?: string) => Promise<void>;
+  // displayText; the transcript never shows the verbose text. `opts.clarified` marks
+  // a turn that answers a prior clarifier, so the backend planner won't clarify
+  // again (no interrogation loops).
+  sendMessage: (
+    text: string,
+    displayText?: string,
+    opts?: { clarified?: boolean }
+  ) => Promise<void>;
   // Cancels any in-flight stream and invalidates its late writes. Called when
   // the user switches or starts a conversation so a previous turn can't bleed
   // tokens into the new view.
@@ -79,7 +90,9 @@ export function useChat({
   // FIFO of messages the user sent while a turn was already streaming. Each is
   // already shown as a user bubble (appended at enqueue time); we hold only what
   // the next turn needs to fire. Drained one-at-a-time as each turn completes.
-  const queueRef = useRef<{ text: string; displayText?: string }[]>([]);
+  const queueRef = useRef<
+    { text: string; displayText?: string; clarified?: boolean }[]
+  >([]);
 
   const abortStream = useCallback(() => {
     // A manual stop also discards anything the user had queued behind this turn —
@@ -106,7 +119,11 @@ export function useChat({
   // streaming, the new message is queued (FIFO) and fired when that turn ends —
   // the send button stays a Send button while text is present, so users can stack
   // follow-ups instead of having to wait or stop. Otherwise the turn runs now.
-  async function sendMessage(text: string, displayText?: string) {
+  async function sendMessage(
+    text: string,
+    displayText?: string,
+    opts?: { clarified?: boolean }
+  ) {
     // What the transcript shows. The full `text` still goes to the model later;
     // displayText only swaps the on-screen bubble.
     const shownText = displayText ?? text;
@@ -120,17 +137,21 @@ export function useChat({
     // A turn is in flight — queue this one and let the current turn's drain pick
     // it up. The bubble is already on screen; only the send payload waits.
     if (abortRef.current !== null) {
-      queueRef.current.push({ text, displayText });
+      queueRef.current.push({ text, displayText, clarified: opts?.clarified });
       return;
     }
 
-    await runTurn(text, displayText);
+    await runTurn(text, displayText, opts?.clarified);
   }
 
   // Runs one network turn. The user bubble for `text` is already in
   // messagesRef.current (appended by sendMessage or a prior drain). On completion
   // it drains the next queued message, so a backlog fires in order.
-  async function runTurn(text: string, displayText?: string) {
+  async function runTurn(
+    text: string,
+    displayText?: string,
+    clarified?: boolean
+  ) {
     // Supersede any lingering aborted stream so its late writes are dropped.
     abortRef.current?.abort();
     const epoch = ++epochRef.current;
@@ -202,6 +223,9 @@ export function useChat({
           userId,
           graphMode: currentGraphMode,
           model: modelRef.current,
+          // Marks a turn that answers a prior clarifier — the backend planner
+          // won't clarify again (no interrogation loops).
+          ...(clarified ? { clarified: true } : {}),
         }),
         signal: controller.signal,
       };
@@ -268,6 +292,8 @@ export function useChat({
             iteration?: number;
             label?: string;
             plan?: CompositionPlan;
+            question?: string;
+            options?: string[];
           };
 
           if (event.type === "text" && event.content) {
@@ -319,6 +345,22 @@ export function useChat({
             // The planner's abstract composition plan. BigsailPlanProvider stores
             // the latest; the canvas consumes it to order cards / draw edges.
             bus.emit({ type: "plan", plan: event.plan });
+          } else if (
+            event.type === "clarify" &&
+            event.question &&
+            Array.isArray(event.options)
+          ) {
+            // The planner asked ONE expanding question instead of composing. The
+            // question text already streamed as this assistant message's `text`;
+            // stash the options on the message so ChatPanel renders tappable chips.
+            // Also emit on the bus so Bigsail shows its "let's aim this first" state.
+            const options = event.options;
+            updateAssistant((m) => ({ ...m, clarifyOptions: options }));
+            bus.emit({
+              type: "clarify",
+              question: event.question,
+              options,
+            });
           } else if (event.type === "warning") {
             // The turn streamed fine but couldn't be persisted. Surface it
             // without stripping the assistant message — it's on screen, just
@@ -362,7 +404,7 @@ export function useChat({
         if (queued) {
           // Not awaited: this finally must unwind so the current turn settles
           // before the next one mutates refs. runTurn re-arms abortRef/epoch.
-          void runTurn(queued.text, queued.displayText);
+          void runTurn(queued.text, queued.displayText, queued.clarified);
         } else {
           setIsLoading(false);
         }
