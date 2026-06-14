@@ -5,7 +5,10 @@ import { useCapabilityContent } from "../capabilities/useCapabilityContent";
 import { HEALTH_WIDGET } from "../capabilities/widgets/Health";
 import { SETTINGS_WIDGET } from "../capabilities/widgets/Settings";
 import { WELCOME_WIDGET } from "../capabilities/widgets/Welcome";
+import { replaceRoute, viewPath } from "../hooks/useRoute";
+import { useSessionContext } from "./SessionContext";
 import { Tooltip } from "./Tooltip";
+import { useAdminNav } from "./useAdminNav";
 import { useIsMobile } from "./useIsMobile";
 
 // Non-capability views reachable from the toolbar's right cluster or via deep
@@ -34,10 +37,25 @@ export function CapabilityColumn({
 }: {
   sidebarCollapsed: boolean;
 }) {
-  const { activeId, unseen, isFullscreen, activate, setFullscreen } =
-    useCapabilities();
+  const { activeId, unseen, isFullscreen, setFullscreen } = useCapabilities();
   const hasContent = useCapabilityContent();
   const isMobile = useIsMobile();
+  const { sessionId } = useSessionContext();
+  // The two utility chips (settings + help) are URL-driven admin pages: clicking
+  // one opens its path, clicking the active one turns it off (navigates back).
+  const settingsNav = useAdminNav("settings");
+  const welcomeNav = useAdminNav("welcome");
+
+  // Selecting a tool tab is purely a navigation — the URL is the source of truth
+  // and activeId projects from it (the route reader in ChatPanel/Shell activates
+  // the matching widget). viewPath builds the right shape for every state: /:view
+  // on the home screen (no session), /c/:id/:view in a conversation, and either way
+  // it REPLACES the current entry so tab-hopping doesn't pile up history. This also
+  // cleanly leaves an admin page (the path stops matching /settings), so no special
+  // "leave admin" handling is needed.
+  const selectCapability = (id: string) => {
+    replaceRoute(viewPath(sessionId, id));
+  };
 
   // Build a throwaway widget descriptor for the active view. Every widget's
   // renderer is keyed by a type equal to its id, so the id doubles as the type.
@@ -78,27 +96,14 @@ export function CapabilityColumn({
               filled={hasContent[cap.id] ?? false}
               glow={unseen.includes(cap.id)}
               isMobile={isMobile}
-              onClick={() => activate(cap.id)}
+              onClick={() => selectCapability(cap.id)}
             />
           ))}
         </div>
 
-        {/* Right cluster: settings + help. Both are utility views (always
-            "filled", never glow), pinned to the right edge of the toolbar. */}
-        <CapabilityChip
-          cap={{
-            id: SETTINGS_WIDGET.id,
-            title: SETTINGS_WIDGET.title,
-            icon: <GearIcon />,
-            blurb: "Settings — theme and more.",
-          }}
-          active={activeId === SETTINGS_WIDGET.id}
-          filled
-          glow={false}
-          iconOnly
-          isMobile={isMobile}
-          onClick={() => activate(SETTINGS_WIDGET.id)}
-        />
+        {/* Right cluster: help + settings (gear pinned to the far right). Both
+            are utility views (never glow) and chrome-free unless active — they
+            show a border/fill only when they're the current page. */}
         <CapabilityChip
           cap={{
             id: WELCOME_WIDGET.id,
@@ -106,12 +111,28 @@ export function CapabilityColumn({
             icon: <HelpIcon />,
             blurb: "What is Aether? Open the intro.",
           }}
-          active={activeId === WELCOME_WIDGET.id}
-          filled
+          active={welcomeNav.isActive}
+          filled={false}
           glow={false}
           iconOnly
+          bare
           isMobile={isMobile}
-          onClick={() => activate(WELCOME_WIDGET.id)}
+          onClick={welcomeNav.activate}
+        />
+        <CapabilityChip
+          cap={{
+            id: SETTINGS_WIDGET.id,
+            title: SETTINGS_WIDGET.title,
+            icon: <GearIcon />,
+            blurb: "Settings — theme and more.",
+          }}
+          active={settingsNav.isActive}
+          filled={false}
+          glow={false}
+          iconOnly
+          bare
+          isMobile={isMobile}
+          onClick={settingsNav.activate}
         />
 
         {/* Expand-to-full-page is meaningless on mobile (the capability view is
@@ -156,12 +177,17 @@ export function CapabilityColumn({
 //   • active (stronger border, darker → the showing view; darker fill only when
 //     fill when it has content)         it also has content, else hollow
 //   • glow (pink dot)                 → new, unviewed content
+//   • bare                            → no resting chrome at all (transparent
+//     border, no fill, just the icon); border/bg appears only when active. Used
+//     by the right-cluster utility chips (help, settings) so they read as plain
+//     icon buttons until they're the current page.
 function CapabilityChip({
   cap,
   active,
   filled,
   glow,
   iconOnly,
+  bare,
   isMobile,
   onClick,
 }: {
@@ -170,6 +196,7 @@ function CapabilityChip({
   filled: boolean;
   glow: boolean;
   iconOnly?: boolean;
+  bare?: boolean;
   isMobile: boolean;
   onClick: () => void;
 }) {
@@ -186,7 +213,15 @@ function CapabilityChip({
   const base =
     "relative flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors max-md:h-11 max-md:min-w-11 max-md:justify-center max-md:px-3";
   let tone: string;
-  if (filled && active) {
+  if (bare) {
+    // Bare chips (right-cluster utilities) carry no resting chrome: transparent
+    // border (keeps the 1px box so state changes never shift layout) and a muted
+    // icon. Active looks exactly like hover — a thin border + fill — rather than
+    // the heavier stronger-border + ring the content chips use.
+    tone = active
+      ? "border-border bg-elevated text-content"
+      : "border-transparent text-content-muted hover:border-border hover:bg-elevated hover:text-content";
+  } else if (filled && active) {
     tone = "border-content-subtle bg-border-strong text-content";
   } else if (filled) {
     tone =
@@ -201,9 +236,11 @@ function CapabilityChip({
 
   // Inset shadow ring that thickens the active chip's 1px border to a crisp 2px
   // without changing its box size. Uses the same theme token as the border color.
-  const activeRing = active
-    ? { boxShadow: "inset 0 0 0 1px var(--content-subtle)" }
-    : undefined;
+  // Bare chips opt out — their active state is the lighter hover look, no ring.
+  const activeRing =
+    active && !bare
+      ? { boxShadow: "inset 0 0 0 1px var(--content-subtle)" }
+      : undefined;
 
   const button = (
     <button

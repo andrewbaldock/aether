@@ -31,6 +31,9 @@ CODE_DIR="$HOME/Code"
 AETHER_FE="${CODE_DIR}/aether/frontend"
 AETHER_BE="${CODE_DIR}/aether/backend"
 
+# Orion (job-hunt app): Vite web on :5176, Bun API on :3000. Browser at orion.hunt.
+ORION_URL="https://orion.hunt"
+
 # GitHub base for the Docs submenu (links open in the browser).
 GH_BASE="https://github.com/andrewbaldock/aether/blob/main"
 
@@ -43,11 +46,15 @@ run_in_terminal() {
     -e 'tell application "Terminal" to activate'
 }
 
-# server registry: name|port|dir|uptype  (uptype: http = 200 on /, health = /api/health ok)
+# server registry: name|port|dir|uptype|cmd
+#   uptype: http = any HTTP response on / | health = /api/health ok | stats = /api/stats 200
+#   cmd:    optional start command (default "run dev"); args passed to bun
 SERVERS=(
-  "website|5173|${CODE_DIR}/website|http"
-  "aether-frontend|5174|${CODE_DIR}/aether/frontend|http"
-  "aether-backend|8000|${CODE_DIR}/aether/backend|health"
+  "website|5173|${CODE_DIR}/website|http|"
+  "aether-frontend|5174|${CODE_DIR}/aether/frontend|http|"
+  "aether-backend|8000|${CODE_DIR}/aether/backend|health|"
+  "orion-web|5176|${CODE_DIR}/orion/web|http|"
+  "orion-api|3000|${CODE_DIR}/orion|stats|server/index.js"
 )
 
 # --- helpers ---------------------------------------------------------------
@@ -62,6 +69,11 @@ is_up() {
     "$CURL" -fsS --max-time 2 "http://localhost:${port}/api/health" 2>/dev/null | grep -q '"ok":true'
     return $?
   fi
+  if [ "$uptype" = "stats" ]; then
+    # Orion API has no /; probe /api/stats which returns 200 + JSON when up.
+    "$CURL" -fsS --max-time 2 "http://localhost:${port}/api/stats" 2>/dev/null | grep -q '"total"'
+    return $?
+  fi
   # http: any HTTP response (200/3xx/4xx) means something is listening & serving
   local code
   code=$("$CURL" -s -o /dev/null -w '%{http_code}' --max-time 2 "http://localhost:${port}/" 2>/dev/null)
@@ -71,10 +83,15 @@ is_up() {
 start_server() {
   local port="$1"
   for s in "${SERVERS[@]}"; do
-    IFS='|' read -r name p dir uptype <<< "$s"
+    IFS='|' read -r name p dir uptype cmd <<< "$s"
     if [ "$p" = "$port" ]; then
       cd "$dir" || exit 1
-      PATH="$HOME/.bun/bin:$PATH" nohup "$BUN" run dev > "/tmp/${name}.log" 2>&1 &
+      # Default is `bun run dev`; a registry cmd (e.g. orion-api) runs `bun <cmd>`.
+      if [ -n "$cmd" ]; then
+        PATH="$HOME/.bun/bin:$PATH" nohup "$BUN" $cmd > "/tmp/${name}.log" 2>&1 &
+      else
+        PATH="$HOME/.bun/bin:$PATH" nohup "$BUN" run dev > "/tmp/${name}.log" 2>&1 &
+      fi
       disown
       return 0
     fi
@@ -106,14 +123,14 @@ case "$1" in
     ;;
   startall)
     for s in "${SERVERS[@]}"; do
-      IFS='|' read -r name p dir uptype <<< "$s"
+      IFS='|' read -r name p dir uptype cmd <<< "$s"
       is_up "$p" "$uptype" || start_server "$p"
     done
     exit 0
     ;;
   stopall)
     for s in "${SERVERS[@]}"; do
-      IFS='|' read -r name p dir uptype <<< "$s"
+      IFS='|' read -r name p dir uptype cmd <<< "$s"
       stop_server "$p"
     done
     exit 0
@@ -162,7 +179,7 @@ total=0
 rows=""
 
 for s in "${SERVERS[@]}"; do
-  IFS='|' read -r name p dir uptype <<< "$s"
+  IFS='|' read -r name p dir uptype cmd <<< "$s"
   total=$((total + 1))
   if is_up "$p" "$uptype"; then
     up_count=$((up_count + 1))
@@ -181,6 +198,8 @@ for s in "${SERVERS[@]}"; do
   elif [ "$name" = "aether-backend" ]; then
     rows+="-----\n"
     rows+="-- Deploy aether (fly → supabase) | bash=\"${SELF}\" param0=deploy-aether terminal=false color=#C77D3A\n"
+  elif [ "$name" = "orion-web" ]; then
+    rows+="-- Open Orion (${ORION_URL}) | href=${ORION_URL} color=#5B8DEF\n"
   fi
 done
 

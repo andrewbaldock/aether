@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef } from "react";
 import { apiFetch } from "../lib/queryClient";
 import type { Message } from "../shell/useChat";
-import { navigate } from "./useRoute";
+import { navigate, parseRoute, viewPath } from "./useRoute";
 import { type Session, sessionsKey } from "./useSessionList";
 
 interface UseSessionActionsArgs {
@@ -102,7 +102,16 @@ export function useSessionActions({
         text: m.content,
       }));
       switchSession(id, messages);
-      navigate(`/c/${id}`);
+      // Preserve a deep-linked tool tab: if the URL already points at THIS session
+      // with a /:view segment (e.g. a shared /c/:id/chart link), keep it so the
+      // restore lands on that tab. Only fall back to the bare path when the current
+      // URL isn't this session's (a switch from elsewhere).
+      const current = parseRoute(location.pathname);
+      const keepView =
+        current.type === "workspace" && current.sessionId === id
+          ? current.view
+          : null;
+      navigate(viewPath(id, keepView));
       // Re-sync the list on switch so any session created moments ago (and briefly
       // untitled in memory) picks up its persisted auto-title from the DB.
       invalidateSessions();

@@ -1,12 +1,8 @@
 import { RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
-import { AdminTabs } from "../../../shell/AdminTabs";
+import { AdminPage } from "../../../shell/AdminPage";
 import type { Widget } from "../../registry";
-import {
-  type HealthFullResult,
-  type ProviderResult,
-  useHealthFull,
-} from "./useHealthFull";
+import { type HealthFullResult, useHealthFull } from "./useHealthFull";
 
 // Static label → key lists, so every row renders (as a PendingRow) before the
 // first check too — the page documents what it covers even when idle. Keys are
@@ -36,96 +32,90 @@ export function HealthWidget(_props: { widget: Widget }) {
   const { data, isFetching, dataUpdatedAt, refetch } = useHealthFull();
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-surface">
-      <div className="mx-auto w-full max-w-2xl px-6 py-8">
-        <div className="mb-6">
-          <AdminTabs />
-        </div>
-        <div className="flex items-center justify-between">
-          <h1 className="font-display text-2xl font-semibold text-content">
-            System Health
-          </h1>
-          <button
-            onClick={() => void refetch()}
-            disabled={isFetching}
-            className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-content-muted transition-colors hover:border-content-muted hover:text-content disabled:opacity-50"
-            aria-label="Run health checks"
-          >
-            <RefreshCw
-              className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`}
-              aria-hidden
-            />
-            {isFetching ? "Checking…" : "Check now"}
-          </button>
-        </div>
+    <AdminPage
+      title="System Health"
+      actions={
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          disabled={isFetching}
+          className="flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-content-muted transition-colors hover:border-content-muted hover:text-content disabled:opacity-50"
+          aria-label="Run health checks"
+        >
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`}
+            aria-hidden
+          />
+          {isFetching ? "Checking…" : "Check now"}
+        </button>
+      }
+    >
+      {!data && !isFetching && (
+        <p className="mt-6 text-sm text-content-muted">
+          Everything the app depends on is listed below. Click{" "}
+          <span className="text-content">Check now</span> to probe each one.
+        </p>
+      )}
 
-        {!data && !isFetching && (
-          <p className="mt-6 text-sm text-content-muted">
-            Everything the app depends on is listed below. Click{" "}
-            <span className="text-content">Check now</span> to probe each one.
-          </p>
-        )}
-
-        {/* Services — Supabase + every LLM provider. Rows render even before the
+      {/* Services — Supabase + every LLM provider. Rows render even before the
             first check so the page always documents what it covers. */}
-        <Section title="Services" className="mt-6">
-          {data ? (
+      <Section title="Services" className="mt-6">
+        {data ? (
+          <CheckRow
+            label="Supabase"
+            ok={data.supabase.ok}
+            configured={true}
+            latencyMs={data.supabase.latencyMs}
+            error={data.supabase.error}
+          />
+        ) : (
+          <PendingRow label="Supabase" />
+        )}
+        {PROVIDER_ROWS.map(([label, key]) =>
+          data ? (
             <CheckRow
-              label="Supabase"
-              ok={data.supabase.ok}
-              configured={true}
-              latencyMs={data.supabase.latencyMs}
-              error={data.supabase.error}
+              key={key}
+              label={label}
+              ok={data.providers[key].ok}
+              configured={data.providers[key].configured}
+              latencyMs={data.providers[key].latencyMs}
+              error={data.providers[key].error}
             />
           ) : (
-            <PendingRow label="Supabase" />
-          )}
-          {PROVIDER_ROWS.map(([label, key]) =>
-            data ? (
-              <CheckRow
-                key={key}
-                label={label}
-                ok={data.providers[key].ok}
-                configured={data.providers[key].configured}
-                latencyMs={data.providers[key].latencyMs}
-                error={data.providers[key].error}
-              />
-            ) : (
-              <PendingRow key={key} label={label} />
-            )
-          )}
-        </Section>
-
-        {/* Data sources — every keyless/keyed source the agent draws on. */}
-        <Section title="Data sources" className="mt-4">
-          {DATA_SOURCE_ROWS.map(([label, key]) =>
-            data ? (
-              <CheckRow
-                key={key}
-                label={label}
-                ok={data.dataSources[key].ok}
-                configured={data.dataSources[key].configured}
-                latencyMs={data.dataSources[key].latencyMs}
-                error={data.dataSources[key].error}
-              />
-            ) : (
-              <PendingRow key={key} label={label} />
-            )
-          )}
-        </Section>
-
-        {data && dataUpdatedAt > 0 && (
-          <p className="mt-3 text-xs text-content-subtle">
-            Last checked{" "}
-            {new Date(dataUpdatedAt).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            })}
-          </p>
+            <PendingRow key={key} label={label} />
+          )
         )}
-      </div>
-    </div>
+      </Section>
+
+      {/* Data sources — every keyless/keyed source the agent draws on. */}
+      <Section title="Data sources" className="mt-4">
+        {DATA_SOURCE_ROWS.map(([label, key]) =>
+          data ? (
+            <CheckRow
+              key={key}
+              label={label}
+              ok={data.dataSources[key].ok}
+              configured={data.dataSources[key].configured}
+              latencyMs={data.dataSources[key].latencyMs}
+              error={data.dataSources[key].error}
+            />
+          ) : (
+            <PendingRow key={key} label={label} />
+          )
+        )}
+      </Section>
+
+      {data && dataUpdatedAt > 0 && (
+        <p className="mt-3 text-xs text-content-subtle">
+          Last checked{" "}
+          {new Date(dataUpdatedAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })}
+        </p>
+      )}
+    </AdminPage>
   );
 }
 
@@ -197,13 +187,7 @@ function PendingRow({ label }: { label: string }) {
   );
 }
 
-function StatusDot({
-  ok,
-  configured,
-}: {
-  ok: boolean;
-  configured: boolean;
-}) {
+function StatusDot({ ok, configured }: { ok: boolean; configured: boolean }) {
   if (!configured) {
     return (
       <span

@@ -3,7 +3,7 @@ import { Group, Panel, Separator } from "react-resizable-panels";
 import { useCapabilities } from "../capabilities/useCapabilities";
 import { GraphPersistenceBridge } from "../capabilities/widgets/KnowledgeGraph/GraphPersistenceBridge";
 import { WidgetPersistenceBridge } from "../capabilities/widgets/WidgetPersistenceBridge";
-import { parseRoute } from "../hooks/useRoute";
+import { parseRoute, useRoute } from "../hooks/useRoute";
 import { CapabilityColumn } from "./CapabilityColumn";
 import { ChatPanel } from "./ChatPanel";
 import { MobileShell } from "./MobileShell";
@@ -57,32 +57,49 @@ function readCapabilitySize(): number {
 }
 
 // Hydrates the active session from the URL on first mount. Must live inside
-// SessionProvider so it can call loadSession.
+// SessionProvider so it can call loadSession. (Admin pages are handled reactively
+// by useUrlDrivenAdmin, not here — they're URL-driven, not session-driven.)
 function RouteBootstrap() {
   const { loadSession } = useSessionContext();
-  const { activate } = useCapabilities();
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only — subsequent navigation is driven by user actions
   useEffect(() => {
     const route = parseRoute(location.pathname);
-    if (route.type === "conversation") loadSession(route.sessionId);
-    // Dev-only deep link: bring the Screenshots admin page forward on load. The
-    // renderer is only registered in dev; in prod activating "screenshots" just
-    // shows the empty-renderer fallback, so this is harmless either way.
-    //
-    // Import the dev-only Screenshots widget (registering its renderer), THEN
-    // activate it. Awaiting the import matters: the registry has no React
-    // subscription, so a renderer that lands after the column has rendered won't
-    // re-render it — activating only once it's registered avoids the
-    // "No renderer registered" flash. The import resolving also lands us a tick
-    // after ChatPanel's mount-time reset() (which sets the initial null-session
-    // view to home base), so the deep link wins rather than being clobbered.
-    else if (route.type === "screenshots" && import.meta.env.DEV) {
-      void import("../capabilities/widgets/Screenshots").then(() =>
-        activate("screenshots")
-      );
+    if (route.type === "workspace" && route.sessionId) {
+      loadSession(route.sessionId);
     }
   }, []);
   return null;
+}
+
+// Admin half of the URL→activeId projection: when the route is an admin page,
+// activate its widget. Leaving an admin route does NOTHING here — the workspace
+// projection in ChatPanel re-activates the workspace view from the URL (the URL is
+// the single source of truth, so whatever /c/:id/:view or /:view we land on drives
+// activeId). This keeps one writer per concern: admin routes here, workspace routes
+// there, never both touching the store for the same transition.
+function useUrlDrivenAdmin() {
+  const route = useRoute();
+  const { activate } = useCapabilities();
+  const adminId = route.type === "admin" ? route.id : null;
+
+  useEffect(() => {
+    if (!adminId) return;
+    if (adminId === "screenshots") {
+      // Dev-only: the renderer is only registered in dev; in prod nothing
+      // navigates here and the gallery module isn't bundled, so this arm never
+      // runs in prod. Import the widget (registering its renderer) THEN activate —
+      // the registry has no React subscription, so a renderer that lands after the
+      // column rendered won't re-render it; activating only once registered avoids
+      // the "No renderer registered" flash.
+      if (import.meta.env.DEV) {
+        void import("../capabilities/widgets/Screenshots").then(() =>
+          activate("screenshots")
+        );
+      }
+    } else {
+      activate(adminId);
+    }
+  }, [adminId, activate]);
 }
 
 // The three-zone shell. SessionProvider wraps everything so Sidebar and
@@ -104,6 +121,9 @@ export function Shell() {
 function ShellInner() {
   const isMobile = useIsMobile();
   const { isFullscreen } = useCapabilities();
+
+  // The URL drives which admin page (if any) is active.
+  useUrlDrivenAdmin();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true"

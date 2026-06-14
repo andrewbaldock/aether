@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { navigate } from "../hooks/useRoute";
+import { navigate, parseRoute, viewPath } from "../hooks/useRoute";
 import { useSession } from "../hooks/useSession";
 import {
   type SessionActions,
@@ -42,11 +42,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const { sessions, refresh: refreshSessions } = useSessionList(userId);
 
   // sessionId from useSession is the single source of truth — it drives both
-  // session creation/persistence and sidebar highlighting.
+  // session creation/persistence and sidebar highlighting. When the first message
+  // creates the session, carry whatever bare tool view the user was on (/chart →
+  // /c/:newId/chart) so starting a conversation doesn't yank them off that tab.
   const onNewSession = useCallback(
     (newId: string) => {
       refreshSessions();
-      navigate(`/c/${newId}`);
+      const current = parseRoute(location.pathname);
+      const view = current.type === "workspace" ? current.view : null;
+      navigate(viewPath(newId, view));
     },
     [refreshSessions]
   );

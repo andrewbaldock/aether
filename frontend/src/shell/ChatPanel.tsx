@@ -19,6 +19,7 @@ import { useTableState } from "../capabilities/widgets/Table/useTableState";
 import { TIMELINE_WIDGET } from "../capabilities/widgets/Timeline";
 import { useTimelineState } from "../capabilities/widgets/Timeline/useTimelineState";
 import { WELCOME_WIDGET } from "../capabilities/widgets/Welcome";
+import { replaceRoute, useRoute, viewPath } from "../hooks/useRoute";
 import { useUpdateSession } from "../hooks/useUpdateSession";
 import { useAgentEvents } from "./AgentEventContext";
 import { ModelPicker } from "./ModelPicker";
@@ -49,6 +50,8 @@ export function ChatPanel() {
     registerAbort,
     renameSession,
   } = useSessionContext();
+
+  const route = useRoute();
 
   // Knowledge Graph is always on — no per-session toggle.
   const graphMode = true;
@@ -103,6 +106,10 @@ export function ChatPanel() {
   // sees the latest value.
   const activeIdRef = useRef(activeId);
   activeIdRef.current = activeId;
+  // sessionId through a ref for the same once-mounted bus closure below (the
+  // request_start jump reads the current session without re-subscribing).
+  const sessionIdRef = useRef(sessionId);
+  sessionIdRef.current = sessionId;
   // Whether the user is currently parked on a data capability (table/chart/
   // timeline/images/graph). Read via a ref for the same reason as the others: a
   // turn that starts must not yank the user off a capability they're actively
@@ -148,11 +155,18 @@ export function ChatPanel() {
     reset();
   }, [sessionId, reset]);
 
-  // Once this session's content has hydrated (entries/graph arrive async via the
-  // persistence bridges), set the active view and glow the content-bearing
-  // capabilities the user hasn't landed on. Keyed on the content signals so it
-  // runs after they settle; the ref guard makes it run at most once per session.
-  // `restore` does NOT bump openTick, so this never pops the mobile overlay.
+  // The URL is the source of truth for which view is active; activeId is a
+  // projection of it (see useActiveViewSync below for the reader that drives the
+  // store from the route). This effect computes the per-session DEFAULT view used
+  // only when the URL carries no explicit :view (a bare /c/:id) — the saved
+  // ui_state.activeWidget if it still has content, else home base — plus the glow
+  // set for content the user hasn't landed on. It runs once per session, after
+  // content hydrates (keyed on the content signals).
+  //
+  // An explicit /c/:id/:view in the URL OVERRIDES this default and shows the tab
+  // even with no content; that precedence lives in useActiveViewSync, which reads
+  // route.view first and falls back to this default only when it's null.
+  const routeView = route.type === "workspace" ? route.view : null;
   const savedActiveWidget = currentSession?.ui_state?.activeWidget ?? null;
   useEffect(() => {
     if (!sessionId || restoredSessionRef.current === sessionId) return;
@@ -162,20 +176,24 @@ export function ChatPanel() {
     if (chartEntries.length > 0) withContent.push(CHART_WIDGET.id);
     if (timelineEntries.length > 0) withContent.push(TIMELINE_WIDGET.id);
     if (imageEntries.length > 0) withContent.push(IMAGES_WIDGET.id);
-    // The remembered view, but only if it still has content; else home base
-    // (Tiles). Tiles itself isn't in withContent (that lists the five data
-    // capabilities), so a remembered Tiles view falls through to the home-base
-    // default below — which is Tiles. Either way we land on Tiles by default.
-    const restoreActiveId =
-      savedActiveWidget && withContent.includes(savedActiveWidget)
+    // The session default: an explicit URL view wins (even empty); else the
+    // remembered view IF it still has content; else home base (Tiles).
+    const validUrlView =
+      routeView && CAPABILITIES.some((c) => c.id === routeView)
+        ? routeView
+        : null;
+    const landing =
+      validUrlView ??
+      (savedActiveWidget && withContent.includes(savedActiveWidget)
         ? savedActiveWidget
-        : HOME_BASE_ID;
+        : HOME_BASE_ID);
     // Glow every content-bearing capability except the one we're landing on.
-    const unseen = withContent.filter((id) => id !== restoreActiveId);
-    restore(restoreActiveId, unseen);
+    const unseen = withContent.filter((id) => id !== landing);
+    restore(landing, unseen);
     restoredSessionRef.current = sessionId;
   }, [
     sessionId,
+    routeView,
     savedActiveWidget,
     graphNodes,
     tableEntries,
@@ -185,11 +203,39 @@ export function ChatPanel() {
     restore,
   ]);
 
-  // Remember which capability the user is viewing, per conversation. Debounced
-  // PATCH of ui_state.activeWidget — but only once this session has been restored
-  // (so we never overwrite the saved view with a transient mid-restore value).
-  // The Welcome/help and Settings pages aren't capabilities, so viewing them
-  // clears the remembered view (falls back to home base on next load).
+  // Keep activeId in sync with the URL AFTER the initial restore: back/forward and
+  // direct navigations (tab clicks call navigate(); see CapabilityColumn) change
+  // route.view, and this projects that onto the store. Guarded to a workspace route
+  // with a real capability view — admin routes are driven by Shell's
+  // useUrlDrivenAdmin, and a null view (bare /c/:id) leaves the restored default in
+  // place. No-op when already showing it, so it only acts on genuine URL changes.
+  useEffect(() => {
+    if (!sessionId || restoredSessionRef.current !== sessionId) return;
+    if (route.type !== "workspace" || !route.view) return;
+    if (!CAPABILITIES.some((c) => c.id === route.view)) return;
+    if (route.view !== activeIdRef.current) activate(route.view);
+  }, [sessionId, route, activate]);
+
+  // No-session workspace projection: on the home screen (no conversation yet) the
+  // URL still names a view — / = home base, /:view = a tool tab shown empty. There
+  // is no content or saved default to restore, so we just project the URL view onto
+  // the store directly. (Once a conversation exists, the session-scoped effects
+  // above take over.) Validated against the catalog; junk falls to home base.
+  useEffect(() => {
+    if (sessionId) return;
+    if (route.type !== "workspace") return;
+    const view =
+      route.view && CAPABILITIES.some((c) => c.id === route.view)
+        ? route.view
+        : HOME_BASE_ID;
+    if (view !== activeIdRef.current) activate(view);
+  }, [sessionId, route, activate]);
+
+  // Persist which capability the user is viewing, per conversation: a debounced
+  // PATCH of ui_state.activeWidget, once this session has been restored (so we
+  // never overwrite the saved view with a transient mid-restore value). Admin
+  // pages aren't capabilities, so viewing one clears the remembered view (next
+  // bare /c/:id load falls back to home base).
   useEffect(() => {
     if (!sessionId || restoredSessionRef.current !== sessionId) return;
     const isCapabilityView = CAPABILITIES.some((c) => c.id === activeId);
@@ -216,10 +262,13 @@ export function ChatPanel() {
     const unsubscribe = bus.subscribe((event) => {
       if (event.type !== "request_start") return;
       const stay = helpOnTopRef.current || isCapabilityViewRef.current;
-      if (!stay) activate(HOME_BASE_ID);
+      // Navigate (not just activate) so the URL follows the jump to home base —
+      // activeId is a projection of the URL. viewPath(sessionId, null) = /c/:id (or
+      // / before the session exists). replace, so it doesn't stack history.
+      if (!stay) replaceRoute(viewPath(sessionIdRef.current, null));
     });
     return unsubscribe;
-  }, [bus, activate]);
+  }, [bus]);
 
   // Glow a capability's chip only when its content actually grows while the user
   // is looking elsewhere. Keying on the live counts (not the tool_result event)

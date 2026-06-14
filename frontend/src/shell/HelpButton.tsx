@@ -1,18 +1,18 @@
-import { useCapabilities } from "../capabilities/useCapabilities";
-import { WELCOME_WIDGET } from "../capabilities/widgets/Welcome";
 import { Tooltip } from "./Tooltip";
+import { useAdminNav } from "./useAdminNav";
 
 // Opens the "Welcome to Aether" explainer. Lives in the sidebar header on
 // desktop and the slim top bar on mobile — the persistent way back to the intro
-// after its one-time first-arrival auto-open.
+// after its one-time first-arrival auto-open. Clicking it while Welcome is showing
+// turns it off (navigates back).
 export function HelpButton({ className }: { className?: string }) {
-  const { activate } = useCapabilities();
+  const { activate } = useAdminNav("welcome");
   return (
     <Tooltip label="What is Aether?" side="bottom" className={className}>
       <button
         type="button"
         onClick={(e) => {
-          activate(WELCOME_WIDGET.id);
+          activate();
           e.currentTarget.blur();
         }}
         aria-label="What is Aether?"

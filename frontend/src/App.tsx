@@ -1,9 +1,6 @@
 import * as RadixTooltip from "@radix-ui/react-tooltip";
 import { useEffect } from "react";
-import {
-  CapabilityProvider,
-  useCapabilities,
-} from "./capabilities/useCapabilities";
+import { CapabilityProvider } from "./capabilities/useCapabilities";
 // Importing a widget module registers its renderer against the capability registry.
 import "./capabilities/widgets/PlaceholderWidget";
 import "./capabilities/widgets/AgentDiagram";
@@ -23,7 +20,7 @@ import { ImagesProvider } from "./capabilities/widgets/Images/useImagesState";
 import { KnowledgeGraphProvider } from "./capabilities/widgets/KnowledgeGraph/useKnowledgeGraphState";
 import { TableProvider } from "./capabilities/widgets/Table/useTableState";
 import { TimelineProvider } from "./capabilities/widgets/Timeline/useTimelineState";
-import { WELCOME_WIDGET } from "./capabilities/widgets/Welcome";
+import { openAdminPage } from "./hooks/useRoute";
 import { AgentEventProvider } from "./shell/AgentEventContext";
 import { BackendStatusBanner } from "./shell/BackendStatusBanner";
 import { Shell } from "./shell/Shell";
@@ -67,7 +64,6 @@ const WELCOMED_KEY = "aether-welcomed";
 // Auto-opens the Welcome widget the first time a visitor ever loads the app.
 // Lives inside CapabilityProvider so it can drive the capability store.
 function FirstArrivalWelcome() {
-  const { activate } = useCapabilities();
   const isMobile = useIsMobile();
   useEffect(() => {
     // On mobile the capability column is a full-screen overlay, so auto-opening
@@ -76,9 +72,15 @@ function FirstArrivalWelcome() {
     // flag yet, so a later desktop visit still gets the auto-welcome once.
     if (isMobile) return;
     if (localStorage.getItem(WELCOMED_KEY)) return;
+    // Don't override an explicit deep link: if the URL already names a page,
+    // respect it rather than yanking the visitor to Welcome.
+    if (location.pathname !== "/") return;
     localStorage.setItem(WELCOMED_KEY, "true");
-    activate(WELCOME_WIDGET.id);
-  }, [activate, isMobile]);
+    // Navigate (not just activate) so the URL becomes /welcome — otherwise
+    // useUrlDrivenAdmin sees activeId=welcome on a "/" route and immediately
+    // closes it as a stale admin view. openAdminPage keeps URL and view in sync.
+    openAdminPage("welcome");
+  }, [isMobile]);
   return null;
 }
 
