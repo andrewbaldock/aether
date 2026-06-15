@@ -236,6 +236,49 @@ describe("placeCards", () => {
     expect(pt.w).toBe(HALF);
   });
 
+  it("keeps a half-width slot for the auto partner when its top-row mate is pinned", () => {
+    // The swap bug: drag the KG onto the Timeline to swap them. Only the dragged
+    // card (KG) becomes userMoved → pinned; the Timeline stays an auto card. The
+    // auto-layout, run over the auto cards alone, no longer sees a KG — so the lone-
+    // survivor promotion would balloon the Timeline to full width at x:0 and dump
+    // the KG below. With the pinned KG counted as occupying the top row, the auto
+    // Timeline must stay HALF width in the right slot, so the two simply swap.
+    const saved = [
+      { id: "knowledge-graph:graph", x: HALF, y: 0, w: HALF, h: 10, userMoved: true },
+    ];
+    const kg = card("k", "knowledge-graph");
+    kg.id = "knowledge-graph:graph";
+    const t = card("t", "timeline");
+    t.id = "timeline:t";
+    const placed = placeCards([kg, t], saved, false);
+    const pt = find(placed, "timeline:t");
+    const pk = find(placed, "knowledge-graph:graph");
+    // Timeline stays half-width and dodges to the LEFT slot the pinned KG vacated,
+    // sharing the pin's row — i.e. the two swap places rather than stacking.
+    expect(pt.w).toBe(HALF);
+    expect(pt.x).toBe(0);
+    expect(pt.y).toBe(pk.y);
+    // The pinned KG keeps its dropped geometry verbatim (right slot).
+    expect(pk.x).toBe(HALF);
+    expect(pk.w).toBe(HALF);
+  });
+
+  it("dodges the auto KG to the right when a pinned timeline holds the left slot", () => {
+    // The mirror swap: drag the Timeline onto the KG. Timeline pinned left; the
+    // auto KG must take the RIGHT slot (half-width) on the pin's row, not balloon.
+    const saved = [
+      { id: "timeline:t", x: 0, y: 0, w: HALF, h: 10, userMoved: true },
+    ];
+    const t = card("t", "timeline");
+    t.id = "timeline:t";
+    const kg = card("k", "knowledge-graph");
+    kg.id = "knowledge-graph:graph";
+    const placed = placeCards([kg, t], saved, false);
+    const pk = find(placed, "knowledge-graph:graph");
+    expect(pk.w).toBe(HALF);
+    expect(pk.x).toBe(HALF);
+  });
+
   it("stacks full-width and ignores the saved layout when skinny", () => {
     const saved = [{ id: "chart:a", x: 12, y: 0, w: 12, h: 5 }];
     const cards = [card("a"), card("b")];

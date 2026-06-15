@@ -108,13 +108,27 @@ function stackFullWidth(
 //     collapses (no gap). Deterministic → identical every render and device.
 //     Drag/resize still apply afterwards (GridStack); this is just the default the
 //     user starts from and "Reset layout" returns to.
-export function autoLayout(cards: Card[], stacked: boolean): PlacedCard[] {
+//
+// `pinned` is the user-moved cards already placed at their saved geometry. It matters
+// for the KG↔Timeline top row: that row's lone-survivor promotion (half→full when its
+// partner is absent) must NOT fire when the partner is merely PINNED rather than truly
+// absent — otherwise dragging one onto the other to swap them makes the survivor
+// balloon to full width and dumps the pin below. A pinned partner is counted as
+// occupying the row (so the auto card stays half-width), and the auto card takes the
+// slot the pin ISN'T in, at the pin's y, so the two land side by side — i.e. swapped.
+export function autoLayout(
+  cards: Card[],
+  stacked: boolean,
+  pinned: readonly PlacedCard[] = []
+): PlacedCard[] {
   const out: PlacedCard[] = [];
 
   if (stacked) {
     stackFullWidth(cards, 0, out);
     return out;
   }
+
+  const pinnedByCap = new Map(pinned.map((p) => [p.card.capabilityType, p]));
 
   // Bucket cards by capability, preserving arrival order within each type.
   const by = (cap: CardCapability) =>
@@ -137,16 +151,40 @@ export function autoLayout(cards: Card[], stacked: boolean): PlacedCard[] {
   //    If NEITHER exists the row collapses (no gap).
   const kgCard = kg[0];
   const timelineCard = timelines[0];
-  const topRowPaired = Boolean(kgCard && timelineCard);
+  const pinnedKg = pinnedByCap.get("knowledge-graph");
+  const pinnedTimeline = pinnedByCap.get("timeline");
+  // The top row is "paired" — each slot half-width — when BOTH slots are filled,
+  // counting a PINNED occupant of the other capability as filled. So a lone auto
+  // card whose partner the user pinned (e.g. dragged to swap) stays half-width
+  // rather than ballooning to full width.
+  const kgPresent = Boolean(kgCard) || Boolean(pinnedKg);
+  const timelinePresent = Boolean(timelineCard) || Boolean(pinnedTimeline);
+  const topRowPaired = kgPresent && timelinePresent;
   const topRowW = topRowPaired ? HALF_W : FULL_W;
+  // When the partner is pinned, the auto card takes the slot the pin ISN'T in (so
+  // they sit side by side rather than overlapping) at the pin's y. Default slots
+  // (no pinned partner): KG left, Timeline right.
   if (kgCard) {
-    out.push({ card: kgCard, x: 0, y, w: topRowW, h: SLOT_H, autoPlace: true });
+    // Left slot by default; dodge to the right only if a pinned timeline holds the
+    // left half.
+    const partnerLeft = pinnedTimeline !== undefined && pinnedTimeline.x < HALF_W;
+    out.push({
+      card: kgCard,
+      x: topRowPaired && partnerLeft ? HALF_W : 0,
+      y: pinnedTimeline?.y ?? y,
+      w: topRowW,
+      h: SLOT_H,
+      autoPlace: true,
+    });
   }
   if (timelineCard) {
+    // Right slot by default; dodge to the left only if a pinned KG holds the right
+    // half (e.g. the user dragged the KG into the timeline's slot to swap them).
+    const partnerRight = pinnedKg !== undefined && pinnedKg.x >= HALF_W;
     out.push({
       card: timelineCard,
-      x: topRowPaired ? HALF_W : 0,
-      y,
+      x: topRowPaired && !partnerRight ? HALF_W : 0,
+      y: pinnedKg?.y ?? y,
       w: topRowW,
       h: SLOT_H,
       autoPlace: true,
@@ -242,6 +280,9 @@ export function placeCards(
   if (pinned.length === 0) return autoLayout(autoCards, false);
 
   // Some pins: keep them, and template-arrange the rest. autoLayout's positions are
-  // a starting arrangement; GridStack resolves any overlap with the pins.
-  return [...pinned, ...autoLayout(autoCards, false)];
+  // a starting arrangement; GridStack resolves any overlap with the pins. Pass the
+  // pins through so the KG↔Timeline top row doesn't promote a lone auto card to full
+  // width when its partner is merely pinned — and so the auto card takes the slot the
+  // pin isn't in (the swap case).
+  return [...pinned, ...autoLayout(autoCards, false, pinned)];
 }
