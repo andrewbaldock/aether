@@ -48,9 +48,17 @@ export function useUpdateSession(userId: string) {
       return { previous };
     },
     onError: (_err, _vars, context) => {
+      // Roll back to the pre-mutation snapshot, then re-sync to server truth.
       if (context?.previous) queryClient.setQueryData(key, context.previous);
+      queryClient.invalidateQueries({ queryKey: key });
     },
-    // Re-sync with the server whether it succeeded or failed.
-    onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
+    // NOTE: no success-path invalidation. Every patch here writes fields the client
+    // already knows (tilesLayout, activeWidget, model), so the optimistic onMutate
+    // write IS the truth — a refetch would only echo it back. Worse, it CLOSED A
+    // LOOP: a Bigsail layout PATCH → invalidate → GET → new session-array identity →
+    // `placed` recomputes → GridStack reconcile → grid.update() → `change` → another
+    // PATCH, forever (the GET/PATCH/GET/PATCH storm in the network panel). Server-
+    // derived fields (auto title / topic_icon) are refetched on their own path
+    // (SSE `done` → refreshSessions), not here, so dropping this loses no real sync.
   });
 }
