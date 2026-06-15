@@ -96,12 +96,13 @@ export function ImagesProvider({ children }: { children: ReactNode }) {
     (id: number) => {
       setEntries((prev) => {
         const idx = prev.findIndex((e) => e.id === id);
-        if (idx === -1) return prev;
+        const src = prev[idx];
+        if (!src) return prev;
         const clone: ImagesEntry = {
           id: nextId.current++,
           spec: {
-            ...structuredClone(prev[idx].spec),
-            title: copyTitle(prev[idx].spec.title),
+            ...structuredClone(src.spec),
+            title: copyTitle(src.spec.title),
           },
         };
         const next = prev.slice();
