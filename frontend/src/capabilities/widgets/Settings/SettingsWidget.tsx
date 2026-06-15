@@ -142,7 +142,7 @@ function TextSizeChoice() {
   );
 }
 
-// Body font: a sans pair (System / Inter) and a serif pair (Georgia / Lora).
+// Body font: a sans pair (System / Geist) and a serif pair (Georgia / Lora).
 // Each segment previews its own typeface. The brand font is untouched.
 function FontChoice() {
   const { fontFace, setFontFace } = useAppearance();
@@ -157,9 +157,9 @@ function FontChoice() {
       style: { fontFamily: "ui-sans-serif, system-ui, sans-serif" },
     },
     {
-      value: "inter",
-      label: "Inter",
-      style: { fontFamily: '"Inter", ui-sans-serif, system-ui, sans-serif' },
+      value: "geist",
+      label: "Geist",
+      style: { fontFamily: '"Geist", ui-sans-serif, system-ui, sans-serif' },
     },
     {
       value: "georgia",

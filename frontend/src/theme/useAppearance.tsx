@@ -23,7 +23,7 @@ import {
 // to sync to yet.
 
 export type TextSize = "xs" | "sm" | "md" | "lg";
-export type FontFace = "system" | "inter" | "georgia" | "lora";
+export type FontFace = "system" | "geist" | "georgia" | "lora";
 
 const SIZE_KEY = "aether-text-size";
 const FONT_KEY = "aether-font-face";
@@ -41,13 +41,13 @@ export const TEXT_SIZE_PX: Record<TextSize, number> = {
   lg: 18,
 };
 
-// The font stack each choice maps to. system/georgia need no network; inter/lora
+// The font stack each choice maps to. system/georgia need no network; geist/lora
 // are loaded in index.html. Body text only — the brand font (font-display) is
 // untouched.
 export const FONT_STACK: Record<FontFace, string> = {
   system:
     'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  inter: '"Inter", ui-sans-serif, system-ui, sans-serif',
+  geist: '"Geist", ui-sans-serif, system-ui, sans-serif',
   georgia: 'Georgia, Cambria, "Times New Roman", Times, serif',
   lora: '"Lora", Georgia, Cambria, "Times New Roman", Times, serif',
 };
@@ -63,7 +63,7 @@ function getInitialFont(): FontFace {
   const stored = localStorage.getItem(FONT_KEY);
   if (
     stored === "system" ||
-    stored === "inter" ||
+    stored === "geist" ||
     stored === "georgia" ||
     stored === "lora"
   )

@@ -11,11 +11,17 @@ import { AdminTabs } from "./AdminTabs";
 // still mirrors the same outer container + AdminTabs slot so its tab bar lines up.
 //
 // `width` lets a page widen its content column without breaking the shared chrome.
-// Default 2xl suits text/forms; pass a wider token (e.g. max-w-5xl) for galleries.
+// Default suits text/forms; pass a wider token (e.g. max-w-5xl) for galleries.
+//
+// The default is a PX max-width, not a rem token, on purpose. Text size is applied
+// via the root <html> font-size, so a rem-based max-width (the old max-w-2xl = 42rem)
+// scaled WITH the text-size setting — clicking XS/S/M/L on the Settings page snapped
+// the whole column wider/narrower (588px → 756px). 672px is exactly 42rem at the
+// default 16px, so it's visually identical at M but now holds steady at every size.
 export function AdminPage({
   title,
   actions,
-  width = "max-w-2xl",
+  width = "max-w-[672px]",
   children,
 }: {
   title: string;
