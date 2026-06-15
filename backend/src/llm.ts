@@ -13,6 +13,7 @@ import {
   buildTools,
   correctionDirective,
   executeTool,
+  ICON_VOCABULARY,
   isDegenerate,
   STREAMABLE_RENDER_TOOLS,
   type ToolDefinition,
@@ -1019,9 +1020,11 @@ export async function generateTitle(
       system:
         "You name conversations. Given the user's first message, reply with ONLY " +
         'a JSON object: {"title": <concise title, at most 5 words, capturing the ' +
-        'topic, no end punctuation>, "icon": <a single lucide-react icon name in ' +
-        "PascalCase that best matches the topic, e.g. Trophy, FlaskConical, " +
-        'Code, Map, Music, Landmark>}. No preamble, no code fences — just the JSON.',
+        'topic, no end punctuation>, "icon": <the single best-matching icon for the ' +
+        "topic, chosen ONLY from this list: " +
+        ICON_VOCABULARY.join(", ") +
+        ">}. Pick the closest fit from that list — do not invent names outside it. " +
+        "No preamble, no code fences — just the JSON.",
       messages: [{ role: "user", content: firstMessage }],
     });
     const text = response.content

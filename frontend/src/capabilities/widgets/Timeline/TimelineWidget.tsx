@@ -5,7 +5,7 @@ import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { BigsailReAddButton } from "../BigsailReAddButton";
 import { ExploreMenu } from "../ContextMenu";
-import { DynamicIcon, resolveIconName } from "../lucideIcon";
+import { resolveVocabularyIcon } from "../vocabularyIcon";
 import { useAwaitingClarification } from "../useAwaitingClarification";
 import { useEntryReload } from "../useEntryReload";
 import { useFillFromConversation } from "../useFillFromConversation";
@@ -212,11 +212,14 @@ export function SpecTimeline({
 // Marker on the spine. When the model picked a valid lucide icon for the event we
 // render it inside a pink ring; otherwise we keep the original small pink dot so
 // nothing regresses for icon-less timelines. Mirrors the Knowledge Graph's
-// per-node icon treatment (see lucideIcon.ts), which is what inspired this.
+// per-node icon treatment (see vocabularyIcon.tsx), which is what inspired this.
 function SpineMarker({ icon }: { icon?: string }) {
-  const name = icon ? resolveIconName(icon) : null;
+  // Vocabulary icons are statically imported (no per-icon dynamic import), so a
+  // timeline with many distinct event icons renders them from the bundle rather
+  // than firing a /assets/<icon>.js request per event.
+  const Icon = icon ? resolveVocabularyIcon(icon) : null;
 
-  if (!name) {
+  if (!Icon) {
     // Plain dot, centred on the spine (matches the pre-icon look).
     return (
       <span className="absolute -left-[1.4rem] top-1 h-2.5 w-2.5 rounded-full border-2 border-[#ff2e9a] bg-surface" />
@@ -226,7 +229,7 @@ function SpineMarker({ icon }: { icon?: string }) {
   // Pink ring badge with the icon centred inside, sitting on the spine line.
   return (
     <span className="absolute -left-7.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#ff2e9a] bg-surface text-[#ff2e9a]">
-      <DynamicIcon name={name} size={11} strokeWidth={2.25} />
+      <Icon size={11} strokeWidth={2.25} />
     </span>
   );
 }

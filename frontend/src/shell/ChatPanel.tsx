@@ -7,10 +7,7 @@ import { ThinkingGlyph } from "../brand/ThinkingGlyph";
 import { Wordmark } from "../brand/Wordmark";
 import { CAPABILITIES, HOME_BASE_ID } from "../capabilities/catalog";
 import { useCapabilities } from "../capabilities/useCapabilities";
-import {
-  DynamicIcon,
-  resolveIconName,
-} from "../capabilities/widgets/lucideIcon";
+import { resolveVocabularyIcon } from "../capabilities/widgets/vocabularyIcon";
 import { CHART_WIDGET } from "../capabilities/widgets/Chart";
 import { useChartState } from "../capabilities/widgets/Chart/useChartState";
 import { IMAGES_WIDGET } from "../capabilities/widgets/Images";
@@ -680,7 +677,7 @@ function ConversationTitle({
   // resolves (old convos, or the model returned nothing) we fall back to the
   // brand's Brahmi lotus glyph 𑁍 — the same mark as the Send button — rather than
   // a generic chat icon.
-  const iconName = topicIcon ? resolveIconName(topicIcon) : null;
+  const TopicIcon = topicIcon ? resolveVocabularyIcon(topicIcon) : null;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title ?? "");
   const [copied, setCopied] = useState(false);
@@ -733,9 +730,8 @@ function ConversationTitle({
         onClick={() => setEditing(true)}
         className="group flex h-full w-full items-center justify-center gap-1.5 px-4 text-[0.9375rem] text-content-muted hover:text-content transition-colors"
       >
-        {iconName ? (
-          <DynamicIcon
-            name={iconName}
+        {TopicIcon ? (
+          <TopicIcon
             className="h-4 w-4 shrink-0 text-content-subtle group-hover:text-content transition-colors"
             aria-hidden
           />

@@ -3,7 +3,7 @@
 How Aether fits together. **Keep this current:** update it in the same commit that changes how
 the pieces connect.
 
-Last updated: Progressive widget rendering — render-tool JSON now streams to the frontend as it's generated (`tool_partial` SSE event) so widgets paint while the model is still writing, and a truncated result is salvaged (best-effort JSON close) instead of failing the turn on `max_tokens`.
+Last updated: Added a **Deployment topology** section — side-by-side prod vs. dev maps of who hosts each half (Vercel/Fly vs. Vite/local-bun) and the shared downstream providers (Supabase, LLM, and the data-lookup sources: World Bank · Wikipedia · Wikimedia · Unsplash).
 
 ---
 
@@ -71,6 +71,61 @@ be installed to the home screen / dock. The SW is a separate browser-managed scr
 the React tree); it's off in `vite dev` and active in preview/prod. `/api/*` is excluded from its
 cache so data calls always hit the network. See [MOBILE.md](./MOBILE.md) for the full mobile/PWA
 story and [RUNBOOK.md](./RUNBOOK.md#pwa--service-worker) for the operational details.
+
+---
+
+## Deployment topology — prod vs. dev
+
+Where each half actually lives. "Two runtimes" said *what* the halves are; this says *who hosts
+them* in each environment. The shape is the same in both — browser → frontend host → backend →
+(database + LLM + data providers) — but the frontend is a **different server** in each, while the
+backend is the **same Hono app**, just hosted differently.
+
+```
+PRODUCTION
+  Browser ──HTTPS──▶ Vercel  (static React build, served + cached at the edge)
+                       │  /api/*  edge proxy  ──▶  aether-ab-api.fly.dev
+                       ▼
+                     Fly.io   aether-ab-api   (Hono on Bun, in Docker; holds all secrets)
+                       ├──▶ Supabase   (Postgres — sessions + messages)
+                       ├──▶ LLM        Anthropic · Google · DeepSeek          (keyed)
+                       └──▶ Data       World Bank · Wikipedia · Wikimedia · Unsplash
+```
+
+```
+DEVELOPMENT
+  Browser ──http──▶ Vite dev server  :5174   (HMR, compiles source live)
+                      │  /api  proxy  ──▶  localhost:8000
+                      ▼
+                    Bun / Hono  :8000   (your machine; secrets from backend/.env)
+                      ├──▶ Supabase   (the SAME project as prod — shared DB)
+                      ├──▶ LLM        Anthropic · Google · DeepSeek          (keyed)
+                      └──▶ Data       World Bank · Wikipedia · Wikimedia · Unsplash
+```
+
+**What changes between the two:** only the **frontend host** (Vercel static edge ↔ Vite live-
+compile dev server) and the **backend host** (Fly Docker container ↔ local bun process). The
+`/api` indirection exists in both for the same two reasons — no CORS, no hardcoded backend URL.
+
+**What stays the same:** the Hono app, the `/api` contract, and every downstream provider.
+**Secrets are server-side in both** (Fly secrets / `backend/.env`) and never reach the browser.
+
+**Downstream providers** (all reached over HTTPS from the backend, identical in both environments):
+- **Database** — Supabase Postgres. ⚠️ Dev points at the **same Supabase project as prod**, so
+  local turns write real session rows; there is no separate dev database.
+- **LLM providers** — Anthropic (default), Google, DeepSeek, selected via `LLM_PROVIDER` /
+  the model picker. Keyed.
+- **Data-lookup providers** — the keyless data sources the backend's tools fetch from:
+  **World Bank** Open Data (`world_bank`), **Wikipedia** REST (`wikipedia_summary`), **Wikimedia
+  Commons** + **Unsplash** for image search (`search_images`; Unsplash needs `UNSPLASH_ACCESS_KEY`,
+  the rest are keyless). Defined in `backend/src/tools.ts`.
+
+> One nuance the boxes can't show: Anthropic's **`web_search`** tool is *server-side on Anthropic's
+> infrastructure* (Claude-only) — the host never calls `executeTool` for it, so it rides the LLM
+> lane, not the data-lookup lane. Everything in the **Data** row above is fetched by *our* backend.
+
+Live URLs, ports, dashboards, and the deploy/secrets commands live in
+[RUNBOOK.md](./RUNBOOK.md) — this section is just the map.
 
 ---
 

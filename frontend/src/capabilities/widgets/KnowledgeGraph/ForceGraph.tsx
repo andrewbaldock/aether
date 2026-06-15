@@ -38,7 +38,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 // model suggestion degrades gracefully.
 import { Tooltip } from "../../../shell/Tooltip";
 import { MenuItems } from "../ContextMenu";
-import { DynamicIcon, resolveIconName } from "../lucideIcon";
+import { resolveVocabularyIcon } from "../vocabularyIcon";
 import { TYPE_COLOR } from "./colors";
 import { dedupeNodes, filterDanglingLinks } from "./sanitize";
 import type { GraphLink, GraphNode } from "./types";
@@ -849,17 +849,11 @@ function NodeIcon({
     className: "pointer-events-none",
   } as const;
 
-  // No model suggestion, or the suggested name isn't a real lucide icon — use
-  // the type icon directly (no lazy load, no console error from a bad import).
-  const name = icon ? resolveIconName(icon) : null;
-  if (!name) return <Fallback {...common} />;
-
-  // Lazy-resolve the validated icon; render the type icon while it loads.
-  return (
-    <DynamicIcon
-      name={name}
-      fallback={() => <Fallback {...common} />}
-      {...common}
-    />
-  );
+  // No model suggestion, or the suggested name isn't in the icon vocabulary — use
+  // the type icon directly. The vocabulary icons are statically imported (no
+  // per-icon dynamic import / network request), so a big graph renders all its
+  // node icons from the bundle, not a /assets/<icon>.js waterfall.
+  const Icon = icon ? resolveVocabularyIcon(icon) : null;
+  if (!Icon) return <Fallback {...common} />;
+  return <Icon {...common} />;
 }
