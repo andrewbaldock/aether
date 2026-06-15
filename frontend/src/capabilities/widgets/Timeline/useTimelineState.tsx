@@ -5,6 +5,7 @@ import {
   useContext,
   useMemo,
 } from "react";
+import { copyTitle } from "../duplicateTitle";
 import { useStreamingEntries } from "../useStreamingEntries";
 import type { TimelineSpec } from "./types";
 
@@ -21,6 +22,10 @@ export interface TimelineState {
   requestReplace: () => void;
   // Reload ONE timeline by id: the next spec replaces just that entry, in place.
   requestReplaceEntry: (id: number) => void;
+  // Duplicate ONE timeline by id: deep-clone its spec, suffix "(copy)" on the title,
+  // and insert it directly AFTER the source so the copy lands right beneath the
+  // original in both the tool tab and the Bigsail canvas.
+  duplicateEntry: (id: number) => void;
 }
 
 const TimelineContext = createContext<TimelineState | null>(null);
@@ -83,6 +88,26 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
 
   const clearEntries = useCallback(() => setEntries([]), [setEntries]);
 
+  const duplicateEntry = useCallback(
+    (id: number) => {
+      setEntries((prev) => {
+        const idx = prev.findIndex((e) => e.id === id);
+        if (idx === -1) return prev;
+        const clone: TimelineEntry = {
+          id: nextId.current++,
+          spec: {
+            ...structuredClone(prev[idx].spec),
+            title: copyTitle(prev[idx].spec.title),
+          },
+        };
+        const next = prev.slice();
+        next.splice(idx + 1, 0, clone);
+        return next;
+      });
+    },
+    [nextId, setEntries]
+  );
+
   const value = useMemo<TimelineState>(
     () => ({
       entries,
@@ -90,8 +115,16 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
       clearEntries,
       requestReplace,
       requestReplaceEntry,
+      duplicateEntry,
     }),
-    [entries, loadEntries, clearEntries, requestReplace, requestReplaceEntry]
+    [
+      entries,
+      loadEntries,
+      clearEntries,
+      requestReplace,
+      requestReplaceEntry,
+      duplicateEntry,
+    ]
   );
 
   return (

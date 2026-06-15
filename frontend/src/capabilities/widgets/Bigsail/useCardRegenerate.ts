@@ -40,7 +40,8 @@ export interface CardRegenerate {
 
 // Parse the entry id out of a card id (`${capability}:${entryId}`). The knowledge
 // graph's id is `knowledge-graph:graph` → NaN, which is fine (it can't regenerate).
-function entryIdOf(card: Card): number {
+// Exported so useCardDuplicate parses the same way.
+export function entryIdOf(card: Card): number {
   const raw = card.id.slice(card.id.indexOf(":") + 1);
   return Number(raw);
 }

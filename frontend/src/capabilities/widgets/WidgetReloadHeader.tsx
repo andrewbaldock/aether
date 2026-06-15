@@ -1,4 +1,4 @@
-import { RefreshCw } from "lucide-react";
+import { Copy, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { Tooltip } from "../../shell/Tooltip";
 
@@ -74,6 +74,33 @@ export function WidgetReloadHeaderButton({
           className={`h-4 w-4 ${queued ? "animate-spin" : ""}`}
           aria-hidden
         />
+      </button>
+    </Tooltip>
+  );
+}
+
+// A dim per-entry Duplicate icon, same look as the reload icon, for a tool tab's
+// entry header. Clones THIS entry in place (a "(copy)"-titled duplicate lands
+// directly beneath it, here and on the Bigsail canvas) so the user can re-prompt and
+// regenerate the copy without disturbing the original. Composed into the header's
+// extraAction slot beside the re-add control.
+export function WidgetDuplicateButton({
+  onClick,
+  label = "Duplicate this",
+}: {
+  onClick: () => void;
+  label?: string;
+}) {
+  return (
+    <Tooltip label={label} contentClassName="w-64 whitespace-normal leading-snug">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        // Dim by default so it recedes; brightens on hover — matches the reload icon.
+        className="shrink-0 rounded-md p-1 text-content-subtle/60 transition-colors hover:bg-elevated hover:text-content focus-visible:bg-elevated focus-visible:text-content focus-visible:outline-none"
+      >
+        <Copy className="h-4 w-4" aria-hidden />
       </button>
     </Tooltip>
   );

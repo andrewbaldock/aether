@@ -30,6 +30,10 @@ export interface ChartState {
   requestReplace: () => void;
   // Reload ONE chart by id: the next spec replaces just that entry, in place.
   requestReplaceEntry: (id: number) => void;
+  // Duplicate ONE chart by id: deep-clone its spec, suffix "(copy)" on the title,
+  // and insert it directly AFTER the source so the copy lands right beneath the
+  // original in both the tool tab and the Bigsail canvas.
+  duplicateEntry: (id: number) => void;
 }
 
 const ChartContext = createContext<ChartState | null>(null);
@@ -116,6 +120,26 @@ export function ChartProvider({ children }: { children: ReactNode }) {
 
   const clearEntries = useCallback(() => setEntries([]), [setEntries]);
 
+  const duplicateEntry = useCallback(
+    (id: number) => {
+      setEntries((prev) => {
+        const idx = prev.findIndex((e) => e.id === id);
+        if (idx === -1) return prev;
+        const clone: ChartEntry = {
+          id: nextId.current++,
+          spec: {
+            ...structuredClone(prev[idx].spec),
+            title: copyTitle(prev[idx].spec.title),
+          },
+        };
+        const next = prev.slice();
+        next.splice(idx + 1, 0, clone);
+        return next;
+      });
+    },
+    [nextId, setEntries]
+  );
+
   const value = useMemo<ChartState>(
     () => ({
       entries,
@@ -123,8 +147,16 @@ export function ChartProvider({ children }: { children: ReactNode }) {
       clearEntries,
       requestReplace,
       requestReplaceEntry,
+      duplicateEntry,
     }),
-    [entries, loadEntries, clearEntries, requestReplace, requestReplaceEntry]
+    [
+      entries,
+      loadEntries,
+      clearEntries,
+      requestReplace,
+      requestReplaceEntry,
+      duplicateEntry,
+    ]
   );
 
   return (

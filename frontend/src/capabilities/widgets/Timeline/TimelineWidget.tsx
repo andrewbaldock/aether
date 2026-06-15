@@ -12,7 +12,11 @@ import { useFillFromConversation } from "../useFillFromConversation";
 import { useQueuedExplore } from "../useQueuedExplore";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
-import { WidgetReloadAll, WidgetReloadHeader } from "../WidgetReloadHeader";
+import {
+  WidgetDuplicateButton,
+  WidgetReloadAll,
+  WidgetReloadHeader,
+} from "../WidgetReloadHeader";
 import type { TimelineItem, TimelineSpec } from "./types";
 import { useTimelineState } from "./useTimelineState";
 
@@ -21,7 +25,8 @@ const TIMELINE_BUILD_PROMPT =
   "Build the best timeline you can about what we've been discussing. Draw on the events, dates, periods, and developments in the subject so far — and broaden from what was literally said: lay out the real chronology of the topic, not only dates someone typed. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call render_timeline now. Only skip if the subject genuinely has no chronological dimension at all.";
 
 export function TimelineWidget(_props: { widget: Widget }) {
-  const { entries, requestReplace, requestReplaceEntry } = useTimelineState();
+  const { entries, requestReplace, requestReplaceEntry, duplicateEntry } =
+    useTimelineState();
   const busy = useAgentBusy();
   const { messages } = useSessionContext();
   const awaitingClarification = useAwaitingClarification();
@@ -78,7 +83,15 @@ export function TimelineWidget(_props: { widget: Widget }) {
                 onReload={() => entryReload.reloadEntry(id, spec.title)}
                 queued={entryReload.queued}
                 label="Reload just this timeline from the conversation"
-                extraAction={<BigsailReAddButton cardId={`timeline:${id}`} />}
+                extraAction={
+                  <>
+                    <WidgetDuplicateButton
+                      onClick={() => duplicateEntry(id)}
+                      label="Duplicate this timeline"
+                    />
+                    <BigsailReAddButton cardId={`timeline:${id}`} />
+                  </>
+                }
               />
             }
           />

@@ -29,7 +29,11 @@ import { useFillFromConversation } from "../useFillFromConversation";
 import { useQueuedExplore } from "../useQueuedExplore";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
-import { WidgetReloadAll, WidgetReloadHeader } from "../WidgetReloadHeader";
+import {
+  WidgetDuplicateButton,
+  WidgetReloadAll,
+  WidgetReloadHeader,
+} from "../WidgetReloadHeader";
 import type { ChartSpec } from "./types";
 import { useChartState } from "./useChartState";
 
@@ -78,7 +82,8 @@ function seriesColor(color: string | undefined, index: number): string {
 // scrollable tab. Recharts for the rendering; brand colors as defaults. The
 // `widget` prop is unused; state is live.
 export function ChartWidget(_props: { widget: Widget }) {
-  const { entries, requestReplace, requestReplaceEntry } = useChartState();
+  const { entries, requestReplace, requestReplaceEntry, duplicateEntry } =
+    useChartState();
   const awaitingClarification = useAwaitingClarification();
   const bus = useAgentEvents();
   const busy = useAgentBusy();
@@ -140,7 +145,15 @@ export function ChartWidget(_props: { widget: Widget }) {
                   onReload={() => entryReload.reloadEntry(id, spec.title)}
                   queued={entryReload.queued}
                   label="Reload just this chart from the conversation"
-                  extraAction={<BigsailReAddButton cardId={`chart:${id}`} />}
+                  extraAction={
+                    <>
+                      <WidgetDuplicateButton
+                        onClick={() => duplicateEntry(id)}
+                        label="Duplicate this chart"
+                      />
+                      <BigsailReAddButton cardId={`chart:${id}`} />
+                    </>
+                  }
                 />
               </div>
               {/* Render the axis TITLES ourselves in a dedicated frame (vertical

@@ -1,6 +1,6 @@
 import "gridstack/dist/gridstack.min.css";
 import { GridStack, type GridStackNode } from "gridstack";
-import { EyeOff, GripVertical, RotateCcw, Settings } from "lucide-react";
+import { Copy, EyeOff, GripVertical, RotateCcw, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ConfirmDialog } from "../../../shell/ConfirmDialog";
@@ -33,6 +33,9 @@ interface TilesCanvasProps {
   // Hide a card from the canvas (reversible — re-addable from its tool tab). Wired
   // to the EyeOff action on the card's back face.
   onHide: (cardId: string) => void;
+  // Duplicate a card: clone its entry in place so a copy lands directly beneath it
+  // (in both the tool tab and here). Wired to the Copy action on the back face.
+  onDuplicate: (cardId: string) => void;
 }
 
 function serialize(
@@ -62,6 +65,7 @@ export function TilesCanvas({
   placed,
   onLayoutChange,
   onHide,
+  onDuplicate,
 }: TilesCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<GridStack | null>(null);
@@ -222,6 +226,7 @@ export function TilesCanvas({
             card={card}
             staggerIndex={skeletonIndex.get(id)}
             onHide={onHide}
+            onDuplicate={onDuplicate}
           />,
           host,
           id
@@ -244,10 +249,12 @@ function CardShell({
   card,
   staggerIndex,
   onHide,
+  onDuplicate,
 }: {
   card: Card;
   staggerIndex?: number;
   onHide: (cardId: string) => void;
+  onDuplicate: (cardId: string) => void;
 }) {
   const isSkeleton = card.placeholder === true;
   // Title lives in the top bar (fixed) so it stays put while the card body
@@ -333,6 +340,17 @@ function CardShell({
             <span className="truncate font-display text-sm font-semibold text-content">
               {title}
             </span>
+            {/* Duplicate this widget: clones the entry in place so a copy (titled
+                "… (copy)") lands directly beneath it on the canvas and in the tool
+                tab — the user then re-prompts/regenerates the copy. ml-auto pushes
+                this pair to the right; the hide button sits just after it. */}
+            <CardChromeButton
+              label="Duplicate this widget"
+              className="ml-auto"
+              onClick={() => onDuplicate(card.id)}
+            >
+              <Copy className="h-3.5 w-3.5" aria-hidden />
+            </CardChromeButton>
             {/* Plain button (no Tooltip wrapper) as the dialog trigger: AlertDialog's
                 asChild clones a single DOM element, so nesting a Tooltip (which is
                 its own Radix tree) inside the trigger would be fragile. The title
@@ -349,7 +367,7 @@ function CardShell({
                   aria-label="Hide from canvas"
                   title="Hide from canvas"
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="ml-auto shrink-0 rounded p-0.5 text-content-faint/60 transition-colors hover:text-content focus-visible:text-content focus-visible:outline-none"
+                  className="shrink-0 rounded p-0.5 text-content-faint/60 transition-colors hover:text-content focus-visible:text-content focus-visible:outline-none"
                 >
                   <EyeOff className="h-3.5 w-3.5" aria-hidden />
                 </button>

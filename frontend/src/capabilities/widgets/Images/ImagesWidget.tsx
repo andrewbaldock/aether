@@ -12,6 +12,7 @@ import { useQueuedExplore } from "../useQueuedExplore";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
 import {
+  WidgetDuplicateButton,
   WidgetReloadAll,
   WidgetReloadHeaderButton,
 } from "../WidgetReloadHeader";
@@ -23,7 +24,8 @@ const IMAGES_BUILD_PROMPT =
   "Build the best gallery you can about what we've been discussing. Search the web for real images of the subject — and broaden from what was literally said: illustrate the topic itself, its people, places, and objects, not only things named outright. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call search_images and then render_images now. Only skip if the subject genuinely can't be illustrated at all.";
 
 export function ImagesWidget(_props: { widget: Widget }) {
-  const { entries, requestReplace, requestReplaceEntry } = useImagesState();
+  const { entries, requestReplace, requestReplaceEntry, duplicateEntry } =
+    useImagesState();
   const busy = useAgentBusy();
   const { messages } = useSessionContext();
   const awaitingClarification = useAwaitingClarification();
@@ -116,6 +118,10 @@ export function ImagesWidget(_props: { widget: Widget }) {
                           : "Get more"}
                     </button>
                   )}
+                  <WidgetDuplicateButton
+                    onClick={() => duplicateEntry(id)}
+                    label="Duplicate this gallery"
+                  />
                   <BigsailReAddButton cardId={`images:${id}`} />
                   <WidgetReloadHeaderButton
                     onReload={() => entryReload.reloadEntry(id, spec.title)}

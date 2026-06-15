@@ -20,7 +20,11 @@ import { useFillFromConversation } from "../useFillFromConversation";
 import { useQueuedExplore } from "../useQueuedExplore";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
-import { WidgetReloadAll, WidgetReloadHeader } from "../WidgetReloadHeader";
+import {
+  WidgetDuplicateButton,
+  WidgetReloadAll,
+  WidgetReloadHeader,
+} from "../WidgetReloadHeader";
 import type { TableSpec } from "./types";
 import { useTableState } from "./useTableState";
 
@@ -33,7 +37,8 @@ const TABLE_BUILD_PROMPT =
 // plain styled <table> for the markup so it themes with the app's Tailwind tokens.
 // The `widget` prop is unused; state is live.
 export function TableWidget(_props: { widget: Widget }) {
-  const { entries, requestReplace, requestReplaceEntry } = useTableState();
+  const { entries, requestReplace, requestReplaceEntry, duplicateEntry } =
+    useTableState();
   const busy = useAgentBusy();
   const { messages } = useSessionContext();
   const awaitingClarification = useAwaitingClarification();
@@ -91,7 +96,15 @@ export function TableWidget(_props: { widget: Widget }) {
                 onReload={() => entryReload.reloadEntry(id, spec.title)}
                 queued={entryReload.queued}
                 label="Reload just this table from the conversation"
-                extraAction={<BigsailReAddButton cardId={`table:${id}`} />}
+                extraAction={
+                  <>
+                    <WidgetDuplicateButton
+                      onClick={() => duplicateEntry(id)}
+                      label="Duplicate this table"
+                    />
+                    <BigsailReAddButton cardId={`table:${id}`} />
+                  </>
+                }
               />
             </div>
             <SpecTable spec={spec} title={spec.title} />

@@ -14,6 +14,7 @@ import { useTimelineState } from "../Timeline/useTimelineState";
 import { BigsailLoading } from "./BigsailLoading";
 import { useBigsailPlan } from "./BigsailPlanProvider";
 import { toCards } from "./cards";
+import { useCardDuplicate } from "./useCardDuplicate";
 import { useHiddenCards } from "./useHiddenCards";
 import {
   FALLBACK_SKELETONS,
@@ -45,6 +46,7 @@ export function BigsailWidget(_props: { widget: Widget }) {
   const bus = useAgentEvents();
   const { userId, sessionId, sessions, messages } = useSessionContext();
   const { isHidden, hide } = useHiddenCards();
+  const duplicate = useCardDuplicate();
 
   // Awaiting a clarifier answer: the planner asked ONE question instead of
   // composing, so the canvas shows a calm "let's aim this first" state rather than
@@ -300,6 +302,7 @@ export function BigsailWidget(_props: { widget: Widget }) {
           placed={placed}
           onLayoutChange={persistLayout}
           onHide={hide}
+          onDuplicate={duplicate}
         />
       ) : awaitingClarification ? (
         // Calm wait-on-user state — NOT the empty copy, NOT the gathering animation.
