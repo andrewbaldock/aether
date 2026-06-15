@@ -3,11 +3,24 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
+// Under E2E (Playwright sets VITE_E2E=1 on its webServer) we point /api at nothing:
+// every /api call MUST be answered by the network mock (e2e/fixtures/mockApi.ts).
+// With a real proxy target, any request that races ahead of the mock falls through
+// to a backend and comes back 502, which the smoke test (no console errors allowed)
+// treats as a hard failure. No proxy → an escaped call is a clean, mock-owned net
+// error instead of a real 502.
+const isE2E = process.env.VITE_E2E === "1";
+
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
+      // No service worker under E2E: the SW runs in its own context and can fetch
+      // /api outside Playwright's page.route mock, racing the mock on first load and
+      // leaking a request to the (proxy-less) network. Disabling it makes the mock
+      // the sole answerer of /api, which is the whole point of the deterministic suite.
+      disable: isE2E,
       // Service worker auto-updates in the background and takes over on the
       // next load — no "new version available" prompt to maintain. Fits a
       // low-churn demo: visitors always end up on the latest deploy.
@@ -68,8 +81,12 @@ export default defineConfig({
   server: {
     port: 5174,
     allowedHosts: ["aether-dev"],
-    proxy: {
-      "/api": "http://localhost:8000",
-    },
+    // No /api proxy under E2E — the network mock owns every /api call. See isE2E note.
+    proxy: isE2E ? undefined : { "/api": "http://localhost:8000" },
+  },
+  preview: {
+    // `vite preview` (what Playwright boots) doesn't inherit server.proxy in every
+    // Vite version, so set it here too — and likewise drop it under E2E.
+    proxy: isE2E ? undefined : { "/api": "http://localhost:8000" },
   },
 });
