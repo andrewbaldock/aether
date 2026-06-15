@@ -14,8 +14,6 @@ import { useTimelineState } from "../Timeline/useTimelineState";
 import { BigsailLoading } from "./BigsailLoading";
 import { useBigsailPlan } from "./BigsailPlanProvider";
 import { toCards } from "./cards";
-import { useCardDuplicate } from "./useCardDuplicate";
-import { useHiddenCards } from "./useHiddenCards";
 import {
   FALLBACK_SKELETONS,
   mergeWithSkeletons,
@@ -28,6 +26,8 @@ import {
   STACK_BREAKPOINT_PX,
   type TilesLayoutItem,
 } from "./tilesLayout";
+import { useCardDuplicate } from "./useCardDuplicate";
+import { useHiddenCards } from "./useHiddenCards";
 
 // Bigsail — the Tiles canvas. It mirrors every widget the conversation produces
 // as a live card on a best-fit-packed, draggable, resizable grid (GridStack). The
@@ -45,7 +45,8 @@ export function BigsailWidget(_props: { widget: Widget }) {
   const { entries: images } = useImagesState();
   const busy = useAgentBusy();
   const bus = useAgentEvents();
-  const { userId, sessionId, sessions, messages } = useSessionContext();
+  const { userId, sessionId, sessions, messages, consumeColdUrlLoad } =
+    useSessionContext();
   const { isHidden, hide } = useHiddenCards();
   const duplicate = useCardDuplicate();
 
@@ -124,6 +125,41 @@ export function BigsailWidget(_props: { widget: Widget }) {
   const planSkeletons = useMemo(() => planToSkeletons(plan), [plan]);
   const firstPanelArrived = realCards.length > 0;
 
+  // Deliberate restore-loading sequence on a COLD URL/refresh load. The canvas
+  // hydrates from the DB instantly, so without this the loading flourish never
+  // plays on a shared/refreshed link. When RouteBootstrap flags a cold load, we
+  // hold the gathering animation + the full generic skeleton set (all at once, no
+  // drip) for a minimum window, then reveal the real cards in one swap. This is a
+  // frontend-only mode, deliberately separate from the live-turn loading contract
+  // (useAgentBusy / the composition plan) — the two never share state.
+  const RESTORE_MIN_MS = 3500; // hold the sequence at least this long
+  const RESTORE_MAX_MS = 8000; // ...but never pin the canvas if data stalls
+  const [restoreLoading, setRestoreLoading] = useState(() =>
+    consumeColdUrlLoad()
+  );
+  const [restoreMinElapsed, setRestoreMinElapsed] = useState(false);
+  useEffect(() => {
+    if (!restoreLoading) return;
+    const min = setTimeout(() => setRestoreMinElapsed(true), RESTORE_MIN_MS);
+    // Hard cap: release regardless of data so an empty/slow hydrate can't hang.
+    const cap = setTimeout(() => setRestoreLoading(false), RESTORE_MAX_MS);
+    return () => {
+      clearTimeout(min);
+      clearTimeout(cap);
+    };
+  }, [restoreLoading]);
+  // Exit once the minimum has elapsed AND the real cards are present — whichever is
+  // later. A live turn starting mid-restore (busy) abandons the sequence so the two
+  // loading paths never fight.
+  useEffect(() => {
+    if (!restoreLoading) return;
+    if (busy) {
+      setRestoreLoading(false);
+      return;
+    }
+    if (restoreMinElapsed && firstPanelArrived) setRestoreLoading(false);
+  }, [restoreLoading, restoreMinElapsed, firstPanelArrived, busy]);
+
   // Fallback floor: a turn can be composing with NO plan to shape it (the plan event
   // was empty, slow, or never arrived). The loading contract says the canvas must
   // never sit on a bare spinner, so after a short grace we drip in a generic shape.
@@ -133,8 +169,7 @@ export function BigsailWidget(_props: { widget: Widget }) {
   // take over below). Reset whenever we're not in the bare-waiting state.
   const FALLBACK_GRACE_MS = 1200;
   const [fallbackEngaged, setFallbackEngaged] = useState(false);
-  const bareWaiting =
-    busy && !firstPanelArrived && planSkeletons.length === 0;
+  const bareWaiting = busy && !firstPanelArrived && planSkeletons.length === 0;
   useEffect(() => {
     if (!bareWaiting) {
       setFallbackEngaged(false);
@@ -181,13 +216,23 @@ export function BigsailWidget(_props: { widget: Widget }) {
   }, [busy, firstPanelArrived, skeletons.length]);
 
   const cards = useMemo(() => {
+    // Cold-load restore: show the full generic skeleton set all at once (no drip,
+    // no merge) until the sequence releases — then the real cards take over below.
+    if (restoreLoading) return FALLBACK_SKELETONS;
     if (!busy) return realCards;
     // Phase 2: once the first panel lands, show the full planned set (real cards
     // supersede their skeletons in place; the rest keep shimmering).
     if (firstPanelArrived) return mergeWithSkeletons(realCards, skeletons);
     // Phase 1: reveal only the dripped-in slice of the skeletons.
     return skeletons.slice(0, dripCount);
-  }, [busy, realCards, firstPanelArrived, skeletons, dripCount]);
+  }, [
+    restoreLoading,
+    busy,
+    realCards,
+    firstPanelArrived,
+    skeletons,
+    dripCount,
+  ]);
 
   // Drop user-hidden cards from what the canvas actually renders. Applied HERE, at
   // the render layer — never at arrival detection (firstPanelArrived) — so hiding a
@@ -279,8 +324,10 @@ export function BigsailWidget(_props: { widget: Widget }) {
 
   // The BigsailLoading animation overlays everything until the first real panel
   // lands — for the first ~10s it plays alone, then over the skeletons as they drip
-  // in beneath it. It stops the instant a real panel arrives.
+  // in beneath it. It stops the instant a real panel arrives. It also plays for the
+  // whole cold-load restore sequence (over the all-at-once skeletons).
   const waitingForFirstPanel = busy && realCards.length === 0;
+  const showLoadingOverlay = waitingForFirstPanel || restoreLoading;
   const hasContent = visibleCards.length > 0;
 
   return (
@@ -305,7 +352,10 @@ export function BigsailWidget(_props: { widget: Widget }) {
         <TilesCanvas
           key={`${sessionId ?? "none"}:${resetTick}`}
           placed={placed}
-          onLayoutChange={persistLayout}
+          // Don't persist the transient restore skeletons' positions — they vanish
+          // when the sequence releases. (persistLayout already strips skeleton ids,
+          // but skipping the write entirely avoids a spurious debounced no-op.)
+          onLayoutChange={restoreLoading ? () => {} : persistLayout}
           onHide={hide}
           onDuplicate={duplicate}
         />
@@ -340,7 +390,7 @@ export function BigsailWidget(_props: { widget: Widget }) {
           skeletons (only a whisper of a backdrop so the placeholders pop in
           visibly underneath), not a wash that hides them. Pointer-events off so
           the cards underneath stay live. Clears the instant a real panel lands. */}
-      {waitingForFirstPanel && (
+      {showLoadingOverlay && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
           <BigsailLoading />
         </div>

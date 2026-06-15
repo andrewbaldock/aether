@@ -66,6 +66,9 @@ function RouteBootstrap() {
   useEffect(() => {
     const route = parseRoute(location.pathname);
     if (route.type === "workspace" && route.sessionId) {
+      // The cold-URL-load flag for the restore-loading sequence is set
+      // synchronously in SessionProvider's render from this same initial URL — see
+      // consumeColdUrlLoad — so an effect-vs-child-render race can't drop it.
       loadSession(route.sessionId);
     }
   }, []);

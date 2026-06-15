@@ -29,6 +29,11 @@ interface SessionContextValue extends SessionActions {
   switchSession: (id: string, messages: Message[]) => void;
   startNewConversation: () => void;
   refreshSessions: () => void;
+  // True the one time the page is opened/refreshed straight onto a /c/:id URL (a
+  // cold URL/refresh load). Bigsail consumes it once to play the deliberate
+  // restore-loading sequence; in-app sidebar switches never set it, so they stay
+  // instant. consume returns true exactly once, then resets to false.
+  consumeColdUrlLoad: () => boolean;
   // useChat registers its stream-abort here so the context can cancel an
   // in-flight turn before switching conversations.
   registerAbort: (fn: () => void) => void;
@@ -63,6 +68,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const abortStreamRef = useRef<() => void>(() => {});
   const registerAbort = useCallback((fn: () => void) => {
     abortStreamRef.current = fn;
+  }, []);
+
+  // One-shot "this session arrived via a cold URL/refresh load" flag. Initialized
+  // SYNCHRONOUSLY at first render from the initial URL — a /c/:id path on the very
+  // first paint means the page was opened/refreshed straight onto a conversation
+  // (vs. an in-app sidebar switch, which mutates the URL later via navigation).
+  // Must be set here, in the provider's render, not in a child effect: child render
+  // (Bigsail's lazy useState consumes this) runs before any parent effect fires, so
+  // an effect-based mark would always lose the race. Ref-backed so consume-once is
+  // race-free and costs no render. Bigsail consumes it to play the restore-loading
+  // sequence; consume returns true exactly once, then resets to false.
+  const coldUrlLoadRef = useRef<boolean | null>(null);
+  if (coldUrlLoadRef.current === null) {
+    const r = parseRoute(location.pathname);
+    coldUrlLoadRef.current = r.type === "workspace" && !!r.sessionId;
+  }
+  const consumeColdUrlLoad = useCallback(() => {
+    const was = coldUrlLoadRef.current === true;
+    coldUrlLoadRef.current = false;
+    return was;
   }, []);
 
   const switchSession = useCallback(
@@ -101,6 +126,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         startNewConversation,
         refreshSessions,
         registerAbort,
+        consumeColdUrlLoad,
         ...actions,
       }}
     >
