@@ -423,6 +423,14 @@ function createClaudeClient(
       let turnCacheRead = 0;
       let turnCacheCreation = 0;
 
+      // Whether any prior iteration streamed assistant text this turn. The frontend
+      // appends every text token raw (m.text + content), so when iteration 1 ends
+      // "…all sources at once." and iteration 2 opens "Now let me…", they collide as
+      // "…at once.Now let me…". When a later iteration emits its FIRST text token and
+      // a previous one already did, we prefix a paragraph break so the thoughts read
+      // as separate. Within a single iteration tokens still concatenate untouched.
+      let turnEmittedText = false;
+
       while (true) {
         iteration++;
         // On the final allowed iteration, call without tools so the model must
@@ -447,6 +455,9 @@ function createClaudeClient(
         >();
         const textBlocks: { type: "text"; text: string }[] = [];
         let currentText = "";
+        // First text token of THIS iteration not yet streamed. Used once, to insert
+        // a separator before iteration 2+ text that follows earlier iterations' text.
+        let iterationTextStarted = false;
         let stopReason: string | null = null;
         // Usage for THIS iteration. message_start carries the input-side counts
         // (including cache_read/cache_creation); message_delta carries the final
@@ -497,6 +508,20 @@ function createClaudeClient(
             }
           } else if (event.type === "content_block_delta") {
             if (event.delta.type === "text_delta") {
+              // Separate this iteration's text from a previous iteration's: prefix a
+              // paragraph break on the FIRST text token here if earlier text exists
+              // and this one doesn't already start with whitespace. Streamed to the
+              // client and kept in currentText so history matches what the user saw.
+              if (
+                !iterationTextStarted &&
+                turnEmittedText &&
+                !/^\s/.test(event.delta.text)
+              ) {
+                await onToken("\n\n");
+                currentText += "\n\n";
+              }
+              iterationTextStarted = true;
+              turnEmittedText = true;
               await onToken(event.delta.text);
               currentText += event.delta.text;
             } else if (event.delta.type === "input_json_delta") {
@@ -759,6 +784,9 @@ function createOpenAICompatClient(
       let iteration = 0;
       // In-loop self-correction counter for this turn (see MAX_CORRECTIONS).
       let correctionCount = 0;
+      // See the Claude client: separates iteration 2+ text from earlier iterations'
+      // text so "…at once." + "Now let me…" don't collide into "…at once.Now let me…".
+      let turnEmittedText = false;
 
       while (true) {
         iteration++;
@@ -801,6 +829,18 @@ function createOpenAICompatClient(
           const delta = choice.delta;
 
           if (delta?.content) {
+            // First text of this iteration following earlier iterations' text: insert
+            // a paragraph break unless it already opens with whitespace (mirrors the
+            // Claude client). Kept in assistantText so history matches the stream.
+            if (
+              assistantText === "" &&
+              turnEmittedText &&
+              !/^\s/.test(delta.content)
+            ) {
+              await onToken("\n\n");
+              assistantText += "\n\n";
+            }
+            turnEmittedText = true;
             await onToken(delta.content);
             assistantText += delta.content;
           }
