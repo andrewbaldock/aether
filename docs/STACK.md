@@ -3,7 +3,7 @@
 Every dependency in Aether, what it does, and why it was chosen. **Keep this current:** when a
 commit adds, removes, or upgrades a dependency, update this file in the same commit.
 
-Last updated: PWA support (`vite-plugin-pwa`, installable + service worker).
+Last updated: Synced the dependency tables to the lockfile — added shipped deps that were missing (`openai` OpenAI-compat client, `@tanstack/react-table`, `recharts`, `gridstack`, `sonner`, `@radix-ui/react-alert-dialog`) and pruned the "planned" list of items already shipped under different names (recharts for plotly, d3 KG for cytoscape) or never adopted (custom `useRoute` instead of `@tanstack/react-router`).
 
 ---
 
@@ -28,6 +28,10 @@ source. See [ARCHITECTURE.md](./ARCHITECTURE.md#two-runtimes).
 | `react` / `react-dom` | ^19.2.6 | UI library | The view layer; the chat interface and all rendered answers (charts, graphs, 3D) are React components. |
 | `@tanstack/react-query` | ^5.101.0 | Server-state / caching | The data layer for every non-streaming `/api` call. One `QueryClient` + `apiFetch` (`src/lib/queryClient.ts`); reads are queries, writes are mutations that invalidate `sessionsKey(userId)`. Retries ride out Fly cold-start 502s. Replaced a hand-rolled module-level cache. |
 | `@tanstack/react-query-devtools` | ^5.101.0 | Query devtools panel | Inspect cache/query state in dev. Rendered headless via `QueryDevtoolsToggle`. |
+| `@tanstack/react-table` | ^8.21.3 | Headless table | Powers the `render_table` widget — sorting/structure logic, app-styled markup. |
+| `recharts` | ^3.8.1 | Charting | The `render_chart` widget (line/bar/area/etc. from a chart spec). |
+| `gridstack` | ^12.6.0 | Draggable/resizable grid | The **Tiles** canvas (project "bigsail") — every render-tool spec becomes a live, draggable/resizable card on a 24-column grid. Default landing surface. |
+| `sonner` | ^2.0.7 | Toasts | Subtle notifications — e.g. the schema-version "saved state was reset" toast. |
 | `tailwindcss` | ^4.3.0 | Utility-first CSS | Styling via composable utility classes in markup — no per-component stylesheets, no leaking. v4 uses a Vite plugin (no PostCSS). |
 | `react-markdown` | ^10.x | Markdown renderer | Renders assistant messages as rich text. Used with `remark-gfm` for tables, strikethrough, task lists. |
 | `remark-gfm` | ^4.x | GitHub Flavored Markdown plugin | Extends `react-markdown` with GFM syntax. |
@@ -36,6 +40,7 @@ source. See [ARCHITECTURE.md](./ARCHITECTURE.md#two-runtimes).
 | `lucide-react` | ^1.17.0 | Icon set | UI glyphs across the shell. |
 | `@radix-ui/react-tooltip` | ^1.2.9 | Accessible tooltip primitive | Hover/focus tooltips with correct a11y + collision handling, instead of hand-rolling. |
 | `@radix-ui/react-dropdown-menu` | ^2.1.17 | Accessible menu primitive | The shared "Explore further" kebab menu on table rows / chart series / image tiles / timeline events (`widgets/ContextMenu.tsx`). Replaced a right-click-only menu that was unreachable on touch; Radix gives a visible ⋮ trigger plus outside-click/Escape/focus-trap/collision-flip for free. |
+| `@radix-ui/react-alert-dialog` | ^1.1.16 | Accessible confirm dialog | Destructive confirmations (e.g. delete-conversation), with focus trap + Escape for free. |
 | `@radix-ui/react-select` | ^2.3.0 | Accessible select primitive | The chat-footer model picker (`shell/ModelPicker.tsx`). Replaced a native `<select>` + a cross-browser width-hugging hack: the custom trigger hugs its content, themes with app tokens, and shows each model's blurb (impossible in a native `<option>`). Keeps health-gating + Sonnet default. |
 | `@supabase/supabase-js` | ^2.106.2 | Supabase client | Persistence — session + message history. |
 
@@ -78,9 +83,10 @@ is why the `typecheck` script uses `tsc -b --noEmit`.
 
 | Package | Version | What it does | Why chosen |
 |---------|---------|--------------|-----------|
-| `hono` | ^4.12.23 | Web framework | Tiny, fast HTTP framework for the API. Served by bun's native server (`export default { port, fetch }` — no `@hono/node-server`). Routes: `/api/health`, `/api/chat`. |
-| `@anthropic-ai/sdk` | ^0.100.1 | Claude API client | Talks to Claude (the LLM). Used only via the connector in `backend/src/llm.ts` (`createClient()` keyed off `LLM_PROVIDER`) — the route never imports it directly, so Claude/Gemini/Ollama stay swappable. Sends the system prompt as a cached content block (`cache_control: ephemeral`). Supports tool use: tools defined in `backend/src/tools.ts`, agent loop in `llm.ts`. |
-| `@supabase/supabase-js` | ^2.106.2 | Supabase client | Persistence (Commit 6). Two-client pattern planned: read (anon key) + write (service key). |
+| `hono` | ^4.12.23 | Web framework | Tiny, fast HTTP framework for the API. Served by bun's native server (`export default { port, fetch }` — no `@hono/node-server`). Routes: `/api/health`, `/api/models`, `/api/chat`, the `/api/sessions/*` CRUD set. |
+| `@anthropic-ai/sdk` | ^0.100.1 | Claude API client | Talks to Claude (the default LLM). Used only via the connector in `backend/src/llm.ts` (`createClaudeClient`, selected by the model's `provider` tag) — the route never imports it directly, so providers stay swappable. Sends the system prompt as a cached content block (`cache_control: ephemeral`). Supports tool use: tools defined in `backend/src/tools.ts`, agent loop in `llm.ts`. |
+| `openai` | ^6.42.0 | OpenAI-compatible client | One shared client (`createOpenAICompatClient` in `llm.ts`) pointed at each provider's base URL — backs **Google**, **DeepSeek**, and **Mistral**. The OpenAI SDK is used purely as the OpenAI-compat transport; OpenAI itself is not a configured provider. |
+| `@supabase/supabase-js` | ^2.106.2 | Supabase client | Persistence — sessions + messages, plus the per-session graph/widget/image/ui_state jsonb blobs. |
 
 ### Dev dependencies
 
@@ -106,18 +112,20 @@ Biome does **not** read `.gitignore`. Each `biome.json` has
 
 ## Not yet in the stack (planned)
 
-Added in later commits — listed so the trajectory is clear. Versions are current-latest as of
-2026-05-30 (pin to these majors when installing):
+Earmarked for later commits — listed so the trajectory is clear (pin to these majors when installing):
 
-- **@tanstack/react-router** — type-safe client-side routing (chat view, saved views). Chosen
-  over react-router for its type safety and tight integration with TanStack Query.
-- **plotly.js** (v3) + **react-plotly.js** (v2) — chart widgets (~M6)
-- **cytoscape** (v3) — relationship graph view (M8)
-- **@3dverse/livelink-react** (v0.2.x, pre-1.0) — 3D scenes (M7)
-- **react-error-boundary** (v6) — one bad widget can't crash the UI
+- **@3dverse/livelink-react** (v0.2.x, pre-1.0) — 3D scenes (the `render_3d` North Star).
+- **react-error-boundary** (v6) — one bad widget can't crash the UI.
+
+See [ROADMAP.md](./ROADMAP.md#tool-ideas-brainstorm) for the broader candidate-tool list
+(maps, diagrams, globe, etc.); those are ideas, not committed deps.
 
 Already shipped (moved out of this list, now in the tables above): **@tanstack/react-query** +
-devtools (data layer), **vitest** + testing-library + jsdom (tests), **d3-force/selection/zoom**
-(knowledge-graph widget), **react-resizable-panels** (shell), **Supabase** (session persistence).
+devtools (data layer), **@tanstack/react-table** + **recharts** (table/chart widgets — recharts
+took the role once earmarked for plotly), **d3-force/selection/zoom** (knowledge-graph widget —
+the relationship-graph role once earmarked for cytoscape), **gridstack** (Tiles canvas),
+**vitest** + testing-library + jsdom (tests), **@playwright/test** (E2E), **vite-plugin-pwa**
+(PWA), **react-resizable-panels** (shell), **Supabase** (session persistence). Routing is a small
+custom `useRoute` hook (`useSyncExternalStore` over the URL), not a router library.
 
-Deploy targets: Vercel (frontend) + Fly.io (backend), both free tiers. No Docker.
+Deploy targets: Vercel (frontend, static) + Fly.io (backend, **Docker** — `backend/Dockerfile`).

@@ -23,6 +23,8 @@ best — table, chart, relationship graph, or 3D scene.
   the two-runtime model, the `/api` proxy wiring, and the testing strategy.
 - **[docs/MOBILE.md](docs/MOBILE.md)** — mobile/responsive behavior, the PWA (installable +
   service worker), icon assets, and how mobile is tested.
+- **[docs/HISTORY.md](docs/HISTORY.md)** — how Aether unfolded commit by commit: the order things
+  were built, the decisions made, and the dev rhythms behind them.
 
 ---
 

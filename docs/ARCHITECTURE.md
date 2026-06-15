@@ -3,7 +3,7 @@
 How Aether fits together. **Keep this current:** update it in the same commit that changes how
 the pieces connect.
 
-Last updated: Added a **Deployment topology** section — side-by-side prod vs. dev maps of who hosts each half (Vercel/Fly vs. Vite/local-bun) and the shared downstream providers (Supabase, LLM, and the data-lookup sources: World Bank · Wikipedia · Wikimedia · Unsplash).
+Last updated: Corrected provider lists to match the code — LLM is now four providers (Anthropic · Google · DeepSeek · Mistral, the last three on one OpenAI-compat client) and the data-lookup sources include Wikidata + OpenAlex. Synced the route list (`GET /api/sessions/:id`, `POST /api/sessions/:id/repair-prompts`) and the `clarify` SSE event.
 
 ---
 
@@ -88,8 +88,8 @@ PRODUCTION
                        ▼
                      Fly.io   aether-ab-api   (Hono on Bun, in Docker; holds all secrets)
                        ├──▶ Supabase   (Postgres — sessions + messages)
-                       ├──▶ LLM        Anthropic · Google · DeepSeek          (keyed)
-                       └──▶ Data       World Bank · Wikipedia · Wikimedia · Unsplash
+                       ├──▶ LLM        Anthropic · Google · DeepSeek · Mistral   (keyed)
+                       └──▶ Data       Wikidata · World Bank · Wikipedia · OpenAlex · Wikimedia · Unsplash
 ```
 
 ```
@@ -99,8 +99,8 @@ DEVELOPMENT
                       ▼
                     Bun / Hono  :8000   (your machine; secrets from backend/.env)
                       ├──▶ Supabase   (the SAME project as prod — shared DB)
-                      ├──▶ LLM        Anthropic · Google · DeepSeek          (keyed)
-                      └──▶ Data       World Bank · Wikipedia · Wikimedia · Unsplash
+                      ├──▶ LLM        Anthropic · Google · DeepSeek · Mistral   (keyed)
+                      └──▶ Data       Wikidata · World Bank · Wikipedia · OpenAlex · Wikimedia · Unsplash
 ```
 
 **What changes between the two:** only the **frontend host** (Vercel static edge ↔ Vite live-
@@ -113,12 +113,16 @@ compile dev server) and the **backend host** (Fly Docker container ↔ local bun
 **Downstream providers** (all reached over HTTPS from the backend, identical in both environments):
 - **Database** — Supabase Postgres. ⚠️ Dev points at the **same Supabase project as prod**, so
   local turns write real session rows; there is no separate dev database.
-- **LLM providers** — Anthropic (default), Google, DeepSeek, selected via `LLM_PROVIDER` /
-  the model picker. Keyed.
-- **Data-lookup providers** — the keyless data sources the backend's tools fetch from:
-  **World Bank** Open Data (`world_bank`), **Wikipedia** REST (`wikipedia_summary`), **Wikimedia
-  Commons** + **Unsplash** for image search (`search_images`; Unsplash needs `UNSPLASH_ACCESS_KEY`,
-  the rest are keyless). Defined in `backend/src/tools.ts`.
+- **LLM providers** — Anthropic (default), Google, DeepSeek, Mistral. The model picker routes
+  each turn by the chosen model's `provider` tag (`backend/src/models.ts`); `createClient()`
+  (`backend/src/llm.ts`) maps that tag to a client — Claude on the Anthropic SDK, the other three
+  on one shared OpenAI-compatible client (the `openai` SDK pointed at each provider's base URL).
+  Keys are read lazily, so the app runs on Anthropic alone.
+- **Data-lookup providers** — the data sources the backend's tools fetch from:
+  **Wikidata** (`wikidata_search` + `wikidata_query` SPARQL), **World Bank** Open Data
+  (`world_bank`), **Wikipedia** REST (`wikipedia_summary`), **OpenAlex** papers
+  (`openalex_search`), and **Wikimedia Commons** + **Unsplash** for image search (`search_images`;
+  Unsplash needs `UNSPLASH_ACCESS_KEY`, the rest are keyless). Defined in `backend/src/tools.ts`.
 
 > One nuance the boxes can't show: Anthropic's **`web_search`** tool is *server-side on Anthropic's
 > infrastructure* (Claude-only) — the host never calls `executeTool` for it, so it rides the LLM
@@ -159,12 +163,16 @@ The backend is a Hono server (`backend/src/index.ts`) served by **bun's native s
 - `POST /api/chat` — one chat turn, streamed as SSE.
 - `POST /api/sessions` — create a new session; returns `{ id }`.
 - `GET /api/sessions?userId=...` — list sessions for a user (most-recent-first).
+- `GET /api/sessions/:id` — load a single session row.
 - `PATCH /api/sessions/:id` — patch a session row (`title`, `graph_mode`, `model`); returns `{ ok: true }`.
 - `DELETE /api/sessions/:id` — delete a session; returns `{ ok: true }`.
 - `POST /api/sessions/:id/fork` — fork a session into a new one for the same user.
+- `POST /api/sessions/:id/repair-prompts` — backfill missing recreation prompts on a session's saved widgets.
 - `GET /api/sessions/:id/messages` — load the full message history for a session.
 - `GET /api/sessions/:id/graph` / `PUT /api/sessions/:id/graph` — load / save the knowledge graph snapshot.
 - `GET /api/sessions/:id/widgets` / `PUT /api/sessions/:id/widgets` — load / save the last table + chart specs for a session.
+
+(Dev-only: `POST /api/screenshots/run` powers the `/screenshots` contact sheet; absent from prod builds.)
 
 Note: writes return a JSON body (`{ ok: true }`), not an empty 204 — the frontend's `apiFetch`
 tolerates an empty body defensively but no endpoint currently sends one.
@@ -189,12 +197,16 @@ present). The auto-title is set from the first user message if the session has n
 
 ### The LLM connector — a platform seam
 
-The route never imports the Anthropic SDK. It calls `createClient().stream(...)` from
-`backend/src/llm.ts`, a factory keyed off `LLM_PROVIDER` (default `claude`). Claude is the only
-provider implemented; adding Gemini/Ollama means a new branch there, not a route change. The
-system prompt (`backend/src/prompt.ts`) is sent as a cached content block
-(`cache_control: ephemeral`). The Anthropic client is built lazily on first chat turn, so the
-server (and `/api/health`) start fine without a key.
+The route never imports an LLM SDK. It calls `createClient(...).stream(...)` from
+`backend/src/llm.ts`, a factory that picks the client from the chosen model's `provider` tag
+(`backend/src/models.ts`; default model `claude-sonnet-4-6`). **Four providers are implemented:**
+Claude on the Anthropic SDK (`createClaudeClient`), and Google / DeepSeek / Mistral on one shared
+OpenAI-compatible client (`createOpenAICompatClient`, the `openai` SDK pointed at each provider's
+base URL). Adding another OpenAI-compatible provider is a new `models.ts` entry, not a route
+change. The system prompt (`backend/src/prompt.ts`) is sent as a cached content block
+(`cache_control: ephemeral`). Provider clients are built lazily and keys read lazily, so the
+server (and `/api/health`) start fine without a key, and an unset provider only fails a turn that
+actually uses it.
 
 Tools are defined in `backend/src/tools.ts` (a `TOOLS` array of Anthropic-schema definitions plus
 an `executeTool` dispatcher) and passed to `createClaudeClient` at construction time — the
@@ -370,11 +382,13 @@ runs inside; it is the platform's primary surface.
 - **Chat (body)** — message transcript + composer. Full width when alone; narrows when the
   capability column opens.
 - **Capability column** — hosts widgets behind a **fixed chip toolbar**. The chip set is
-  constant (Knowledge Graph + Table + Chart + Timeline + Images, plus right-pinned gear/Settings
-  and help/Welcome). It is **always present** — the Knowledge Graph is "home base" and never turns
-  off — so the column can't launch collapsed or off-screen. **Fullscreen-capable** (expands over
-  the chat, then restores). Resizable. Width is **device-local chrome**: it lives only in
-  localStorage (clamped to a safe band), never in conversation state.
+  constant (**Tiles** (Bigsail) + Knowledge Graph + Table + Chart + Timeline + Images, plus
+  right-pinned gear/Settings and help/Welcome). It is **always present** — **Tiles is "home base"**
+  (the first chip and the default landing view; it mirrors every render-tool spec as live
+  draggable/resizable cards) and never turns off — so the column can't launch collapsed or
+  off-screen. **Fullscreen-capable** (expands over the chat, then restores). Resizable. Width is
+  **device-local chrome**: it lives only in localStorage (clamped to a safe band), never in
+  conversation state.
 
 **Two states** (the column is always present; there is no chat-only state)
 ```
@@ -466,8 +480,9 @@ data: {"type":"tool_result","tool":"...","result":"..."} // tool result fed back
 data: [DONE]                                       // stream complete
 data: {"type":"error","message":"..."}             // mid-stream error
 ```
-(Other event types the route emits: `status`, `loop_start`, `plan`, `warning`. The `tool_partial`
-stream is render-tools-only — see the progressive-rendering and salvage notes above.)
+(Other event types the route emits: `status`, `loop_start`, `plan`, `clarify` (the thin-but-
+explodable clarifier question), `warning`. The `tool_partial` stream is render-tools-only — see
+the progressive-rendering and salvage notes above.)
 
 The agent loop runs entirely on the backend; the frontend sees only SSE events. Tool
 definitions live in `backend/src/tools.ts`; the loop in `backend/src/llm.ts`.

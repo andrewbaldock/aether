@@ -98,13 +98,15 @@ Run the SQL migrations in `backend/sql/` against your Supabase project, in order
 Supabase dashboard **SQL Editor** (paste + run each):
 
 ```
+backend/sql/000_baseline.sql           # core sessions + messages tables (run first)
 backend/sql/001_app_state.sql          # app-wide counters (e.g. the Unsplash rate cap)
 backend/sql/002_session_image_data.sql # per-session image widget storage
 backend/sql/003_session_ui_state.sql   # per-session UI memory (active tab, tiles layout)
+backend/sql/004_session_topic_icon.sql # per-session topic icon column
 ```
 
-(The core `sessions` / `messages` tables are created by the earliest migration in that folder;
-run every file in `backend/sql/` in numeric order on a fresh project.)
+(Run every file in `backend/sql/` in numeric order on a fresh project; the list above is the
+current set.)
 
 ---
 

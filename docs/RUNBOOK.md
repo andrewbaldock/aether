@@ -119,14 +119,15 @@ install prompt) after a deploy that touches the manifest or icons.
 
 ### Manage Fly.io
 
-Fly.io hosts the Aether **backend API** as a Docker container. It handles compute, TLS, health checks, and auto-scaling (including scale-to-zero). Secrets (API keys) live here, never in the repo.
+Fly.io hosts the Aether **backend API** as a Docker container. It handles compute, TLS, and health checks. Secrets (API keys) live here, never in the repo.
 
 | | |
 |---|---|
 | Dashboard | https://fly.io/apps/aether-ab-api |
 | App name | `aether-ab-api` |
 | Region | `sjc` (San Jose) |
-| Scaling | Scales to zero when idle; cold start ~5–10s |
+| Internal port | `8080` (`fly.toml` → `PORT=8080`; not 8000 — that's dev only) |
+| Scaling | **One always-on machine** (`min_machines_running = 1`) — deliberately *not* scale-to-zero, because a chat request landing during a cold start got a 502 from the Fly proxy before the app booted. See `backend/fly.toml`. |
 
 **Secrets** (never in repo — live on Fly). Set the LLM provider keys (see *Manage
 LLM Providers* above) plus the Supabase keys here. Setting a secret triggers an
@@ -182,23 +183,30 @@ SUPABASE_SERVICE_KEY=eyJ...
 
 #### Schema changes
 
-There is no migrations framework — schema is managed by hand in the Supabase
-SQL editor. When the backend gains a column, run the matching SQL there.
+There is no migrations framework — schema is managed by hand as numbered SQL files in
+`backend/sql/`, applied in the Supabase SQL editor. On a fresh project, run every file in numeric
+order (see [GETTING_STARTED.md](GETTING_STARTED.md#4-set-up-the-database-supabase-one-time)). When
+the backend gains a column, add a new numbered file and run it.
 
-**`sessions.graph_data`** (knowledge-graph persistence): stores the saved graph
-snapshot `{ nodes, links }` per conversation so reopening/reloading restores the
-graph the user built (and any drag-pinned node positions), rather than relying
-on the model to re-emit it. Run once:
-```sql
-alter table sessions add column if not exists graph_data jsonb;
-```
+Current files:
 
-**`sessions.widget_data`** (table + chart persistence): stores the last
-`render_table` and `render_chart` specs for a session so reopening a conversation
-URL restores the table/chart widgets without needing a new turn. Run once:
-```sql
-alter table sessions add column if not exists widget_data jsonb;
-```
+| File | Adds |
+|------|------|
+| `000_baseline.sql` | core `sessions` + `messages` tables |
+| `001_app_state.sql` | `app_state` table + `increment_app_counter()` (e.g. Unsplash rate cap) |
+| `002_session_image_data.sql` | `sessions.image_data` jsonb + `increment_session_unsplash_search()` |
+| `003_session_ui_state.sql` | `sessions.ui_state` jsonb (active tab, Tiles layout) |
+| `004_session_topic_icon.sql` | `sessions.topic_icon` text |
+
+Two of those `sessions` columns hold the per-conversation render snapshots:
+- **`sessions.graph_data`** — the saved knowledge-graph snapshot `{ nodes, links }` (incl.
+  drag-pinned positions), so reopening restores the graph the user built instead of relying on the
+  model to re-emit it.
+- **`sessions.widget_data`** — the last `render_table` / `render_chart` (and the other render-tool)
+  specs, so reopening a conversation URL restores the widgets without a new turn.
+
+(Both ship as part of `000_baseline.sql`; the frontend stamps each blob with a `schemaVersion` and
+discards stale shapes on load — see [ARCHITECTURE.md](ARCHITECTURE.md#persisted-json-schema-versioning-libschemaversionts).)
 
 ### Manage LLM Providers
 
@@ -372,6 +380,6 @@ bun run lint         # ESLint
 - **Two Vite servers are normal** — Aether frontend on 5174, website on 5173. These run concurrently.
 - **Aether build has two TS configs** — `tsc --noEmit` (typecheck) and `tsc -b && vite build` (build) use different settings. A green typecheck doesn't guarantee a successful build. Always run `bun run build` before pushing.
 - **react-resizable-panels v4 gotcha** — `resize()` reads bare numbers as **pixels**, not percent. Always pass `"32%"` (string with unit).
-- **Fly cold starts** — App scales to zero when idle; first request after idle takes 5–10s.
+- **Fly: one always-on machine, no scale-to-zero** — `min_machines_running = 1` in `fly.toml` keeps a machine warm so chat requests don't hit a cold-start 502. (It was previously scale-to-zero; the cold-start 502s are why that changed.)
 - **Service worker is off in dev, on in preview/prod** — `vite dev` never registers the SW (`devOptions.enabled: false`). To test PWA/offline behavior, `bun run build:app && bunx vite preview`. After a deploy, the SW updates in the background (`autoUpdate`); a hard-stuck old version usually clears with one reload, or DevTools → Application → Service Workers → Unregister.
 - **ASO `.htaccess` is server-only** — it's not in `dist/` and not in the git repo. Don't try to deploy it; it's already on the server and should stay untouched.
