@@ -387,6 +387,14 @@ app.post("/api/sessions/:id/repair-prompts", async (c) => {
   const owner = callerId(c);
   if (!owner) return c.json({ error: "Missing X-User-Id" }, 401);
   try {
+    // Owner-check UP FRONT, before reading the snapshot or doing any backfill
+    // work. Unlike the other writes (which fail at the owner-checked db call),
+    // this route reads widget data and can make Haiku calls before its write —
+    // and on the no-write paths (no widgets, or filled===0) it returns the
+    // snapshot. Without this guard a foreign caller could read another user's
+    // widgets and burn LLM spend. So gate the whole handler.
+    if (!(await isSessionOwner(id, owner)))
+      return c.json({ error: "Forbidden" }, 403);
     const existing = await getSessionWidgets(id);
     if (!existing) return c.json({ filled: 0, widgets: null });
     const { filled } = await backfillSnapshotPrompts(existing);

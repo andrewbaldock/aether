@@ -41,33 +41,9 @@ describe("smoke: liveness", () => {
   });
 });
 
-describe("smoke: core routes are registered", () => {
-  // Each route below is a load-bearing entry point the frontend or the platform
-  // depends on. We assert the route EXISTS (responds, not 404), not that it
-  // succeeds end-to-end — a 400 (bad input) still proves the handler is wired; a
-  // 404 means the route is gone. This is the cheap "did the app assemble?" check.
-  const routes: { method: string; path: string; init?: RequestInit }[] = [
-    { method: "GET", path: "/api/health/full" },
-    { method: "GET", path: "/api/models" },
-    // by-userId list (no userId → 400, but the route is registered)
-    { method: "GET", path: "/api/sessions" },
-    // create (no body → 400, but registered)
-    { method: "POST", path: "/api/sessions" },
-    // by-id read (random id → 404 OR 500 from DB, but NOT a routing 404 with
-    // Hono's default body — so we only assert it's not the unrouted case below)
-    { method: "GET", path: "/api/sessions/00000000-0000-0000-0000-000000000000/messages" },
-  ];
-
-  for (const { method, path, init } of routes) {
-    it(`${method} ${path} is routed (not 404-unrouted)`, async () => {
-      const res = await request(path, { method, ...init });
-      // Hono returns 404 for an UNREGISTERED path. A registered handler that
-      // rejects bad input returns 400 (or 401/500), never the unrouted 404.
-      // Some of these legitimately 404 on a missing row at the DB layer, but
-      // those paths reach the DB which isn't configured in the test env and
-      // throw → 500. Either way, a *routing* miss is the only thing that yields
-      // 404 here, so we assert the status is not 404.
-      expect(res.status).not.toBe(404);
-    });
-  }
-});
+// NOTE: this file stays HERMETIC — it only probes `/api/health`, whose handler is
+// a pure `c.json({ ok: true })` with no I/O. We deliberately do NOT probe
+// `/api/health/full`, `/api/models`, or the session routes here: those make live
+// calls (health/provider probes, Supabase) and would hang in CI where there are
+// no secrets/network. Route-registration for the session endpoints is covered by
+// ownership.test.ts, which mocks the db layer.
