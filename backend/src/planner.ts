@@ -148,7 +148,7 @@ Reply with ONLY a JSON object, no prose, of this exact shape:
 Rules:
 - intents: ordered; each capability is one of the five above; subject is a short phrase (optional).
 - relationships: index pairs into intents (from/to), with an optional short label; only include real relationships, often none.
-- Prefer 1-4 intents. If the request needs only a plain text reply, return {"intents":[],"relationships":[]}.
+- Prefer 2-8 intents for any substantive request — compose a RICH canvas (e.g. a table AND a chart AND a timeline AND a knowledge-graph AND images), not the bare minimum; reach for several complementary capabilities whenever the subject supports them. If the request needs only a plain text reply, return {"intents":[],"relationships":[]}.
 - NEVER include coordinates, sizes, or layout — only which capabilities and how they relate.
 
 BEFORE planning, judge how fruitful this request is AS ASKED. If the request is THIN

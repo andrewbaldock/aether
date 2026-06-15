@@ -54,12 +54,17 @@ export function planToSkeletons(plan: CompositionPlan | null): Card[] {
 // shape it from — the plan event was empty, slow, or never arrived. The loading
 // contract is "EVERY new-conversation load shows skeletons in real grid slots", so
 // the canvas must NEVER sit on a bare spinner: we drip in a sensible generic shape
-// (a table + a chart, the two most common composites) so the user always sees the
-// canvas assembling. These are superseded the instant ANY real card OR a real plan
-// arrives, so an over-guess never persists or misleads.
+// (one of every capability — knowledge-graph + timeline top row, then table,
+// chart, and images — so each lands in its own template slot and the drip keeps
+// feeding rows the full length of the canvas, never stalling after two) so the
+// user always sees the canvas assembling. These are superseded the instant ANY
+// real card OR a real plan arrives, so an over-guess never persists or misleads.
 export const FALLBACK_SKELETONS: Card[] = capabilitiesToSkeletons([
+  "knowledge-graph",
+  "timeline",
   "table",
   "chart",
+  "images",
 ]);
 
 // Merge real cards with plan skeletons so the canvas shows its final shape while

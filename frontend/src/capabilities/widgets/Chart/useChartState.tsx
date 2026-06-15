@@ -5,6 +5,7 @@ import {
   useContext,
   useMemo,
 } from "react";
+import { copyTitle } from "../duplicateTitle";
 import { useStreamingEntries } from "../useStreamingEntries";
 import type { ChartOrientation, ChartSpec, ChartType } from "./types";
 
