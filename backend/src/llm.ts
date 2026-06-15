@@ -1008,18 +1008,20 @@ export function createClient(opts: {
 // blocks the turn.
 export async function generateTitle(
   firstMessage: string
-): Promise<string | null> {
+): Promise<{ title: string; icon: string | null } | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
   try {
     const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 32,
+      max_tokens: 64,
       system:
-        "You name conversations. Given the user's first message, reply with a " +
-        "concise title of at most 5 words that captures its topic. No quotes, no " +
-        "punctuation at the end, no preamble — just the title.",
+        "You name conversations. Given the user's first message, reply with ONLY " +
+        'a JSON object: {"title": <concise title, at most 5 words, capturing the ' +
+        'topic, no end punctuation>, "icon": <a single lucide-react icon name in ' +
+        "PascalCase that best matches the topic, e.g. Trophy, FlaskConical, " +
+        'Code, Map, Music, Landmark>}. No preamble, no code fences — just the JSON.',
       messages: [{ role: "user", content: firstMessage }],
     });
     const text = response.content
@@ -1027,10 +1029,18 @@ export async function generateTitle(
       .map((b) => b.text)
       .join("")
       .trim();
-    // Strip stray wrapping quotes the model sometimes adds, and bound the length
-    // so a runaway reply can't become an oversized title.
-    const cleaned = text.replace(/^["']|["']$/g, "").trim();
-    return cleaned.length > 0 ? cleaned.slice(0, 60) : null;
+    // Parse the JSON object; strip any stray code fences first. Best-effort —
+    // a malformed reply falls through to the caller's truncated-message fallback.
+    const jsonText = text.replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
+    const parsed = JSON.parse(jsonText) as { title?: unknown; icon?: unknown };
+    const rawTitle = typeof parsed.title === "string" ? parsed.title : "";
+    const cleaned = rawTitle.replace(/^["']|["']$/g, "").trim();
+    if (cleaned.length === 0) return null;
+    const icon =
+      typeof parsed.icon === "string" && parsed.icon.trim().length > 0
+        ? parsed.icon.trim().slice(0, 40)
+        : null;
+    return { title: cleaned.slice(0, 60), icon };
   } catch (err) {
     console.error("generateTitle failed:", err);
     return null;

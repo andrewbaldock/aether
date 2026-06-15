@@ -87,6 +87,27 @@ body,
   height: 100%;
 }
 
+/* ── Conversation titlebar texture ───────────────────────────────────────────
+   "Beautiful but very subtle": faint horizontal stripes in the brand's grey-green,
+   layered over the surface. A repeating-linear-gradient draws thin sage bands at
+   very low alpha — barely-there pinstripes, a quiet texture rather than a flat
+   fill. Pure CSS — no image asset, no new dependency. --stripe sets the band
+   tint (a touch stronger in light, softer on the dark near-black surface). */
+.aether-titlebar-texture {
+  --stripe: rgba(120, 160, 120, 0.08);
+  background-color: var(--surface);
+  background-image: repeating-linear-gradient(
+    0deg,
+    var(--stripe) 0px,
+    var(--stripe) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+}
+.dark .aether-titlebar-texture {
+  --stripe: rgba(140, 180, 140, 0.06);
+}
+
 @layer base {
   *:focus,
   *:focus-visible {

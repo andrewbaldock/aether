@@ -88,7 +88,7 @@ export function ImagesWidget(_props: { widget: Widget }) {
       {/* Row spacing lives on each gallery section (pt), not a container gap, so the
           per-entry sticky header can pull its solid bg up over it and cover the strip
           above when pinned — see SpecImages. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 pb-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4">
         {entries.map(({ id, spec }, i) => (
           <SpecImages
             key={id}

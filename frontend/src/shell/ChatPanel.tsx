@@ -7,6 +7,10 @@ import { ThinkingGlyph } from "../brand/ThinkingGlyph";
 import { Wordmark } from "../brand/Wordmark";
 import { CAPABILITIES, HOME_BASE_ID } from "../capabilities/catalog";
 import { useCapabilities } from "../capabilities/useCapabilities";
+import {
+  DynamicIcon,
+  resolveIconName,
+} from "../capabilities/widgets/lucideIcon";
 import { CHART_WIDGET } from "../capabilities/widgets/Chart";
 import { useChartState } from "../capabilities/widgets/Chart/useChartState";
 import { IMAGES_WIDGET } from "../capabilities/widgets/Images";
@@ -385,6 +389,7 @@ export function ChatPanel() {
       {started && sessionId && (
         <ConversationTitle
           title={displayTitle}
+          topicIcon={currentSession?.topic_icon ?? null}
           onRename={(t) => renameSession(sessionId, t)}
         />
       )}
@@ -664,11 +669,18 @@ export function ChatPanel() {
 
 function ConversationTitle({
   title,
+  topicIcon,
   onRename,
 }: {
   title: string | null;
+  topicIcon: string | null;
   onRename: (t: string) => void;
 }) {
+  // The model's PascalCase suggestion, validated to a real lucide name. When none
+  // resolves (old convos, or the model returned nothing) we fall back to the
+  // brand's Brahmi lotus glyph 𑁍 — the same mark as the Send button — rather than
+  // a generic chat icon.
+  const iconName = topicIcon ? resolveIconName(topicIcon) : null;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title ?? "");
   const [copied, setCopied] = useState(false);
@@ -701,7 +713,7 @@ function ConversationTitle({
 
   if (editing) {
     return (
-      <div className="relative flex items-center justify-center border-b border-border px-4 pb-2 pt-3.5">
+      <div className="aether-titlebar-texture relative flex items-center justify-center border-b border-border px-4 pb-2 pt-3.5">
         <input
           ref={inputRef}
           value={draft}
@@ -715,12 +727,26 @@ function ConversationTitle({
   }
 
   return (
-    <div className="relative border-b border-border">
+    <div className="aether-titlebar-texture relative border-b border-border">
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="group flex w-full items-center justify-center gap-1 px-4 pb-2 pt-3.5 text-[0.9375rem] text-content-muted hover:text-content transition-colors"
+        className="group flex w-full items-center justify-center gap-1.5 px-4 pb-2 pt-3.5 text-[0.9375rem] text-content-muted hover:text-content transition-colors"
       >
+        {iconName ? (
+          <DynamicIcon
+            name={iconName}
+            className="h-4 w-4 shrink-0 text-content-subtle group-hover:text-content transition-colors"
+            aria-hidden
+          />
+        ) : (
+          <span
+            aria-hidden
+            className="shrink-0 text-xl leading-none text-content-subtle group-hover:text-content transition-colors"
+          >
+            𑁍
+          </span>
+        )}
         <span className="max-w-sm truncate font-display">{title ?? "·"}</span>
         {/* Edit affordance: shown on touch (no hover), reveal-on-hover on desktop. */}
         <ChevronDown

@@ -125,7 +125,7 @@ export function ChartWidget(_props: { widget: Widget }) {
           entry sticky header can pull its solid bg up over that spacing (-mt-4 pt-4)
           and fully cover the strip above it when pinned; otherwise prior content
           bleeds through. Section pt-4 also spaces title-less charts. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 pb-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4">
         {entries.map(({ id, spec }) => {
           const label = spec.title ?? `${spec.type} chart`;
           const chart = (
@@ -141,10 +141,31 @@ export function ChartWidget(_props: { widget: Widget }) {
                   label="Reload just this chart from the conversation"
                 />
               </div>
-              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <SpecChart spec={spec} />
-                </ResponsiveContainer>
+              {/* Render the axis TITLES ourselves in a dedicated frame (vertical
+                  strip on the left for the y-label, centered strip below for the
+                  x-label) and pass hideAxisLabels so recharts draws only ticks +
+                  plot — the same treatment BigsailCard uses. Recharts' own rotated
+                  y-label otherwise clips/garbles against the panel edge. */}
+              <div className="flex h-72 w-full">
+                {spec.yLabel ? (
+                  <div className="flex shrink-0 items-center justify-center pr-1">
+                    <span className="[writing-mode:vertical-rl] rotate-180 text-xs text-content-subtle">
+                      {spec.yLabel}
+                    </span>
+                  </div>
+                ) : null}
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <div className="min-h-0 flex-1">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <SpecChart spec={spec} hideAxisLabels />
+                    </ResponsiveContainer>
+                  </div>
+                  {spec.xLabel ? (
+                    <div className="shrink-0 pt-1 text-center text-xs text-content-subtle">
+                      {spec.xLabel}
+                    </div>
+                  ) : null}
+                </div>
               </div>
               {/* Explore surface. A pie's single series IS the whole chart, so it
                 gets one whole-chart target; line/bar/area get one chip per

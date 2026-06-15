@@ -436,8 +436,13 @@ app.post("/api/chat", async (c) => {
             if (lastUserMessage.content) {
               try {
                 const generated = await generateTitle(lastUserMessage.content);
-                const title = generated ?? lastUserMessage.content.slice(0, 60);
-                await updateSessionTitleIfEmpty(persistSession, title);
+                const title =
+                  generated?.title ?? lastUserMessage.content.slice(0, 60);
+                await updateSessionTitleIfEmpty(
+                  persistSession,
+                  title,
+                  generated?.icon ?? null
+                );
               } catch (err) {
                 console.error("Failed to auto-title session:", err);
               }

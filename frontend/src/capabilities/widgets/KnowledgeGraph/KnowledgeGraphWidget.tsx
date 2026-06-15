@@ -103,6 +103,9 @@ export function KnowledgeGraphWidget(_props: { widget: Widget }) {
                 onPositionNode={fixNodePosition}
                 onRemove={removeNode}
                 onExplore={exploreNode}
+                // Full tool panel: don't auto-frame. The graph builds at its natural
+                // position and stays put; the user frames it via the Fit button.
+                autoFitEnabled={false}
               />
               {isAwaitingGraph && (
                 <div className="pointer-events-none absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-surface/80 px-3 py-1.5 backdrop-blur-sm">

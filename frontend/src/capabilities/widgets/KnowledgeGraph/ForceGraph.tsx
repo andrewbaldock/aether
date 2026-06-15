@@ -88,6 +88,11 @@ interface ForceGraphProps {
   onPositionNode?: (id: string, x: number, y: number) => void;
   onRemove?: (id: string) => void;
   onExplore?: (node: GraphNode) => void;
+  // Whether the graph auto-frames itself (early fit + settle re-fit). Default true,
+  // which keeps the Bigsail card and any other caller auto-framing. The full tool
+  // panel passes false so it builds at its natural position and stays put — the
+  // user frames it manually via the Fit button.
+  autoFitEnabled?: boolean;
 }
 
 // Long-press duration (ms) before a stationary press on a node opens its menu.
@@ -113,6 +118,7 @@ export function ForceGraph({
   onPositionNode,
   onRemove,
   onExplore,
+  autoFitEnabled = true,
 }: ForceGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
@@ -443,6 +449,7 @@ export function ForceGraph({
   // can lose the race on a restored graph that settles in a tick or two — retry next
   // frame rather than dropping the fit (the bug where the graph opened unframed).
   function autoFit(isFinal: boolean) {
+    if (!autoFitEnabled) return; // full tool panel opts out — frame manually
     const done = isFinal ? didFinalFitRef : didEarlyFitRef;
     if (done.current) return;
     if (isFinal && userZoomedRef.current) return; // user took over — don't yank

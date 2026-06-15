@@ -7,6 +7,10 @@ export interface Session {
   id: string;
   user_id: string;
   title: string | null;
+  // Model-chosen lucide icon name (PascalCase) matching the topic; null until
+  // the conversation is auto-titled. Validated against the real lucide set
+  // before rendering (see utils/lucideIcon.ts).
+  topic_icon: string | null;
   graph_mode: boolean;
   // The Claude model last selected for this conversation; null = server default.
   model: string | null;

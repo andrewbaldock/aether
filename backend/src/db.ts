@@ -111,6 +111,9 @@ export interface Session {
   id: string;
   user_id: string;
   title: string | null;
+  // A model-chosen lucide icon name (PascalCase, e.g. "Trophy") that matches the
+  // conversation's topic. Set once alongside the auto-title; null until then.
+  topic_icon: string | null;
   graph_mode: boolean;
   graph_data: GraphSnapshot | null;
   widget_data: WidgetSnapshot | null;
@@ -229,11 +232,15 @@ export async function updateSessionTitle(
 // turn — so auto-titling can't orphan a session on a transient read failure.
 export async function updateSessionTitleIfEmpty(
   sessionId: string,
-  title: string
+  title: string,
+  topicIcon?: string | null
 ): Promise<void> {
+  const patch: { title: string; topic_icon?: string | null; updated_at: string } =
+    { title, updated_at: new Date().toISOString() };
+  if (topicIcon !== undefined) patch.topic_icon = topicIcon;
   const { error } = await getDb()
     .from("sessions")
-    .update({ title, updated_at: new Date().toISOString() })
+    .update(patch)
     .eq("id", sessionId)
     .is("title", null);
   if (error) throw new Error(`updateSessionTitleIfEmpty: ${error.message}`);

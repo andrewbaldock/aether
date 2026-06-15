@@ -225,7 +225,10 @@ function CapabilityChip({
       ? "border-border bg-elevated text-content"
       : "border-transparent text-content-muted hover:border-border hover:bg-elevated hover:text-content";
   } else if (filled && active) {
-    tone = "border-content-subtle bg-border-strong text-content";
+    // Active content tab: soft grey-green fill (lighter sage in dark) so the
+    // showing view reads as "selected" with the brand's grey-green, not a flat grey.
+    tone =
+      "border-content-subtle bg-[#d5ebd5] dark:bg-[#2a3a2a] text-content";
   } else if (filled) {
     tone =
       "border-border-strong bg-elevated text-content hover:bg-border-strong";

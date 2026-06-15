@@ -86,7 +86,13 @@ export function WidgetReloadAll({
   label?: string;
 }) {
   return (
-    <div className="flex justify-center pt-6 pb-4">
+    // mt-auto pins this to the BOTTOM of the scroll column when content is short
+    // (the column is flex-col), so it never floats mid-panel with empty space
+    // below it — it's always just beneath the content, and ≤8px (pb-2) off the
+    // panel's bottom edge. When content is tall it simply sits after it and
+    // scrolls into view at the end. Callers must NOT add their own bottom padding
+    // to the scroll container (it would stack on this and break the ≤10px rule).
+    <div className="mt-auto flex justify-center pt-6 pb-2">
       <Tooltip label={label} contentClassName="w-64 whitespace-normal leading-snug">
         <button
           type="button"

@@ -66,7 +66,7 @@ export function TimelineWidget(_props: { widget: Widget }) {
       {/* No top padding / row gap here: each per-entry sticky header owns its top
           spacing (pt) so its solid bg fully covers the strip up to the viewport top
           when pinned — otherwise scrolled rows bleed through above it. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 pb-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4">
         {entries.map(({ id, spec }) => (
           <SpecTimeline
             key={id}
