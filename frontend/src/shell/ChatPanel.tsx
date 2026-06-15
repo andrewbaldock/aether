@@ -708,7 +708,7 @@ function ConversationTitle({
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
           onKeyDown={handleKey}
-          className="w-full max-w-sm rounded-md bg-elevated px-3 py-1 text-sm text-content outline-none ring-1 ring-border-strong text-center"
+          className="w-full max-w-sm rounded-md bg-elevated px-3 py-1 text-[0.9375rem] text-content outline-none ring-1 ring-border-strong text-center"
         />
       </div>
     );
@@ -719,9 +719,9 @@ function ConversationTitle({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="group flex w-full items-center justify-center gap-1 px-4 pb-2 pt-3.5 text-sm text-content-muted hover:text-content transition-colors"
+        className="group flex w-full items-center justify-center gap-1 px-4 pb-2 pt-3.5 text-[0.9375rem] text-content-muted hover:text-content transition-colors"
       >
-        <span className="max-w-sm truncate">{title ?? "·"}</span>
+        <span className="max-w-sm truncate font-display">{title ?? "·"}</span>
         {/* Edit affordance: shown on touch (no hover), reveal-on-hover on desktop. */}
         <ChevronDown
           className="h-3.5 w-3.5 shrink-0 opacity-60 transition-opacity md:opacity-0 md:group-hover:opacity-100"

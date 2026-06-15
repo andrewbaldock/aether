@@ -97,7 +97,11 @@ export function parseChartSpec(raw: string): ChartSpec | null {
 export function ChartProvider({ children }: { children: ReactNode }) {
   // Streamed partials + final tool_result, via the shared streaming-entries hook.
   const { entries, setEntries, nextId, requestReplace, requestReplaceEntry } =
-    useStreamingEntries<ChartSpec>("render_chart", parseChartSpec);
+    useStreamingEntries<ChartSpec>(
+      "render_chart",
+      parseChartSpec,
+      (spec) => spec.title
+    );
 
   const loadEntries = useCallback(
     (loaded: ChartEntry[]) => {

@@ -183,9 +183,13 @@ function Attribution({ img }: { img: ImageItem }) {
 export function SpecImages({
   spec,
   header,
+  hideTitle,
 }: {
   spec: ImagesSpec;
   header?: ReactNode;
+  // Bigsail renders the title in the card's top bar, so it asks the body to skip
+  // its own plain-title fallback.
+  hideTitle?: boolean;
 }) {
   const bus = useAgentEvents();
   // Ground each image's explore prompt in the gallery title when present.
@@ -199,6 +203,7 @@ export function SpecImages({
           {header}
         </div>
       ) : (
+        !hideTitle &&
         spec.title && (
           <h2 className="font-display text-sm font-semibold text-content">
             {spec.title}

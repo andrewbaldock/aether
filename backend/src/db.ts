@@ -102,6 +102,9 @@ export type TilesLayoutItem = {
   y: number;
   w: number;
   h: number;
+  // True once the user dragged/resized this card (frontend-owned; round-tripped,
+  // not interpreted here). Pins the card so the frontend doesn't auto-rejigger it.
+  userMoved?: boolean;
 };
 
 export interface Session {

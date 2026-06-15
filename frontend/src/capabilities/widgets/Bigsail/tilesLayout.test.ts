@@ -179,25 +179,61 @@ describe("placeCards", () => {
     expect(placed.every((p) => p.autoPlace && p.x !== undefined)).toBe(true);
   });
 
-  it("respects saved positions and auto-places only new cards", () => {
-    const saved = [{ id: "chart:a", x: 2, y: 3, w: 12, h: 5 }];
+  it("pins user-moved cards and templates the rest", () => {
+    const saved = [{ id: "chart:a", x: 2, y: 3, w: 12, h: 5, userMoved: true }];
     const cards = [card("a"), card("b")];
     cards[0]!.id = "chart:a";
     cards[1]!.id = "chart:b";
     const placed = placeCards(cards, saved, false);
     const a = placed.find((p) => p.card.id === "chart:a")!;
     const b = placed.find((p) => p.card.id === "chart:b")!;
+    // The user-moved card is pinned to its saved spot…
     expect(a.autoPlace).toBe(false);
     expect(a.x).toBe(2);
+    // …everything else is template-arranged (auto), so it re-packs on each change.
     expect(b.autoPlace).toBe(true);
   });
 
-  it("clamps a saved width to the grid column count", () => {
-    const saved = [{ id: "chart:a", x: 0, y: 0, w: 40, h: 5 }];
+  it("re-templates a saved card that was NOT user-moved", () => {
+    // The crux of the KG/timeline fix: a position saved by the auto-layout (no
+    // userMoved flag — e.g. the KG persisted mid async-load) must NOT pin. It's
+    // re-run through the template so a late card re-pairs instead of sticking.
+    const saved = [{ id: "chart:a", x: 2, y: 3, w: 12, h: 5 }];
+    const cards = [card("a")];
+    cards[0]!.id = "chart:a";
+    const placed = placeCards(cards, saved, false);
+    expect(placed[0]!.autoPlace).toBe(true);
+  });
+
+  it("clamps a user-moved saved width to the grid column count", () => {
+    const saved = [{ id: "chart:a", x: 0, y: 0, w: 40, h: 5, userMoved: true }];
     const cards = [card("a")];
     cards[0]!.id = "chart:a";
     const placed = placeCards(cards, saved, false);
     expect(placed[0]!.w).toBe(GRID_COLUMNS);
+  });
+
+  it("re-pairs KG+Timeline even when a stale saved layout had them apart", () => {
+    // The reported bug: a layout saved while the KG was mid async-load (timeline
+    // full-width, KG dumped below) must NOT survive as a pin. With neither card
+    // user-moved, placeCards re-templates → KG (x:0) + Timeline (x:HALF) top row.
+    const saved = [
+      { id: "timeline:t", x: 0, y: 0, w: GRID_COLUMNS, h: 10 },
+      { id: "knowledge-graph:graph", x: 0, y: 10, w: GRID_COLUMNS, h: 10 },
+    ];
+    const kg = card("k", "knowledge-graph");
+    kg.id = "knowledge-graph:graph";
+    const t = card("t", "timeline");
+    t.id = "timeline:t";
+    const placed = placeCards([kg, t], saved, false);
+    const pk = find(placed, "knowledge-graph:graph");
+    const pt = find(placed, "timeline:t");
+    expect(pk.y).toBe(0);
+    expect(pt.y).toBe(0);
+    expect(pk.x).toBe(0);
+    expect(pt.x).toBe(HALF);
+    expect(pk.w).toBe(HALF);
+    expect(pt.w).toBe(HALF);
   });
 
   it("stacks full-width and ignores the saved layout when skinny", () => {

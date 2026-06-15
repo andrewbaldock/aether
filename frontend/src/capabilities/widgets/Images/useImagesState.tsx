@@ -71,7 +71,11 @@ export function parseImagesSpec(raw: string): ImagesSpec | null {
 export function ImagesProvider({ children }: { children: ReactNode }) {
   // Streamed partials + final tool_result, via the shared streaming-entries hook.
   const { entries, setEntries, nextId, requestReplace, requestReplaceEntry } =
-    useStreamingEntries<ImagesSpec>("render_images", parseImagesSpec);
+    useStreamingEntries<ImagesSpec>(
+      "render_images",
+      parseImagesSpec,
+      (spec) => spec.title
+    );
 
   const loadEntries = useCallback(
     (loaded: ImagesEntry[]) => {

@@ -66,7 +66,11 @@ export function parseTimelineSpec(raw: string): TimelineSpec | null {
 export function TimelineProvider({ children }: { children: ReactNode }) {
   // Streamed partials + final tool_result, via the shared streaming-entries hook.
   const { entries, setEntries, nextId, requestReplace, requestReplaceEntry } =
-    useStreamingEntries<TimelineSpec>("render_timeline", parseTimelineSpec);
+    useStreamingEntries<TimelineSpec>(
+      "render_timeline",
+      parseTimelineSpec,
+      (spec) => spec.title
+    );
 
   const loadEntries = useCallback(
     (loaded: TimelineEntry[]) => {

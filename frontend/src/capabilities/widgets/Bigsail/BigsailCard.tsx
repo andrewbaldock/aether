@@ -28,46 +28,57 @@ function CardBody({ card }: { card: Card }) {
   switch (card.capabilityType) {
     case "chart": {
       const spec = card.spec as ChartSpec;
-      // Chart is the one renderer that needs a sizing wrapper + title supplied by
-      // the caller (the tab does the same in its <section>).
+      // Chart needs a sizing wrapper. Title now lives in the card's top bar
+      // (CardShell), so it's omitted here. We render the axis TITLES ourselves in a
+      // dedicated frame — a vertical strip on the left for the y-label, a strip
+      // along the bottom for the x-label — and pass hideAxisLabels so recharts draws
+      // only ticks + plot. That lets the chart fill the rest of the card instead of
+      // recharts reserving (and clipping) room for a rotated label at the edge.
       return (
-        <div className="flex h-full flex-col gap-1 p-3">
-          {spec.title && (
-            <h2 className="font-display text-sm font-semibold text-content">
-              {spec.title}
-            </h2>
-          )}
-          <div className="min-h-0 flex-1">
-            <ResponsiveContainer width="100%" height="100%">
-              <SpecChart spec={spec} />
-            </ResponsiveContainer>
+        <div className="flex h-full flex-col px-3 pt-3 pb-2">
+          <div className="flex min-h-0 flex-1">
+            {spec.yLabel ? (
+              <div className="flex shrink-0 items-center justify-center pr-1">
+                <span className="[writing-mode:vertical-rl] rotate-180 text-xs text-content-subtle">
+                  {spec.yLabel}
+                </span>
+              </div>
+            ) : null}
+            <div className="min-h-0 min-w-0 flex-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <SpecChart spec={spec} hideAxisLabels />
+              </ResponsiveContainer>
+            </div>
           </div>
+          {spec.xLabel ? (
+            <div className="shrink-0 pt-1 text-center text-xs text-content-subtle">
+              {spec.xLabel}
+            </div>
+          ) : null}
         </div>
       );
     }
     case "table": {
       const spec = card.spec as TableSpec;
+      // Title now lives in the card's top bar (CardShell), so it's omitted here.
       return (
         <div className="flex h-full flex-col overflow-auto">
-          {spec.title && (
-            <h2 className="px-3 pt-3 pb-1 font-display text-sm font-semibold text-content">
-              {spec.title}
-            </h2>
-          )}
           <SpecTable spec={spec} title={spec.title} />
         </div>
       );
     }
     case "timeline":
+      // Title lives in the card's top bar (CardShell) → hideTitle here.
       return (
         <div className="h-full overflow-auto p-3">
-          <SpecTimeline spec={card.spec as TimelineSpec} />
+          <SpecTimeline spec={card.spec as TimelineSpec} hideTitle />
         </div>
       );
     case "images":
+      // Title lives in the card's top bar (CardShell) → hideTitle here.
       return (
         <div className="h-full overflow-auto p-3">
-          <SpecImages spec={card.spec as ImagesSpec} />
+          <SpecImages spec={card.spec as ImagesSpec} hideTitle />
         </div>
       );
     case "knowledge-graph": {
@@ -76,13 +87,9 @@ function CardBody({ card }: { card: Card }) {
       // as "the graph of THIS conversation". Its own d3-zoom handles in-card
       // pan/zoom; gestures starting inside .bigsail-card are excluded from the
       // canvas zoom.
+      // Title now lives in the card's top bar (CardShell), so it's omitted here.
       return (
         <div className="flex h-full flex-col">
-          {spec.title && (
-            <h2 className="shrink-0 px-3 pt-3 pb-1 font-display text-sm font-semibold text-content">
-              {spec.title}
-            </h2>
-          )}
           <div className="min-h-0 flex-1">
             <ForceGraph
               nodes={spec.nodes}

@@ -195,14 +195,20 @@ export function autoLayout(cards: Card[], stacked: boolean): PlacedCard[] {
   return out;
 }
 
-// Merge the saved layout with the current card set:
+// Merge the saved layout with the current card set. The model is "pin what the user
+// moved, auto-arrange the rest", re-evaluated on EVERY card-set change so the layout
+// reflows as cards hydrate (the KG loads via a separate async fetch, so it lands a
+// beat after the others — the template must re-pair it with the timeline when it
+// arrives, not leave it dumped in a gap):
 //   • stacked (skinny) → ignore saved positions entirely and stack full-width. The
-//     saved "true" layout stays in the DB, so widening the panel reflows the cards
-//     back to it. This is what makes the collapse non-destructive.
-//   • ANY saved positions present → respect the user's arrangement: saved cards
-//     keep their x/y/h (width clamped to the grid), and any card without a saved
-//     entry is auto-placed by GridStack into a gap (autoPlace, no explicit x/y).
-//   • NO saved positions → run the full auto-layout so the default fills cleanly.
+//     saved "true" layout stays in the DB, so widening the panel reflows back to it.
+//   • USER-MOVED cards (saved entry with userMoved) → pinned: restored verbatim
+//     (clamped to the grid), never auto-rejiggered.
+//   • EVERYTHING ELSE → run the template auto-layout over just the auto cards, so the
+//     KG+Timeline top-row pairing (and the rest of the template) is recomputed each
+//     time. Auto cards that collide with a pinned card are nudged by GridStack's
+//     gravity packing (float:false) since their template position is a starting
+//     point, not a hard pin.
 // Deterministic ordering keeps placement stable across renders.
 export function placeCards(
   cards: Card[],
@@ -212,24 +218,30 @@ export function placeCards(
   if (stacked) return autoLayout(cards, true);
 
   const savedById = new Map((saved ?? []).map((s) => [s.id, s]));
-  const hasSaved = savedById.size > 0;
 
-  // Fresh conversation (nothing saved): compute the filled auto-layout.
-  if (!hasSaved) return autoLayout(cards, false);
-
-  // Otherwise respect saved positions; auto-place only the genuinely-new cards.
-  return cards.map((card) => {
+  // Partition: a card is PINNED only if the user explicitly moved it. Everything
+  // else (never-touched, or restored-but-not-user-moved) is auto-arranged.
+  const pinned: PlacedCard[] = [];
+  const autoCards: Card[] = [];
+  for (const card of cards) {
     const s = savedById.get(card.id);
-    if (s) {
-      // Clamp a saved card to the grid so a restored card never overflows: width
+    if (s?.userMoved) {
+      // Clamp a pinned card to the grid so a restored card never overflows: width
       // first, then x into [0, GRID_COLUMNS - w] so x + w can't exceed the grid
       // (a stale/corrupt saved x like {x:20,w:12} would otherwise run off-grid).
       const w = clamp(s.w, 1, GRID_COLUMNS);
       const x = clamp(s.x, 0, GRID_COLUMNS - w);
-      return { card, x, y: s.y, w, h: s.h, autoPlace: false };
+      pinned.push({ card, x, y: s.y, w, h: s.h, autoPlace: false });
+    } else {
+      autoCards.push(card);
     }
-    // A genuinely-new card on an existing saved arrangement: GridStack finds it a
-    // gap (no explicit x/y). Default to a full-width standard slot.
-    return { card, w: FULL_W, h: SLOT_H, autoPlace: true };
-  });
+  }
+
+  // No pins → the whole canvas is the clean template (the common case: fresh or
+  // restored-but-never-dragged). This is what re-pairs KG+Timeline on every load.
+  if (pinned.length === 0) return autoLayout(autoCards, false);
+
+  // Some pins: keep them, and template-arrange the rest. autoLayout's positions are
+  // a starting arrangement; GridStack resolves any overlap with the pins.
+  return [...pinned, ...autoLayout(autoCards, false)];
 }

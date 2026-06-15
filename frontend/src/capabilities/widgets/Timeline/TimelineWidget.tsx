@@ -96,9 +96,13 @@ export function TimelineWidget(_props: { widget: Widget }) {
 export function SpecTimeline({
   spec,
   header,
+  hideTitle,
 }: {
   spec: TimelineSpec;
   header?: ReactNode;
+  // Bigsail renders the title in the card's top bar, so it asks the body to skip
+  // its own plain-title fallback.
+  hideTitle?: boolean;
 }) {
   const bus = useAgentEvents();
   // Ground each entry's explore prompt in the timeline title when present.
@@ -145,6 +149,7 @@ export function SpecTimeline({
           {header}
         </div>
       ) : (
+        !hideTitle &&
         spec.title && (
           <h2 className="font-display text-sm font-semibold text-content">
             {spec.title}

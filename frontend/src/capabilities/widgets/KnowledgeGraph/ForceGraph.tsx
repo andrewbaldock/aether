@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 // Lazy per-icon loader: resolves a model-chosen icon by name on demand without
 // bundling all ~1500 icons. Unknown names render its fallback, so an invalid
 // model suggestion degrades gracefully.
+import { Tooltip } from "../../../shell/Tooltip";
 import { MenuItems } from "../ContextMenu";
 import { DynamicIcon, resolveIconName } from "../lucideIcon";
 import { TYPE_COLOR } from "./colors";
@@ -38,14 +39,30 @@ import { dedupeNodes, filterDanglingLinks } from "./sanitize";
 import type { GraphLink, GraphNode } from "./types";
 import type { NodePosition } from "./useKnowledgeGraphState";
 
-const VIEW_W = 600;
+// The viewBox HEIGHT is fixed; the WIDTH tracks the card's aspect ratio (see
+// viewW state below). A fixed square viewBox letterboxed into a wide card meant the
+// graph fit perfectly into a centred square and left big dead margins on the sides —
+// the "why is it so small" bug. Matching the viewBox aspect to the card makes the
+// fit use the full visible area. VIEW_W is just the seed/fallback width before the
+// first measure.
 const VIEW_H = 600;
+const VIEW_W = 600;
+// Clamp the derived width so a pathologically wide/narrow card can't produce an
+// absurd aspect (which would make nodes tiny or the layout a thin strip).
+const MIN_VIEW_W = 360;
+const MAX_VIEW_W = 1600;
 // Larger nodes so each can carry a centred lucide icon and read as a distinct
 // token rather than a dot.
 const NODE_R = 16;
 // Pointer movement (in SVG units) beyond which a press counts as a drag, not a
 // click. Keeps tap-to-select working while still allowing drag-to-pin.
 const DRAG_THRESHOLD = 4;
+// Auto-fit the view after this many sim ticks rather than waiting for the full
+// cool-down (`end`, ~300 ticks / ~2s). By ~40 ticks the layout is broadly in place,
+// so framing then makes the "pop" feel immediate; the sim keeps refining beneath
+// the already-fit view. The `end` handler is a backstop for graphs that settle in
+// fewer ticks.
+const AUTO_FIT_TICKS = 40;
 // Quiet window after the last nodes/links change before we reconcile + re-heat the
 // sim. Collapses a burst of build_knowledge_graph updates (some models fire many
 // per turn) into a single settle instead of one violent re-layout per update.
@@ -107,10 +124,32 @@ export function ForceGraph({
   const [transform, setTransform] = useState("");
   const [menu, setMenu] = useState<ContextMenuState | null>(null);
 
+  // The viewBox width, derived from the card's measured aspect ratio (height fixed
+  // at VIEW_H). State drives the <svg viewBox>; the ref mirror lets the sim/fit
+  // closures read the current width without re-subscribing. See the ResizeObserver
+  // effect below.
+  const [viewW, setViewW] = useState(VIEW_W);
+  const viewWRef = useRef(VIEW_W);
+  viewWRef.current = viewW;
+
   // The simulation owns a stable node/link array it mutates; we reconcile React's
   // props into it so positions survive across additive merges.
   const simNodes = useRef<GraphNode[]>([]);
   const simLinks = useRef<GraphLink[]>([]);
+
+  // Auto-fit happens in two one-shot stages on load, so the graph opens framed
+  // fast AND stays framed once it fully settles (zoom/pan is view state, separate
+  // from node positions, so we re-frame even when positions were restored):
+  //   1. EARLY — after ~AUTO_FIT_TICKS ticks, when the layout is roughly in place,
+  //      so the "pop" feels immediate.
+  //   2. FINAL — on the sim's `end` (fully settled), correcting the early frame
+  //      after the nodes finish spreading.
+  // Each stage fires once. A genuine user zoom/pan (userZoomedRef) cancels the
+  // pending final fit so we never yank a view the user already grabbed; later
+  // incremental updates don't re-fit either.
+  const didEarlyFitRef = useRef(false);
+  const didFinalFitRef = useRef(false);
+  const userZoomedRef = useRef(false);
 
   // Report current positions (incl. pinned fx/fy) up so saves capture layout.
   const reportPositions = useCallback(() => {
@@ -144,7 +183,7 @@ export function ForceGraph({
       const cx =
         positioned.length > 0
           ? positioned.reduce((s, n) => s + (n.x ?? 0), 0) / positioned.length
-          : VIEW_W / 2;
+          : viewWRef.current / 2;
       const cy =
         positioned.length > 0
           ? positioned.reduce((s, n) => s + (n.y ?? 0), 0) / positioned.length
@@ -190,7 +229,7 @@ export function ForceGraph({
           simNodes.current.length > 0
             ? simNodes.current.reduce((s, n) => s + (n.x ?? 0), 0) /
               simNodes.current.length
-            : VIEW_W / 2;
+            : viewWRef.current / 2;
         const ly =
           simNodes.current.length > 0
             ? simNodes.current.reduce((s, n) => s + (n.y ?? 0), 0) /
@@ -216,11 +255,22 @@ export function ForceGraph({
               .strength(0.5)
           )
           .force("charge", forceManyBody().strength(-260))
-          .force("center", forceCenter(VIEW_W / 2, VIEW_H / 2))
+          .force("center", forceCenter(viewWRef.current / 2, VIEW_H / 2))
           .force("collide", forceCollide(NODE_R * 2.2));
-        sim.on("tick", () => setTick((t) => t + 1));
-        // When the layout settles, report final positions for persistence.
-        sim.on("end", () => reportPositions());
+        let tickCount = 0;
+        sim.on("tick", () => {
+          setTick((t) => t + 1);
+          // EARLY fit — after a handful of ticks the layout is roughly in place, so
+          // we frame then instead of waiting the full ~2s cool-down (that long wait
+          // read as a slow "pop").
+          if (++tickCount === AUTO_FIT_TICKS) autoFit(false);
+        });
+        // FINAL fit — the layout has fully settled, so re-frame to correct the early
+        // fit after the nodes finished spreading. Also persists final positions.
+        sim.on("end", () => {
+          reportPositions();
+          autoFit(true);
+        });
         simRef.current = sim;
       } else {
         sim.nodes(simNodes.current);
@@ -246,6 +296,43 @@ export function ForceGraph({
     };
   }, []);
 
+  // Track the SVG's rendered aspect ratio and derive the viewBox width from it, so
+  // the graph's coordinate space is as wide as the card (no letterboxing → the fit
+  // uses the full visible area). A single ResizeObserver on the SVG covers EVERY
+  // cause of a size change — widget resize, shell/panel resize, window resize — since
+  // they all change this element's box. On each change we re-derive viewW and re-fit
+  // (unless the user has taken over the zoom) so the framing tracks the new size.
+  useEffect(() => {
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
+    const ro = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      if (width === 0 || height === 0) return;
+      const next = Math.round(
+        Math.min(MAX_VIEW_W, Math.max(MIN_VIEW_W, VIEW_H * (width / height)))
+      );
+      setViewW((prev) => {
+        if (prev === next) return prev;
+        // Re-frame to the new aspect on the next frame (after the viewBox state
+        // applies). Don't fight a user who's taken over the zoom.
+        if (!userZoomedRef.current) {
+          requestAnimationFrame(() => {
+            const t = computeFitTransform();
+            const svg = svgRef.current;
+            const zoomBehavior = zoomRef.current;
+            if (svg && zoomBehavior && t) {
+              select(svg).call(zoomBehavior.transform, t);
+            }
+          });
+        }
+        return next;
+      });
+    });
+    ro.observe(svgEl);
+    return () => ro.disconnect();
+  }, []);
+
   // Wire d3-zoom for pan/zoom — writes the transform string into React state.
   useEffect(() => {
     const svgEl = svgRef.current;
@@ -265,7 +352,13 @@ export function ForceGraph({
         const me = e as MouseEvent;
         return (!me.ctrlKey || e.type === "wheel") && !me.button;
       })
-      .on("zoom", (e) => setTransform(e.transform.toString()));
+      .on("zoom", (e) => {
+        setTransform(e.transform.toString());
+        // A genuine user gesture (sourceEvent set) cancels the pending final
+        // auto-fit so we never yank a view the user already grabbed. Programmatic
+        // transforms from fitView() have no sourceEvent, so they don't trip this.
+        if (e.sourceEvent) userZoomedRef.current = true;
+      });
     zoomRef.current = zoomBehavior;
     const selection = select(svgEl);
     selection.call(zoomBehavior);
@@ -295,14 +388,22 @@ export function ForceGraph({
   // Returns null when there are no nodes (nothing to fit). Pure — used both to
   // apply the fit and to decide whether the Fit button would change anything.
   const computeFitTransform = useCallback((): ZoomTransform | null => {
-    if (renderNodes.length === 0) return null;
+    // Read nodes LIVE off the ref, not a render-snapshot: the reconcile reassigns
+    // simNodes.current to a NEW array, so a closure that captured the old snapshot
+    // (e.g. the sim 'end' handler bound at firstBuild, when it was empty) would
+    // otherwise see 0 nodes forever and never fit.
+    const liveNodes = simNodes.current;
+    if (liveNodes.length === 0) return null;
+
+    // Fit against the CURRENT viewBox (width tracks the card aspect; height fixed).
+    const vw = viewWRef.current;
 
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
-    for (const n of renderNodes) {
-      const x = n.x ?? VIEW_W / 2;
+    for (const n of liveNodes) {
+      const x = n.x ?? vw / 2;
       const y = n.y ?? VIEW_H / 2;
       minX = Math.min(minX, x - NODE_R);
       minY = Math.min(minY, y - NODE_R);
@@ -317,15 +418,15 @@ export function ForceGraph({
       0.3,
       Math.min(
         3,
-        Math.min((VIEW_W - PADDING * 2) / bboxW, (VIEW_H - PADDING * 2) / bboxH)
+        Math.min((vw - PADDING * 2) / bboxW, (VIEW_H - PADDING * 2) / bboxH)
       )
     );
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
     return zoomIdentity
-      .translate(VIEW_W / 2 - k * cx, VIEW_H / 2 - k * cy)
+      .translate(vw / 2 - k * cx, VIEW_H / 2 - k * cy)
       .scale(k);
-  }, [renderNodes]);
+  }, []);
 
   // Apply the fit transform (animated by d3 via the zoom behaviour).
   function fitView() {
@@ -334,6 +435,24 @@ export function ForceGraph({
     const target = computeFitTransform();
     if (!svgEl || !zoomBehavior || !target) return;
     select(svgEl).call(zoomBehavior.transform, target);
+  }
+
+  // Auto-fit one stage (see the refs up top). The early stage frames the rough
+  // layout fast; the final stage re-frames once the sim settles. Each is a one-shot;
+  // a user zoom/pan cancels the final stage. If d3-zoom isn't wired yet — its effect
+  // can lose the race on a restored graph that settles in a tick or two — retry next
+  // frame rather than dropping the fit (the bug where the graph opened unframed).
+  function autoFit(isFinal: boolean) {
+    const done = isFinal ? didFinalFitRef : didEarlyFitRef;
+    if (done.current) return;
+    if (isFinal && userZoomedRef.current) return; // user took over — don't yank
+    if (!svgRef.current) return; // unmounted — stop retrying
+    if (!zoomRef.current || !computeFitTransform()) {
+      requestAnimationFrame(() => autoFit(isFinal));
+      return;
+    }
+    done.current = true;
+    fitView();
   }
 
   // Whether clicking Fit would actually move the view — false when there are no
@@ -502,7 +621,7 @@ export function ForceGraph({
     <div className="relative h-full w-full overflow-hidden">
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+        viewBox={`0 0 ${viewW} ${VIEW_H}`}
         className="h-full w-full touch-none"
         role="img"
         aria-label="Knowledge graph"
@@ -644,19 +763,25 @@ export function ForceGraph({
         />
       </DropdownMenu.Root>
 
-      {/* Fit-to-view: frames every node perfectly. Icon-only and tiny; disabled
-          when the view is already fitted (or there are no nodes) so clicking it
-          would do nothing. */}
-      <button
-        type="button"
-        onClick={fitView}
-        disabled={!canFit}
-        aria-label="Fit graph to view"
-        title="Fit graph to view"
-        className="absolute bottom-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface-raised text-content-muted transition-colors hover:text-content disabled:cursor-default disabled:opacity-40 disabled:hover:text-content-muted"
-      >
-        <Maximize2 className="h-4 w-4" aria-hidden />
-      </button>
+      {/* Fit-to-view: frames every node perfectly. Icon-only and tiny. Hidden
+          entirely when the view is already fitted (or there are no nodes) —
+          clicking would change nothing, so we don't show it at all. */}
+      {canFit && (
+        <Tooltip
+          label="Fit graph to view"
+          side="right"
+          className="absolute bottom-2 left-2"
+        >
+          <button
+            type="button"
+            onClick={fitView}
+            aria-label="Fit graph to view"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-content-muted transition-colors hover:bg-surface-raised hover:text-content"
+          >
+            <Maximize2 className="h-4 w-4" aria-hidden />
+          </button>
+        </Tooltip>
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import "gridstack/dist/gridstack.min.css";
 import { GridStack, type GridStackNode } from "gridstack";
+import { GripVertical } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BigsailCard } from "./BigsailCard";
@@ -28,17 +29,27 @@ interface TilesCanvasProps {
   onLayoutChange: (layout: TilesLayoutItem[]) => void;
 }
 
-function serialize(grid: GridStack): TilesLayoutItem[] {
+function serialize(
+  grid: GridStack,
+  userMovedIds: Set<string>
+): TilesLayoutItem[] {
   const nodes = grid.save(false) as GridStackNode[];
   return nodes
     .filter((n) => typeof n.id === "string")
-    .map((n) => ({
-      id: n.id as string,
-      x: n.x ?? 0,
-      y: n.y ?? 0,
-      w: n.w ?? 1,
-      h: n.h ?? 1,
-    }));
+    .map((n) => {
+      const id = n.id as string;
+      return {
+        id,
+        x: n.x ?? 0,
+        y: n.y ?? 0,
+        w: n.w ?? 1,
+        h: n.h ?? 1,
+        // Carry the user-moved flag so placeCards pins this card on reload instead
+        // of re-templating it. Set only by a genuine drag/resize (see dragstop /
+        // resizestop below), never by a programmatic add/reflow.
+        ...(userMovedIds.has(id) ? { userMoved: true } : {}),
+      };
+    });
 }
 
 export function TilesCanvas({ placed, onLayoutChange }: TilesCanvasProps) {
@@ -52,6 +63,15 @@ export function TilesCanvas({ placed, onLayoutChange }: TilesCanvasProps) {
 
   const onChangeRef = useRef(onLayoutChange);
   onChangeRef.current = onLayoutChange;
+
+  // Ids the user has dragged/resized this session. Seeded from the pinned cards in
+  // `placed` (autoPlace === false → they came from a userMoved saved entry), then
+  // grown by dragstop/resizestop. serialize() reads it to re-stamp userMoved so the
+  // pin survives reload. A ref (not state) so updating it never re-runs effects.
+  const userMovedRef = useRef<Set<string>>(new Set());
+  for (const p of placed) {
+    if (!p.autoPlace) userMovedRef.current.add(p.card.id);
+  }
 
   // Init GridStack once. The grid is always GRID_COLUMNS wide — responsiveness is
   // the column WIDTH (the grid spans 100% of the panel), not a changing count.
@@ -70,9 +90,23 @@ export function TilesCanvas({ placed, onLayoutChange }: TilesCanvasProps) {
       el
     );
     gridRef.current = grid;
-    grid.on("change", () => onChangeRef.current(serialize(grid)));
+    // A genuine user drag/resize pins the card: record it so it's re-stamped
+    // userMoved on save and never auto-rejiggered again. These fire ONLY on user
+    // interaction (not on our programmatic addWidget/reflow), which is exactly the
+    // signal we want — `change` alone can't tell a user move from a reflow.
+    const markMoved = (_e: Event, el: unknown) => {
+      const node = (el as { gridstackNode?: GridStackNode })?.gridstackNode;
+      if (typeof node?.id === "string") userMovedRef.current.add(node.id);
+    };
+    grid.on("dragstop", markMoved);
+    grid.on("resizestop", markMoved);
+    grid.on("change", () =>
+      onChangeRef.current(serialize(grid, userMovedRef.current))
+    );
     return () => {
       grid.off("change");
+      grid.off("dragstop");
+      grid.off("resizestop");
       grid.destroy(false);
       gridRef.current = null;
     };
@@ -114,6 +148,23 @@ export function TilesCanvas({ placed, onLayoutChange }: TilesCanvasProps) {
           ".grid-stack-item-content"
         );
         if (content) nextPortals.set(p.card.id, content);
+        // Reflow an AUTO card to its freshly-computed template slot. This is what
+        // makes the layout re-evaluate as cards hydrate: when the KG lands and the
+        // template re-pairs it with the timeline (half/half top row), the timeline's
+        // existing item moves from full-width to its new half slot. Pinned cards
+        // (userMoved) are left exactly where the user put them. Skip no-op updates
+        // so we don't thrash GridStack with identical geometry.
+        if (
+          !userMovedRef.current.has(p.card.id) &&
+          p.x !== undefined &&
+          p.y !== undefined &&
+          (existing.x !== p.x ||
+            existing.y !== p.y ||
+            existing.w !== p.w ||
+            existing.h !== p.h)
+        ) {
+          grid.update(existing.el, { x: p.x, y: p.y, w: p.w, h: p.h });
+        }
         continue;
       }
       // New card: let GridStack create the item DOM, then portal React in. We
@@ -178,9 +229,12 @@ function CardShell({
   staggerIndex?: number;
 }) {
   const isSkeleton = card.placeholder === true;
+  // Title lives in the top bar (fixed) so it stays put while the card body
+  // scrolls. Skeleton cards have no real spec yet, so no title.
+  const title = isSkeleton ? undefined : card.spec.title;
   return (
     <div
-      className={`flex h-full flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg ${
+      className={`group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg ${
         isSkeleton ? "tiles-skeleton-in" : ""
       }`}
       style={
@@ -189,11 +243,21 @@ function CardShell({
           : undefined
       }
     >
+      {/* Top bar doubles as the drag handle (the whole strip starts a drag) and
+          carries the card's title, which stays fixed while the body scrolls. */}
       <div
-        className="bigsail-card-drag flex h-5 shrink-0 cursor-grab items-center justify-center bg-elevated/60 active:cursor-grabbing"
+        className="bigsail-card-drag flex h-7 shrink-0 cursor-grab items-center gap-2 px-3 bg-elevated/60 active:cursor-grabbing"
         title="Drag to rearrange"
       >
-        <span className="text-content-faint text-xs leading-none">⋯</span>
+        <span className="truncate font-display text-sm font-semibold text-content">
+          {title}
+        </span>
+        {/* Subtle drag-affordance dots, right-aligned. Faint by default so they
+            recede; brighten a touch on card hover to hint the bar is draggable. */}
+        <GripVertical
+          className="ml-auto h-4 w-4 shrink-0 text-content-faint/50 transition-colors group-hover:text-content-faint"
+          aria-hidden
+        />
       </div>
       <div className="bigsail-card min-h-0 flex-1 overflow-hidden">
         <BigsailCard card={card} />

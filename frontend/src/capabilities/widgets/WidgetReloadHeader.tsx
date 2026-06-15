@@ -1,4 +1,5 @@
 import { RefreshCw } from "lucide-react";
+import { Tooltip } from "../../shell/Tooltip";
 
 // Per-ENTRY header: one table/chart/timeline/gallery's own title on the left, with a
 // dim reload icon on the right that rebuilds JUST THAT entry from the conversation
@@ -52,20 +53,21 @@ export function WidgetReloadHeaderButton({
   label?: string;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onReload}
-      aria-label={label}
-      title={label}
-      // Dim by default (text-content-subtle/60) so it recedes; brightens on hover.
-      // Spins while a reload is queued behind an in-flight turn.
-      className="shrink-0 rounded-md p-1 text-content-subtle/60 transition-colors hover:bg-elevated hover:text-content focus-visible:bg-elevated focus-visible:text-content focus-visible:outline-none"
-    >
-      <RefreshCw
-        className={`h-4 w-4 ${queued ? "animate-spin" : ""}`}
-        aria-hidden
-      />
-    </button>
+    <Tooltip label={label} contentClassName="w-64 whitespace-normal leading-snug">
+      <button
+        type="button"
+        onClick={onReload}
+        aria-label={label}
+        // Dim by default (text-content-subtle/60) so it recedes; brightens on hover.
+        // Spins while a reload is queued behind an in-flight turn.
+        className="shrink-0 rounded-md p-1 text-content-subtle/60 transition-colors hover:bg-elevated hover:text-content focus-visible:bg-elevated focus-visible:text-content focus-visible:outline-none"
+      >
+        <RefreshCw
+          className={`h-4 w-4 ${queued ? "animate-spin" : ""}`}
+          aria-hidden
+        />
+      </button>
+    </Tooltip>
   );
 }
 
@@ -84,20 +86,23 @@ export function WidgetReloadAll({
   label?: string;
 }) {
   return (
-    <div className="flex justify-center pt-2 pb-4">
-      <button
-        type="button"
-        onClick={onReload}
-        aria-label={label}
-        title={label}
-        className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-content-muted transition-colors hover:border-content-muted hover:text-content"
-      >
-        <RefreshCw
-          className={`h-3.5 w-3.5 ${queued ? "animate-spin" : ""}`}
-          aria-hidden
-        />
-        Reload
-      </button>
+    <div className="flex justify-center pt-6 pb-4">
+      <Tooltip label={label} contentClassName="w-64 whitespace-normal leading-snug">
+        <button
+          type="button"
+          onClick={onReload}
+          aria-label={label}
+          // Recedes at 50% opacity so it doesn't compete with the data above it;
+          // brightens to full on hover. Border/text also shift on hover.
+          className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-content-muted opacity-50 transition hover:border-content-muted hover:text-content hover:opacity-100"
+        >
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${queued ? "animate-spin" : ""}`}
+            aria-hidden
+          />
+          Reload
+        </button>
+      </Tooltip>
     </div>
   );
 }

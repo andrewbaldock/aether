@@ -3,6 +3,7 @@ import { useUpdateSession } from "../../../hooks/useUpdateSession";
 import { SCHEMA_VERSIONS } from "../../../lib/schemaVersion";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
 import { useSessionContext } from "../../../shell/SessionContext";
+import { Tooltip } from "../../../shell/Tooltip";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { useChartState } from "../Chart/useChartState";
@@ -197,6 +198,22 @@ export function BigsailWidget(_props: { widget: Widget }) {
     // Never persist transient skeleton positions — they vanish when the turn
     // settles, so a saved `skeleton:*` entry would just be dead weight on reload.
     const real = layout.filter((item) => !item.id.startsWith("skeleton:"));
+
+    // Preserve saved slots for cards that aren't in the grid right now. On reload
+    // some cards hydrate asynchronously — the knowledge graph especially, whose
+    // nodes restore a beat after the other cards. GridStack fires `change` for the
+    // cards already present, and a naive save would drop the absent KG entry; when
+    // its nodes then arrive it'd be treated as a brand-new card and dumped
+    // full-width at the bottom (the bug this guards). Cards are never user-deleted
+    // on the canvas (they mirror conversation state), so an id missing from the
+    // current layout is loading, not gone — keep its saved position until it
+    // actually renders and reports a real one.
+    const present = new Set(real.map((item) => item.id));
+    const carried = (savedLayout ?? []).filter(
+      (item) => !item.id.startsWith("skeleton:") && !present.has(item.id)
+    );
+    const merged = [...real, ...carried];
+
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       updateSession.mutate({
@@ -204,7 +221,7 @@ export function BigsailWidget(_props: { widget: Widget }) {
         patch: {
           ui_state: {
             activeWidget,
-            tilesLayout: real,
+            tilesLayout: merged,
             tilesLayoutVersion: SCHEMA_VERSIONS.tilesLayout,
           },
         },
@@ -249,18 +266,21 @@ export function BigsailWidget(_props: { widget: Widget }) {
 
   return (
     <div ref={hostRef} className="relative h-full w-full bg-surface">
+      {/* Reset layout button hidden for now — wiring (resetLayout) kept intact.
       {hasContent && (
         <div className="absolute right-3 top-3 z-10">
-          <button
-            type="button"
-            onClick={resetLayout}
-            title="Reset the card arrangement to a fresh best-fit layout"
-            className="rounded-full border border-border bg-surface/90 px-3 py-1 text-xs font-medium text-content-muted backdrop-blur-sm transition-colors hover:text-content"
-          >
-            Reset layout
-          </button>
+          <Tooltip label="Reset the card arrangement to a fresh best-fit layout">
+            <button
+              type="button"
+              onClick={resetLayout}
+              aria-label="Reset the card arrangement to a fresh best-fit layout"
+              className="rounded-full border border-border bg-surface/90 px-3 py-1 text-xs font-medium text-content-muted backdrop-blur-sm transition-colors hover:text-content"
+            >
+              Reset layout
+            </button>
+          </Tooltip>
         </div>
-      )}
+      )} */}
 
       {hasContent ? (
         <TilesCanvas

@@ -71,7 +71,11 @@ export function TableProvider({ children }: { children: ReactNode }) {
   // Accumulating table list, fed by both streamed partials and the final
   // tool_result via the shared streaming-entries hook (see useStreamingEntries).
   const { entries, setEntries, nextId, requestReplace, requestReplaceEntry } =
-    useStreamingEntries<TableSpec>("render_table", parseTableSpec);
+    useStreamingEntries<TableSpec>(
+      "render_table",
+      parseTableSpec,
+      (spec) => spec.title
+    );
 
   const loadEntries = useCallback(
     (loaded: TableEntry[]) => {

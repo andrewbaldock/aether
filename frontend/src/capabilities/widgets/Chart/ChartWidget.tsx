@@ -222,10 +222,23 @@ const AXIS_COLOR = "currentColor";
 // The bare recharts node for one chart spec. Caller supplies the sizing wrapper
 // (ResponsiveContainer) and optional title — the ChartWidget tab does, and so does
 // BigsailCard. Pure spec → JSX; this is the canonical single-spec renderer.
-export function SpecChart({ spec }: { spec: ChartSpec }) {
+//
+// hideAxisLabels: suppress the recharts-internal axis titles so the caller can
+// render them in a dedicated frame and let the plot fill the rest (Bigsail does
+// this — recharts' rotated y-label otherwise clips against the card edge). Ticks
+// stay; only the axis TITLES are dropped.
+export function SpecChart({
+  spec,
+  hideAxisLabels,
+}: {
+  spec: ChartSpec;
+  hideAxisLabels?: boolean;
+}) {
   const common = {
     data: spec.data,
   };
+  const xLabel = hideAxisLabels ? undefined : spec.xLabel;
+  const yLabel = hideAxisLabels ? undefined : spec.yLabel;
 
   if (spec.type === "pie") {
     // Pie uses the first series as the value field; each datum becomes a slice
@@ -268,10 +281,10 @@ export function SpecChart({ spec }: { spec: ChartSpec }) {
         <CategoryAxis
           axis={horizontal ? "y" : "x"}
           xKey={spec.xKey}
-          label={spec.xLabel}
+          label={xLabel}
           count={spec.data.length}
         />
-        <ValueAxis axis={horizontal ? "x" : "y"} label={spec.yLabel} />
+        <ValueAxis axis={horizontal ? "x" : "y"} label={yLabel} />
         <RechartsTooltip />
         <Legend />
         {spec.series.map((s, i) => (
@@ -305,10 +318,10 @@ export function SpecChart({ spec }: { spec: ChartSpec }) {
         <CategoryAxis
           axis="x"
           xKey={spec.xKey}
-          label={spec.xLabel}
+          label={xLabel}
           count={spec.data.length}
         />
-        <ValueAxis axis="y" label={spec.yLabel} />
+        <ValueAxis axis="y" label={yLabel} />
         <RechartsTooltip />
         <Legend />
         {spec.series.map((s, i) => {
@@ -336,10 +349,10 @@ export function SpecChart({ spec }: { spec: ChartSpec }) {
       <CategoryAxis
         axis="x"
         xKey={spec.xKey}
-        label={spec.xLabel}
+        label={xLabel}
         count={spec.data.length}
       />
-      <ValueAxis axis="y" label={spec.yLabel} />
+      <ValueAxis axis="y" label={yLabel} />
       <RechartsTooltip />
       <Legend />
       {spec.series.map((s, i) => (

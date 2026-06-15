@@ -48,4 +48,9 @@ export interface TilesLayoutItem {
   y: number;
   w: number;
   h: number;
+  // True once the USER has dragged/resized this card. User-moved cards are pinned
+  // (restored verbatim, never auto-rejiggered); everything else is re-packed by the
+  // template on each card-set change, so e.g. a late-hydrating KG re-pairs with the
+  // timeline instead of being dumped in a gap. Absent/false → auto-arranged.
+  userMoved?: boolean;
 }

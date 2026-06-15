@@ -25,9 +25,23 @@ export interface StreamingEntry<Spec> {
   spec: Spec;
 }
 
+// Normalize a title for de-dup comparison: trimmed + lowercased. Empty/whitespace
+// titles return undefined (never merge an untitled widget onto another).
+function normTitle(title: string | undefined): string | undefined {
+  const t = title?.trim().toLowerCase();
+  return t ? t : undefined;
+}
+
 export function useStreamingEntries<Spec>(
   toolName: string,
-  parse: (raw: string) => Spec | null
+  parse: (raw: string) => Spec | null,
+  // Optional: extract a spec's title for de-duplication. When a turn opens a FRESH
+  // entry whose title matches an existing entry's (case-insensitive, trimmed), the
+  // new spec REPLACES that entry in place instead of appending a near-duplicate.
+  // This is the safety net for follow-up turns where the model re-emits a widget it
+  // already produced (same "History of Bowling" timeline twice, same gallery title,
+  // an overlapping chart). Omit it (or return undefined) to always append.
+  getTitle?: (spec: Spec) => string | undefined
 ): {
   entries: StreamingEntry<Spec>[];
   setEntries: React.Dispatch<React.SetStateAction<StreamingEntry<Spec>[]>>;
@@ -37,6 +51,10 @@ export function useStreamingEntries<Spec>(
 } {
   const bus = useAgentEvents();
   const [entries, setEntries] = useState<StreamingEntry<Spec>[]>([]);
+  // Live mirror of entries so the bus handler can read the current set (for the
+  // title-merge lookup) without re-subscribing on every entries change.
+  const entriesRef = useRef(entries);
+  entriesRef.current = entries;
   // Monotonic id source for stable keys — never reused, even across removals.
   const nextId = useRef(0);
   // The id of the entry currently being streamed for THIS in-flight render, or null
@@ -112,23 +130,42 @@ export function useStreamingEntries<Spec>(
         // below clears streamingId synchronously — reading the ref inside the
         // updater would race that).
         let id = streamingId.current;
+        // Whether this is a freshly-opened slot (vs. continuing to stream into one
+        // already open this render). Only a fresh slot is eligible for title-merge —
+        // once a slot is bound, every partial keeps targeting the same entry.
+        let freshSlot = false;
         if (id === null) {
           // A per-entry reload binds the streaming slot to the EXISTING entry's id,
           // so this turn's spec(s) overwrite that one entry in place. Otherwise open
-          // a fresh id (append, or whole-set replace below).
+          // a fresh id (append, title-merge, or whole-set replace below).
           if (replaceEntryId.current !== null) {
             id = replaceEntryId.current;
             replaceEntryId.current = null;
           } else {
             id = nextId.current++;
+            freshSlot = true;
           }
           streamingId.current = id;
         }
-        const targetId = id;
+        let targetId = id;
         // A pending whole-set rebuild replaces the prior set with this fresh entry the
         // moment it arrives, then behaves normally for the rest of the turn.
         const replacing = replaceOnArrival.current;
         if (replacing) replaceOnArrival.current = false;
+        // De-dup by title: when a fresh slot opens with a title that matches an
+        // existing entry (and we're not doing a whole-set replace), retarget the
+        // streaming slot onto that entry so the new spec supersedes it in place
+        // instead of appending a near-duplicate (the follow-up-turn dupe bug).
+        const newTitle = freshSlot && !replacing ? normTitle(getTitle?.(parsed)) : undefined;
+        if (newTitle !== undefined) {
+          const match = entriesRef.current.find(
+            (e) => normTitle(getTitle?.(e.spec)) === newTitle
+          );
+          if (match) {
+            targetId = match.id;
+            streamingId.current = match.id;
+          }
+        }
         setEntries((prev) => {
           const base = replacing ? [] : prev;
           const idx = base.findIndex((e) => e.id === targetId);

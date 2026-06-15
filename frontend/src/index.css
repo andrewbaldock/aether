@@ -94,6 +94,42 @@ body,
   }
 }
 
+/* ── Scrollbars ──────────────────────────────────────────────────────────────
+   Default browser scrollbars render an opaque grey track that clashes with our
+   tinted surfaces (e.g. the grey-green sidebar). Shade them to the theme: a
+   transparent track so the body bg shows through, and a subtle thumb drawn from
+   the border token (which already flips light/dark). Standard properties cover
+   Firefox + modern Chromium/Safari; the ::-webkit block backs older WebKit.
+   Components on a non-default surface can still override scrollbar-color. */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+    border-radius: 9999px;
+    /* Transparent border + background-clip insets the thumb so it reads as a
+       slim pill floating on the body bg rather than filling the gutter. */
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--content-faint);
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
 button,
 [role="button"],
 label,
@@ -245,33 +281,35 @@ body {
 
 /* ── Tiles resize affordance ─────────────────────────────────────────────────
    GridStack's default SE resize handle is a near-invisible 1px glyph — in dark
-   mode you're resizing blind. Give it a real, brand-tinted grip that brightens on
-   hover, and outline the whole card with a neon ring while it's actively being
-   resized or dragged so you can always see what you're manipulating. */
+   mode you're resizing blind. Give it a real grip in the SE corner. At rest it's
+   a quiet, muted grey so it doesn't compete with the card content; it adopts the
+   brand neon cyan on card hover, when you're actually reaching to resize. The card
+   still gets a neon ring while being actively resized/dragged. */
 .grid-stack .grid-stack-item > .ui-resizable-se {
-  width: 18px;
-  height: 18px;
-  right: 2px;
-  bottom: 2px;
-  /* Two stacked corner ticks → a visible "drag me" grip in the SE corner. */
+  width: 15px;
+  height: 15px;
+  right: 8px;
+  bottom: 8px;
+  /* Two stacked corner ticks → a "drag me" grip in the SE corner. */
   background-image: linear-gradient(
       135deg,
       transparent 0 45%,
-      var(--neon-cyan, #16c2ff) 45% 55%,
+      var(--content-faint, #b8b2c4) 45% 55%,
       transparent 55%
     ),
     linear-gradient(
       135deg,
       transparent 0 65%,
-      var(--neon-cyan, #16c2ff) 65% 75%,
+      var(--content-faint, #b8b2c4) 65% 75%,
       transparent 75%
     );
-  opacity: 0.55;
+  opacity: 0.15;
   transform: none;
   transition: opacity 120ms ease;
 }
 .grid-stack .grid-stack-item:hover > .ui-resizable-se {
-  opacity: 1;
+  /* Just a touch more present on hover — still the muted grey grip, never neon. */
+  opacity: 0.35;
 }
 /* While dragging or resizing, GridStack adds these classes — ring the live card. */
 .grid-stack .grid-stack-item.ui-resizable-resizing > .grid-stack-item-content,

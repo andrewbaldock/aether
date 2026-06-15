@@ -1,6 +1,7 @@
 import { RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { AdminPage } from "../../../shell/AdminPage";
+import { Tooltip } from "../../../shell/Tooltip";
 import type { Widget } from "../../registry";
 import { type HealthFullResult, useHealthFull } from "./useHealthFull";
 
@@ -190,16 +191,21 @@ function PendingRow({ label }: { label: string }) {
 function StatusDot({ ok, configured }: { ok: boolean; configured: boolean }) {
   if (!configured) {
     return (
-      <span
-        className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-amber-400"
-        title="Not configured"
-      />
+      <Tooltip label="Not configured" className="mt-0.5 shrink-0">
+        <span
+          className="h-2 w-2 rounded-full bg-amber-400"
+          aria-label="Not configured"
+        />
+      </Tooltip>
     );
   }
+  const label = ok ? "OK" : "Error";
   return (
-    <span
-      className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${ok ? "bg-green-400" : "bg-red-400"}`}
-      title={ok ? "OK" : "Error"}
-    />
+    <Tooltip label={label} className="mt-0.5 shrink-0">
+      <span
+        className={`h-2 w-2 rounded-full ${ok ? "bg-green-400" : "bg-red-400"}`}
+        aria-label={label}
+      />
+    </Tooltip>
   );
 }

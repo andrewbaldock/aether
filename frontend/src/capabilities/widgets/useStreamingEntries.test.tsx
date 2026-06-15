@@ -237,4 +237,101 @@ describe("useStreamingEntries", () => {
     });
     expect(r.current.streaming.entries).toHaveLength(0);
   });
+
+  // ── Title-merge (follow-up-turn dupe safety net) ──────────────────────────
+  // A getTitle fn enables de-dup: a fresh entry whose title matches an existing
+  // one replaces it in place instead of appending a near-duplicate.
+  interface TitledSpec {
+    title?: string;
+    rows: { v: number }[];
+  }
+  function parseTitled(raw: string): TitledSpec | null {
+    let data: unknown;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+    if (data == null || typeof data !== "object") return null;
+    const rows = (data as { rows?: unknown }).rows;
+    if (!Array.isArray(rows)) return null;
+    const title = (data as { title?: unknown }).title;
+    return {
+      title: typeof title === "string" ? title : undefined,
+      rows: rows.filter((r): r is { v: number } => r != null),
+    };
+  }
+  function setupTitled() {
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AgentEventProvider>{children}</AgentEventProvider>
+    );
+    return renderHook(
+      () => ({
+        streaming: useStreamingEntries<TitledSpec>(
+          "render_table",
+          parseTitled,
+          (s) => s.title
+        ),
+        bus: useAgentEvents(),
+      }),
+      { wrapper }
+    );
+  }
+
+  it("title-merge: a same-titled entry from a later turn replaces in place", () => {
+    const { result: r } = setupTitled();
+    const { bus } = r.current;
+
+    result(bus, '{"title":"History of Bowling","rows":[{"v":1}]}');
+    expect(r.current.streaming.entries).toHaveLength(1);
+    const id = r.current.streaming.entries[0]!.id;
+
+    // Follow-up turn re-emits the SAME title — must overwrite, not append.
+    result(bus, '{"title":"History of Bowling","rows":[{"v":2},{"v":3}]}');
+    expect(r.current.streaming.entries).toHaveLength(1);
+    expect(r.current.streaming.entries[0]?.id).toBe(id); // same entry, kept id
+    expect(r.current.streaming.entries[0]?.spec.rows).toHaveLength(2);
+  });
+
+  it("title-merge is case/space-insensitive", () => {
+    const { result: r } = setupTitled();
+    const { bus } = r.current;
+    result(bus, '{"title":"History of Bowling","rows":[{"v":1}]}');
+    result(bus, '{"title":"  history of BOWLING ","rows":[{"v":9}]}');
+    expect(r.current.streaming.entries).toHaveLength(1);
+    expect(r.current.streaming.entries[0]?.spec.rows[0]?.v).toBe(9);
+  });
+
+  it("title-merge: different titles still append", () => {
+    const { result: r } = setupTitled();
+    const { bus } = r.current;
+    result(bus, '{"title":"Lanes over time","rows":[{"v":1}]}');
+    result(bus, '{"title":"Bowlers over time","rows":[{"v":2}]}');
+    expect(r.current.streaming.entries).toHaveLength(2);
+  });
+
+  it("title-merge: untitled specs never merge onto each other", () => {
+    const { result: r } = setupTitled();
+    const { bus } = r.current;
+    result(bus, '{"rows":[{"v":1}]}');
+    result(bus, '{"rows":[{"v":2}]}');
+    expect(r.current.streaming.entries).toHaveLength(2);
+  });
+
+  it("title-merge: streaming partials of a matching title upsert the matched entry", () => {
+    const { result: r } = setupTitled();
+    const { bus } = r.current;
+    result(bus, '{"title":"Trend","rows":[{"v":1}]}');
+    const id = r.current.streaming.entries[0]!.id;
+
+    // A later turn streams a same-titled spec: the FIRST parseable partial binds the
+    // slot to the matched entry, and subsequent partials keep upserting it (not a
+    // new entry per tick).
+    partial(bus, '{"title":"Trend","rows":[{"v":2}]}');
+    expect(r.current.streaming.entries).toHaveLength(1);
+    expect(r.current.streaming.entries[0]?.id).toBe(id);
+    partial(bus, '{"title":"Trend","rows":[{"v":2},{"v":3}]}');
+    expect(r.current.streaming.entries).toHaveLength(1);
+    expect(r.current.streaming.entries[0]?.spec.rows).toHaveLength(2);
+  });
 });
