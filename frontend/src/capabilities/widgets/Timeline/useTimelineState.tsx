@@ -19,6 +19,8 @@ export interface TimelineState {
   clearEntries: () => void;
   // Rebuild = replace-on-arrival: keep the current timeline until the new one lands.
   requestReplace: () => void;
+  // Reload ONE timeline by id: the next spec replaces just that entry, in place.
+  requestReplaceEntry: (id: number) => void;
 }
 
 const TimelineContext = createContext<TimelineState | null>(null);
@@ -63,7 +65,7 @@ export function parseTimelineSpec(raw: string): TimelineSpec | null {
 
 export function TimelineProvider({ children }: { children: ReactNode }) {
   // Streamed partials + final tool_result, via the shared streaming-entries hook.
-  const { entries, setEntries, nextId, requestReplace } =
+  const { entries, setEntries, nextId, requestReplace, requestReplaceEntry } =
     useStreamingEntries<TimelineSpec>("render_timeline", parseTimelineSpec);
 
   const loadEntries = useCallback(
@@ -77,8 +79,14 @@ export function TimelineProvider({ children }: { children: ReactNode }) {
   const clearEntries = useCallback(() => setEntries([]), [setEntries]);
 
   const value = useMemo<TimelineState>(
-    () => ({ entries, loadEntries, clearEntries, requestReplace }),
-    [entries, loadEntries, clearEntries, requestReplace]
+    () => ({
+      entries,
+      loadEntries,
+      clearEntries,
+      requestReplace,
+      requestReplaceEntry,
+    }),
+    [entries, loadEntries, clearEntries, requestReplace, requestReplaceEntry]
   );
 
   return (

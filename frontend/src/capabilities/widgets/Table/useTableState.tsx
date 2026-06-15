@@ -28,6 +28,8 @@ export interface TableState {
   clearEntries: () => void;
   // Rebuild = replace-on-arrival: keep the current table until the new one lands.
   requestReplace: () => void;
+  // Reload ONE table by id: the next spec replaces just that entry, in place.
+  requestReplaceEntry: (id: number) => void;
 }
 
 const TableContext = createContext<TableState | null>(null);
@@ -68,7 +70,7 @@ export function parseTableSpec(raw: string): TableSpec | null {
 export function TableProvider({ children }: { children: ReactNode }) {
   // Accumulating table list, fed by both streamed partials and the final
   // tool_result via the shared streaming-entries hook (see useStreamingEntries).
-  const { entries, setEntries, nextId, requestReplace } =
+  const { entries, setEntries, nextId, requestReplace, requestReplaceEntry } =
     useStreamingEntries<TableSpec>("render_table", parseTableSpec);
 
   const loadEntries = useCallback(
@@ -83,8 +85,20 @@ export function TableProvider({ children }: { children: ReactNode }) {
   const clearEntries = useCallback(() => setEntries([]), [setEntries]);
 
   const value = useMemo<TableState>(
-    () => ({ entries, loadEntries, clearEntries, requestReplace }),
-    [entries, loadEntries, clearEntries, requestReplace]
+    () => ({
+      entries,
+      loadEntries,
+      clearEntries,
+      requestReplace,
+      requestReplaceEntry,
+    }),
+    [
+      entries,
+      loadEntries,
+      clearEntries,
+      requestReplace,
+      requestReplaceEntry,
+    ]
   );
 
   return (

@@ -1,14 +1,17 @@
+import type { ReactNode } from "react";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
 import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { ExploreMenu } from "../ContextMenu";
 import { DynamicIcon, resolveIconName } from "../lucideIcon";
+import { useAwaitingClarification } from "../useAwaitingClarification";
+import { useEntryReload } from "../useEntryReload";
 import { useFillFromConversation } from "../useFillFromConversation";
 import { useQueuedExplore } from "../useQueuedExplore";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
-import { WidgetReloadHeader } from "../WidgetReloadHeader";
+import { WidgetReloadAll, WidgetReloadHeader } from "../WidgetReloadHeader";
 import type { TimelineItem, TimelineSpec } from "./types";
 import { useTimelineState } from "./useTimelineState";
 
@@ -17,9 +20,10 @@ const TIMELINE_BUILD_PROMPT =
   "Build the best timeline you can about what we've been discussing. Draw on the events, dates, periods, and developments in the subject so far — and broaden from what was literally said: lay out the real chronology of the topic, not only dates someone typed. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call render_timeline now. Only skip if the subject genuinely has no chronological dimension at all.";
 
 export function TimelineWidget(_props: { widget: Widget }) {
-  const { entries, requestReplace } = useTimelineState();
+  const { entries, requestReplace, requestReplaceEntry } = useTimelineState();
   const busy = useAgentBusy();
   const { messages } = useSessionContext();
+  const awaitingClarification = useAwaitingClarification();
   const fill = useFillFromConversation({
     hasContent: entries.length > 0,
     gentlePrompt: TIMELINE_BUILD_PROMPT,
@@ -28,17 +32,20 @@ export function TimelineWidget(_props: { widget: Widget }) {
     displayText: "Update the Timeline from our conversation.",
   });
 
-  // Reload = rebuild fresh; queues if a turn's in flight (latest-wins). Replace-on-
-  // arrival: the current timeline stays until the new one lands, so an empty/failed
-  // rebuild can't wipe the canvas tile.
+  // Bottom "Reload" = DESTRUCTIVE rebuild of the whole view; queues (latest-wins) if
+  // a turn's in flight. Replace-on-arrival keeps the current timelines until the new
+  // ones land, so an empty/failed rebuild can't wipe the view.
   const reload = useQueuedExplore();
-  function onReload() {
+  function onReloadAll() {
     reload.enqueue({
       prompt: TIMELINE_BUILD_PROMPT,
       displayText: "Rebuild the Timeline from our conversation.",
       onFire: requestReplace,
     });
   }
+
+  // Per-entry header reload: rebuild just one timeline in place.
+  const entryReload = useEntryReload("timeline", requestReplaceEntry);
 
   if (entries.length === 0) {
     if (busy) return <WidgetLoading label="Laying out a timeline…" />;
@@ -49,21 +56,33 @@ export function TimelineWidget(_props: { widget: Widget }) {
         canUpdate={fill.canUpdate}
         onUpdate={fill.onUpdate}
         onReset={fill.reset}
+        awaitingClarification={awaitingClarification}
       />
     );
   }
 
   return (
     <div className="flex h-full flex-col bg-surface">
-      <WidgetReloadHeader
-        onReload={onReload}
-        queued={reload.queued}
-        label="Rebuild the timeline from the conversation"
-      />
-      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto p-4">
+      {/* No top padding / row gap here: each per-entry sticky header owns its top
+          spacing (pt) so its solid bg fully covers the strip up to the viewport top
+          when pinned — otherwise scrolled rows bleed through above it. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 pb-4">
         {entries.map(({ id, spec }) => (
-          <SpecTimeline key={id} spec={spec} />
+          <SpecTimeline
+            key={id}
+            spec={spec}
+            header={
+              <WidgetReloadHeader
+                title={spec.title}
+                onReload={() => entryReload.reloadEntry(id, spec.title)}
+                queued={entryReload.queued}
+                label="Reload just this timeline from the conversation"
+              />
+            }
+          />
         ))}
+        {/* Quiet, always-present destructive rebuild of the whole view. */}
+        <WidgetReloadAll onReload={onReloadAll} queued={reload.queued} />
       </div>
     </div>
   );
@@ -71,7 +90,16 @@ export function TimelineWidget(_props: { widget: Widget }) {
 
 // Self-contained single-spec timeline (chronological, swimlanes, explore menu).
 // Used by the Timeline tab and BigsailCard. Pure spec → JSX; canonical renderer.
-export function SpecTimeline({ spec }: { spec: TimelineSpec }) {
+// `header`, when given (the Timeline tab), is a sticky per-entry header rendered in
+// place of the plain title — it carries the title + a reload-this-one control.
+// Bigsail cards omit it and just get the plain title (each card is its own box).
+export function SpecTimeline({
+  spec,
+  header,
+}: {
+  spec: TimelineSpec;
+  header?: ReactNode;
+}) {
   const bus = useAgentEvents();
   // Ground each entry's explore prompt in the timeline title when present.
   const titleCtx = spec.title ? ` in the "${spec.title}" timeline` : "";
@@ -109,11 +137,19 @@ export function SpecTimeline({ spec }: { spec: TimelineSpec }) {
   }
 
   return (
-    <section className="flex flex-col gap-2">
-      {spec.title && (
-        <h2 className="font-display text-sm font-semibold text-content">
-          {spec.title}
-        </h2>
+    <section className={`flex flex-col gap-2 ${header ? "pt-4" : ""}`}>
+      {header ? (
+        // Sticky per-entry header (tab). -mt-4 pt-4 pulls its solid bg up over the
+        // section's pt-4 so prior content scrolls cleanly UNDER it when pinned.
+        <div className="-mx-4 -mt-4 sticky top-0 z-10 bg-surface px-4 pt-4 pb-2">
+          {header}
+        </div>
+      ) : (
+        spec.title && (
+          <h2 className="font-display text-sm font-semibold text-content">
+            {spec.title}
+          </h2>
+        )
       )}
       {lanes.map((lane) => (
         <div key={lane.key ?? "__ungrouped"}>

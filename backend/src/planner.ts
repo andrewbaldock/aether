@@ -133,7 +133,9 @@ export function mightClarify(message: string): boolean {
 
 const PLANNER_SYSTEM = `You are the planner for Aether, a conversational explorer that answers by rendering live widgets beside the chat.
 
-Given the user's latest request, decide which of these capabilities a strong answer would compose, in the order they should appear, and how they relate:
+You may be given recent conversation context followed by the latest request. Judge the request IN THAT CONTEXT: if it's a generic "build from what we've discussed", the conversation IS the subject — plan around it, never treat it as topicless.
+
+Decide which of these capabilities a strong answer would compose, in the order they should appear, and how they relate:
 - "table" — structured/tabular data, comparisons, ranked lists
 - "chart" — quantitative trends, distributions, comparisons over a dimension
 - "timeline" — chronological sequences, histories, schedules
@@ -153,7 +155,7 @@ BEFORE planning, judge how fruitful this request is AS ASKED. If the request is 
 but a single clarifying question would massively expand a rich answer (pick a
 sub-area, a lens, a scope, an era), return a clarify object INSTEAD of a plan:
 {"clarify":{"question":"one short question","options":["concrete option","concrete option","concrete option"]}}
-- Only clarify when it genuinely EXPLODES the concept — e.g. "how many kinds of art are there?" → ask which tradition/era/medium to explore. Never clarify a request already rich or specific enough to answer well (a comparison, a named subject, a clear scope).
+- Only clarify when it genuinely EXPLODES the concept — e.g. "how many kinds of art are there?" → ask which tradition/era/medium to explore. Never clarify a request already rich or specific enough to answer well (a comparison, a named subject, a clear scope) — and never clarify when the conversation context already gives a clear subject to build from. Clarify only when there's truly little or nothing to go on.
 - question: ONE short, friendly question. options: 2–4 concrete, tempting choices (not vague). The user can always answer free-form too, so make the options inviting starting points, not a cage.
 - When you return a clarify object, return ONLY that object (no intents/relationships).`;
 
@@ -254,19 +256,35 @@ export function parseClarify(raw: string): ClarifyResult | null {
 
 // Run the router + planner for a turn. Returns a PlannerResult: a clarifier when
 // the turn is thin-but-explodable, a plan when it warrants composition, else null
-// (plain ReAct). `message` is the user's latest turn content. `clarified` is true
+// (plain ReAct). `message` is the planner's view of the turn. `clarified` is true
 // when this turn is itself the answer to a prior clarifier — it suppresses a second
-// clarifier so we never interrogate in a loop (the turn still gets a plan). The two
-// gates are independent: the clarifier targets the SHORT/broad turns mightNeedPlan
-// skips, so on a turn that passes only the clarifier gate we still make the call.
-// Best-effort throughout — never throws; any failure means no plan/clarify.
+// clarifier so we never interrogate in a loop, AND it FORCES the planner to run.
+//
+// Why force on clarified: a clarifier only fires on a thin-but-EXPLODABLE concept,
+// and the answer ("Demons", a tapped chip) is by construction that explosion — the
+// exact turn we most want to compose. But the answer alone is short, so the cheap
+// mightNeedPlan gate (which bails under 40 chars) would skip it and we'd lose the
+// skeletons. So on a clarified turn we never gate: we always make the Haiku call.
+// (The caller feeds us the original question + answer as `message`, so the planner
+// sees "magic → Demons", not a bare "Demons".)
+//
+// The two gates are otherwise independent: the clarifier targets the SHORT/broad
+// turns mightNeedPlan skips, so on a turn that passes only the clarifier gate we
+// still make the call. Best-effort throughout — never throws; any failure means no
+// plan/clarify.
 export async function planTurn(
   message: string,
-  opts: { clarified?: boolean } = {}
+  opts: { clarified?: boolean; prompt?: string } = {}
 ): Promise<PlannerResult> {
   if (!message) return null;
+  // The cheap router gates on the RAW latest message (so greetings/arithmetic/short
+  // turns still get culled), but the Haiku call sees `prompt` — the context-enriched
+  // view (recent conversation tail) when the caller built one — so it judges
+  // fruitfulness against what's actually been discussed. Falls back to `message`.
   const canClarify = !opts.clarified && mightClarify(message);
-  const canPlan = mightNeedPlan(message);
+  // A clarified turn ALWAYS plans (see above) — never let the cheap gate skip the
+  // very turn the clarifier set up to be rich.
+  const canPlan = opts.clarified === true || mightNeedPlan(message);
   if (!canClarify && !canPlan) return null;
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -278,7 +296,7 @@ export async function planTurn(
       model: PLANNER_MODEL,
       max_tokens: 256,
       system: PLANNER_SYSTEM,
-      messages: [{ role: "user", content: message }],
+      messages: [{ role: "user", content: opts.prompt ?? message }],
     });
     const text = response.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")

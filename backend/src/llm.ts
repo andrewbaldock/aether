@@ -125,6 +125,55 @@ type PrePassOutcome =
 // appended to the conversation prefix ONCE by the caller (not per iteration), so
 // the cached system/tools prefix is untouched and (on Claude) it rides the
 // conversation cache on iterations 2+.
+// How many trailing messages of the conversation the planner sees, and how much of
+// each. The planner is a cheap Haiku call that runs on most turns, so we keep this
+// compact (light-budget demo): enough recent context to judge what the turn is
+// REALLY about, not the whole transcript.
+const PLANNER_CONTEXT_TURNS = 6;
+const PLANNER_MSG_CHARS = 400;
+
+// Compose the planner's view of a turn: the compact recent conversation tail plus
+// the latest request, folded into one prompt. The planner MUST see context or it
+// misjudges fruitfulness — e.g. an empty-tool "Update" sends a generic "build the
+// best chart about what we've been discussing", and with no history the planner
+// thinks nothing's been discussed and clarifies wrongly. With the tail it sees the
+// real subject and composes (or clarifies only when there's genuinely nothing).
+//
+// `clarified` reframes it: the latest message is then a terse answer to a prior
+// clarifier ("Demons"), so we tell the planner to compose for what they ultimately
+// want using the exchange — not the one-word reply alone.
+function buildPlannerInput(
+  messages: ChatMessage[],
+  clarified: boolean
+): string {
+  let lastUserIdx = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]!.role === "user") {
+      lastUserIdx = i;
+      break;
+    }
+  }
+  const latest = lastUserIdx >= 0 ? messages[lastUserIdx]!.content : "";
+  // Prior context = everything before the latest user turn, capped + truncated.
+  const prior = (lastUserIdx >= 0 ? messages.slice(0, lastUserIdx) : messages)
+    .slice(-PLANNER_CONTEXT_TURNS)
+    .map((m) => {
+      const role = m.role === "user" ? "User" : "Assistant";
+      const text = m.content.slice(0, PLANNER_MSG_CHARS);
+      return `${role}: ${text}`;
+    })
+    .join("\n");
+
+  // No prior context at all → the planner judges the latest message on its own (the
+  // genuinely-thin case the clarifier is FOR).
+  if (!prior) return latest;
+
+  if (clarified) {
+    return `The user is answering a clarifying question. Plan a rich composition for what they ultimately want.\n\nConversation so far:\n${prior}\n\nTheir answer: ${latest}`;
+  }
+  return `Plan a composition for the latest request, judged in the context of the conversation so far. If the latest request is a generic "build from what we've discussed", use that conversation as the subject — do NOT treat it as having no topic.\n\nConversation so far:\n${prior}\n\nLatest request: ${latest}`;
+}
+
 async function runPlannerPrePass(
   messages: ChatMessage[],
   onPlan?: (plan: CompositionPlan) => Promise<void>,
@@ -132,7 +181,12 @@ async function runPlannerPrePass(
 ): Promise<PrePassOutcome> {
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
   if (!lastUser) return { kind: "none" };
-  const result = await planTurn(lastUser.content, { clarified });
+  // Gate on the raw latest message; let the Haiku call see the context-enriched view.
+  const plannerInput = buildPlannerInput(messages, clarified === true);
+  const result = await planTurn(lastUser.content, {
+    clarified,
+    prompt: plannerInput,
+  });
   if (!result) return { kind: "none" };
   if (result.kind === "clarify")
     return { kind: "clarify", clarify: result.clarify };

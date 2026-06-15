@@ -23,21 +23,44 @@ const EMPTY_SPEC = {} as CardSpec;
 // (e.g. two charts). sizeHint is carried only so the skeleton satisfies the Card
 // type AND so an images skeleton gets a sensible default slot height — placeCards
 // is template-driven and ignores sizeHint for every other capability.
-export function planToSkeletons(plan: CompositionPlan | null): Card[] {
-  if (!plan || plan.intents.length === 0) return [];
+// One skeleton card for a capability, ordinal-numbered for a stable id.
+function skeletonFor(capability: CardCapability, ordinal: number): Card {
+  return {
+    id: `skeleton:${capability}:${ordinal}`,
+    capabilityType: capability,
+    spec: EMPTY_SPEC,
+    sizeHint: baseSizeHint(capability),
+    placeholder: true,
+  };
+}
+
+// Turn an ordered list of capabilities into skeleton cards (ordinal disambiguates
+// repeats of one type). Shared by the plan path and the fallback floor.
+function capabilitiesToSkeletons(capabilities: CardCapability[]): Card[] {
   const seen = new Map<CardCapability, number>();
-  return plan.intents.map((intent) => {
-    const n = seen.get(intent.capability) ?? 0;
-    seen.set(intent.capability, n + 1);
-    return {
-      id: `skeleton:${intent.capability}:${n}`,
-      capabilityType: intent.capability,
-      spec: EMPTY_SPEC,
-      sizeHint: baseSizeHint(intent.capability),
-      placeholder: true,
-    };
+  return capabilities.map((cap) => {
+    const n = seen.get(cap) ?? 0;
+    seen.set(cap, n + 1);
+    return skeletonFor(cap, n);
   });
 }
+
+export function planToSkeletons(plan: CompositionPlan | null): Card[] {
+  if (!plan || plan.intents.length === 0) return [];
+  return capabilitiesToSkeletons(plan.intents.map((it) => it.capability));
+}
+
+// The fallback skeleton shape used when a turn is composing but we have NO plan to
+// shape it from — the plan event was empty, slow, or never arrived. The loading
+// contract is "EVERY new-conversation load shows skeletons in real grid slots", so
+// the canvas must NEVER sit on a bare spinner: we drip in a sensible generic shape
+// (a table + a chart, the two most common composites) so the user always sees the
+// canvas assembling. These are superseded the instant ANY real card OR a real plan
+// arrives, so an over-guess never persists or misleads.
+export const FALLBACK_SKELETONS: Card[] = capabilitiesToSkeletons([
+  "table",
+  "chart",
+]);
 
 // Merge real cards with plan skeletons so the canvas shows its final shape while
 // tools are still running. Rule: a real card SUPERSEDES a pending skeleton of the

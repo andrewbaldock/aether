@@ -13,7 +13,11 @@ import { useTimelineState } from "../Timeline/useTimelineState";
 import { BigsailLoading } from "./BigsailLoading";
 import { useBigsailPlan } from "./BigsailPlanProvider";
 import { toCards } from "./cards";
-import { mergeWithSkeletons, planToSkeletons } from "./skeletonCards";
+import {
+  FALLBACK_SKELETONS,
+  mergeWithSkeletons,
+  planToSkeletons,
+} from "./skeletonCards";
 import { TilesCanvas } from "./TilesCanvas";
 import {
   placeCards,
@@ -112,6 +116,36 @@ export function BigsailWidget(_props: { widget: Widget }) {
   // Skeletons never persist — persistLayout drops every skeleton:* id.
   const plan = useBigsailPlan();
   const planSkeletons = useMemo(() => planToSkeletons(plan), [plan]);
+  const firstPanelArrived = realCards.length > 0;
+
+  // Fallback floor: a turn can be composing with NO plan to shape it (the plan event
+  // was empty, slow, or never arrived). The loading contract says the canvas must
+  // never sit on a bare spinner, so after a short grace we drip in a generic shape.
+  // The grace exists so a quick TEXT-ONLY turn ("what's 2+2") — which also has no
+  // plan and no cards — never flashes skeletons that would never fill. As soon as a
+  // real plan or a real card arrives, the fallback is moot (planSkeletons/realCards
+  // take over below). Reset whenever we're not in the bare-waiting state.
+  const FALLBACK_GRACE_MS = 1200;
+  const [fallbackEngaged, setFallbackEngaged] = useState(false);
+  const bareWaiting =
+    busy && !firstPanelArrived && planSkeletons.length === 0;
+  useEffect(() => {
+    if (!bareWaiting) {
+      setFallbackEngaged(false);
+      return;
+    }
+    const t = setTimeout(() => setFallbackEngaged(true), FALLBACK_GRACE_MS);
+    return () => clearTimeout(t);
+  }, [bareWaiting]);
+
+  // The skeleton set we actually drip/merge: the real plan when we have one, else the
+  // fallback floor once the grace elapses, else nothing (so a plain text turn shows
+  // no skeletons). The plan path always wins over the fallback.
+  const skeletons = useMemo(() => {
+    if (planSkeletons.length > 0) return planSkeletons;
+    if (fallbackEngaged) return FALLBACK_SKELETONS;
+    return [];
+  }, [planSkeletons, fallbackEngaged]);
 
   // One planned skeleton pops in per interval while we wait for the first real
   // panel. Tuned so the full planned shape (1–4 slots) reveals within the typical
@@ -121,27 +155,29 @@ export function BigsailWidget(_props: { widget: Widget }) {
   // several seconds of spinner-only time, where it actually reads.
   const DRIP_INTERVAL_MS = 2500;
   const [dripCount, setDripCount] = useState(0);
-  const firstPanelArrived = realCards.length > 0;
   useEffect(() => {
-    // Drip only while we're waiting for the first panel on a planned turn.
-    if (!busy || firstPanelArrived || planSkeletons.length === 0) {
+    // Drip only while we're waiting for the first panel and have skeletons to show.
+    if (!busy || firstPanelArrived || skeletons.length === 0) {
       setDripCount(0);
       return;
     }
+    // Show the first skeleton immediately, then drip the rest — the fallback floor
+    // (engaged after a grace) shouldn't wait another full interval to appear.
+    setDripCount((n) => (n === 0 ? 1 : n));
     const t = setInterval(() => {
-      setDripCount((n) => Math.min(n + 1, planSkeletons.length));
+      setDripCount((n) => Math.min(n + 1, skeletons.length));
     }, DRIP_INTERVAL_MS);
     return () => clearInterval(t);
-  }, [busy, firstPanelArrived, planSkeletons.length]);
+  }, [busy, firstPanelArrived, skeletons.length]);
 
   const cards = useMemo(() => {
     if (!busy) return realCards;
     // Phase 2: once the first panel lands, show the full planned set (real cards
     // supersede their skeletons in place; the rest keep shimmering).
-    if (firstPanelArrived) return mergeWithSkeletons(realCards, planSkeletons);
-    // Phase 1: reveal only the dripped-in slice of the planned skeletons.
-    return planSkeletons.slice(0, dripCount);
-  }, [busy, realCards, firstPanelArrived, planSkeletons, dripCount]);
+    if (firstPanelArrived) return mergeWithSkeletons(realCards, skeletons);
+    // Phase 1: reveal only the dripped-in slice of the skeletons.
+    return skeletons.slice(0, dripCount);
+  }, [busy, realCards, firstPanelArrived, skeletons, dripCount]);
 
   // Merge the saved arrangement with the current card set: saved cards keep their
   // spot, new cards auto-place. Recompute when cards, the saved layout, or the

@@ -27,6 +27,8 @@ export interface ChartState {
   clearEntries: () => void;
   // Rebuild = replace-on-arrival: keep the current chart until the new one lands.
   requestReplace: () => void;
+  // Reload ONE chart by id: the next spec replaces just that entry, in place.
+  requestReplaceEntry: (id: number) => void;
 }
 
 const ChartContext = createContext<ChartState | null>(null);
@@ -94,7 +96,7 @@ export function parseChartSpec(raw: string): ChartSpec | null {
 
 export function ChartProvider({ children }: { children: ReactNode }) {
   // Streamed partials + final tool_result, via the shared streaming-entries hook.
-  const { entries, setEntries, nextId, requestReplace } =
+  const { entries, setEntries, nextId, requestReplace, requestReplaceEntry } =
     useStreamingEntries<ChartSpec>("render_chart", parseChartSpec);
 
   const loadEntries = useCallback(
@@ -108,8 +110,14 @@ export function ChartProvider({ children }: { children: ReactNode }) {
   const clearEntries = useCallback(() => setEntries([]), [setEntries]);
 
   const value = useMemo<ChartState>(
-    () => ({ entries, loadEntries, clearEntries, requestReplace }),
-    [entries, loadEntries, clearEntries, requestReplace]
+    () => ({
+      entries,
+      loadEntries,
+      clearEntries,
+      requestReplace,
+      requestReplaceEntry,
+    }),
+    [entries, loadEntries, clearEntries, requestReplace, requestReplaceEntry]
   );
 
   return (

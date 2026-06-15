@@ -1,7 +1,11 @@
 import { ThinkingGlyph } from "../../../brand/ThinkingGlyph";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
-import { useSessionContext } from "../../../shell/SessionContext";
+import {
+  useCurrentSessionTitle,
+  useSessionContext,
+} from "../../../shell/SessionContext";
 import type { Widget } from "../../registry";
+import { useAwaitingClarification } from "../useAwaitingClarification";
 import { useFillFromConversation } from "../useFillFromConversation";
 import { useQueuedExplore } from "../useQueuedExplore";
 import { WidgetEmptyState } from "../WidgetEmptyState";
@@ -34,6 +38,8 @@ export function KnowledgeGraphWidget(_props: { widget: Widget }) {
   } = useKnowledgeGraphState();
   const bus = useAgentEvents();
   const { messages } = useSessionContext();
+  const sessionTitle = useCurrentSessionTitle();
+  const awaitingClarification = useAwaitingClarification();
   const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
   const fill = useFillFromConversation({
     hasContent: nodes.length > 0,
@@ -76,11 +82,13 @@ export function KnowledgeGraphWidget(_props: { widget: Widget }) {
               canUpdate={fill.canUpdate}
               onUpdate={fill.onUpdate}
               onReset={fill.reset}
+              awaitingClarification={awaitingClarification}
             />
           )
         ) : (
           <div className="relative flex h-full flex-col">
             <WidgetReloadHeader
+              title={sessionTitle ?? "Knowledge Graph"}
               onReload={onReload}
               queued={reload.queued}
               label="Rebuild the knowledge graph from the conversation"

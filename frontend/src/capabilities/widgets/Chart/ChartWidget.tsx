@@ -22,11 +22,13 @@ import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { ExploreMenu, WithContextMenu } from "../ContextMenu";
+import { useAwaitingClarification } from "../useAwaitingClarification";
+import { useEntryReload } from "../useEntryReload";
 import { useFillFromConversation } from "../useFillFromConversation";
 import { useQueuedExplore } from "../useQueuedExplore";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
-import { WidgetReloadHeader } from "../WidgetReloadHeader";
+import { WidgetReloadAll, WidgetReloadHeader } from "../WidgetReloadHeader";
 import type { ChartSpec } from "./types";
 import { useChartState } from "./useChartState";
 
@@ -75,7 +77,8 @@ function seriesColor(color: string | undefined, index: number): string {
 // scrollable tab. Recharts for the rendering; brand colors as defaults. The
 // `widget` prop is unused; state is live.
 export function ChartWidget(_props: { widget: Widget }) {
-  const { entries, requestReplace } = useChartState();
+  const { entries, requestReplace, requestReplaceEntry } = useChartState();
+  const awaitingClarification = useAwaitingClarification();
   const bus = useAgentEvents();
   const busy = useAgentBusy();
   const { messages } = useSessionContext();
@@ -87,17 +90,20 @@ export function ChartWidget(_props: { widget: Widget }) {
     displayText: "Update the Chart from our conversation.",
   });
 
-  // Reload = rebuild fresh from the conversation. Queues (latest-wins) if a turn's
-  // in flight rather than greying out. Replace-on-arrival: the current charts stay
-  // until the new ones land, so an empty/failed rebuild can't wipe the canvas tile.
+  // Bottom "Reload" = DESTRUCTIVE rebuild of the whole view. Queues (latest-wins) if
+  // a turn's in flight. Replace-on-arrival: the current charts stay until the new
+  // ones land, so an empty/failed rebuild can't wipe the view.
   const reload = useQueuedExplore();
-  function onReload() {
+  function onReloadAll() {
     reload.enqueue({
       prompt: CHART_BUILD_PROMPT,
       displayText: "Rebuild the Chart from our conversation.",
       onFire: requestReplace,
     });
   }
+
+  // Per-entry header reload: rebuild just one chart in place.
+  const entryReload = useEntryReload("chart", requestReplaceEntry);
 
   if (entries.length === 0) {
     if (busy) return <WidgetLoading label="Drawing a chart…" />;
@@ -108,27 +114,33 @@ export function ChartWidget(_props: { widget: Widget }) {
         canUpdate={fill.canUpdate}
         onUpdate={fill.onUpdate}
         onReset={fill.reset}
+        awaitingClarification={awaitingClarification}
       />
     );
   }
 
   return (
     <div className="flex h-full flex-col bg-surface">
-      <WidgetReloadHeader
-        onReload={onReload}
-        queued={reload.queued}
-        label="Rebuild the chart from the conversation"
-      />
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
+      {/* Row spacing lives on each section (pt-4), NOT a container gap — so the per-
+          entry sticky header can pull its solid bg up over that spacing (-mt-4 pt-4)
+          and fully cover the strip above it when pinned; otherwise prior content
+          bleeds through. Section pt-4 also spaces title-less charts. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 pb-4">
         {entries.map(({ id, spec }) => {
           const label = spec.title ?? `${spec.type} chart`;
           const chart = (
-            <section className="flex flex-col gap-1">
-              {spec.title && (
-                <h2 className="font-display text-sm font-semibold text-content">
-                  {spec.title}
-                </h2>
-              )}
+            <section className="flex flex-col gap-1 pt-4">
+              {/* Per-entry header: this chart's title + a dim reload that rebuilds
+                  just this one. Sticky; -mt-4 pt-4 pulls its solid bg up over the
+                  section's pt-4 so prior content scrolls cleanly UNDER it. */}
+              <div className="-mx-4 -mt-4 sticky top-0 z-10 bg-surface px-4 pt-4 pb-2">
+                <WidgetReloadHeader
+                  title={spec.title}
+                  onReload={() => entryReload.reloadEntry(id, spec.title)}
+                  queued={entryReload.queued}
+                  label="Reload just this chart from the conversation"
+                />
+              </div>
               <div className="h-72 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <SpecChart spec={spec} />
@@ -195,6 +207,8 @@ export function ChartWidget(_props: { widget: Widget }) {
 
           return <div key={id}>{chart}</div>;
         })}
+        {/* Quiet, always-present destructive rebuild of the whole view. */}
+        <WidgetReloadAll onReload={onReloadAll} queued={reload.queued} />
       </div>
     </div>
   );

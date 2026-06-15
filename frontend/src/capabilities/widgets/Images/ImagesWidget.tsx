@@ -4,11 +4,16 @@ import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { WithContextMenu } from "../ContextMenu";
+import { useAwaitingClarification } from "../useAwaitingClarification";
+import { useEntryReload } from "../useEntryReload";
 import { useFillFromConversation } from "../useFillFromConversation";
 import { useQueuedExplore } from "../useQueuedExplore";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
-import { WidgetReloadHeader } from "../WidgetReloadHeader";
+import {
+  WidgetReloadAll,
+  WidgetReloadHeaderButton,
+} from "../WidgetReloadHeader";
 import type { ImageItem, ImagesSpec } from "./types";
 import { useImagesState } from "./useImagesState";
 
@@ -17,9 +22,10 @@ const IMAGES_BUILD_PROMPT =
   "Build the best gallery you can about what we've been discussing. Search the web for real images of the subject — and broaden from what was literally said: illustrate the topic itself, its people, places, and objects, not only things named outright. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call search_images and then render_images now. Only skip if the subject genuinely can't be illustrated at all.";
 
 export function ImagesWidget(_props: { widget: Widget }) {
-  const { entries, requestReplace } = useImagesState();
+  const { entries, requestReplace, requestReplaceEntry } = useImagesState();
   const busy = useAgentBusy();
   const { messages } = useSessionContext();
+  const awaitingClarification = useAwaitingClarification();
   const fill = useFillFromConversation({
     hasContent: entries.length > 0,
     gentlePrompt: IMAGES_BUILD_PROMPT,
@@ -49,16 +55,19 @@ export function ImagesWidget(_props: { widget: Widget }) {
     });
   }
 
-  // Reload = rebuild fresh from the conversation. Replace-on-arrival: the current
-  // galleries stay until the new set lands, so an empty/failed rebuild can't wipe
-  // the canvas tile.
-  function onReload() {
+  // Bottom "Reload" = DESTRUCTIVE rebuild of the whole view. Replace-on-arrival: the
+  // current galleries stay until the new set lands, so an empty/failed rebuild can't
+  // wipe the view.
+  function onReloadAll() {
     action.enqueue({
       prompt: IMAGES_BUILD_PROMPT,
       displayText: "Rebuild the Images from our conversation.",
       onFire: requestReplace,
     });
   }
+
+  // Per-entry header reload: rebuild just one gallery in place.
+  const entryReload = useEntryReload("gallery", requestReplaceEntry);
 
   if (entries.length === 0) {
     if (busy) return <WidgetLoading label="Searching for images…" />;
@@ -69,38 +78,55 @@ export function ImagesWidget(_props: { widget: Widget }) {
         canUpdate={fill.canUpdate}
         onUpdate={fill.onUpdate}
         onReset={fill.reset}
+        awaitingClarification={awaitingClarification}
       />
     );
   }
 
   return (
     <div className="flex h-full flex-col bg-surface">
-      <WidgetReloadHeader
-        onReload={onReload}
-        queued={action.queued}
-        label="Rebuild the gallery from the conversation"
-      />
-      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto p-4">
+      {/* Row spacing lives on each gallery section (pt), not a container gap, so the
+          per-entry sticky header can pull its solid bg up over it and cover the strip
+          above when pinned — see SpecImages. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 pb-4">
         {entries.map(({ id, spec }, i) => (
-          // "Get more" rides the first gallery's title row, top-right, so there's a
-          // single header line. Subsequent galleries render plain. It queues rather
-          // than disabling mid-turn, so it stays clickable while a turn is in flight.
           <SpecImages
             key={id}
             spec={spec}
-            action={
-              i === 0 ? (
-                <button
-                  type="button"
-                  onClick={getMore}
-                  className="shrink-0 rounded border border-border px-3 py-1 text-xs text-content-subtle transition-colors hover:border-content-subtle hover:text-content"
-                >
-                  {action.queued ? "Queued…" : busy ? "Searching…" : "Get more"}
-                </button>
-              ) : undefined
+            header={
+              // Per-entry header: this gallery's title + a dim reload that rebuilds
+              // just this one. "Get more" rides the FIRST gallery's header (append
+              // more results); it queues mid-turn rather than disabling.
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="truncate font-display text-sm font-semibold text-content">
+                  {spec.title}
+                </h2>
+                <div className="flex shrink-0 items-center gap-2">
+                  {i === 0 && (
+                    <button
+                      type="button"
+                      onClick={getMore}
+                      className="shrink-0 rounded border border-border px-3 py-1 text-xs text-content-subtle transition-colors hover:border-content-subtle hover:text-content"
+                    >
+                      {action.queued
+                        ? "Queued…"
+                        : busy
+                          ? "Searching…"
+                          : "Get more"}
+                    </button>
+                  )}
+                  <WidgetReloadHeaderButton
+                    onReload={() => entryReload.reloadEntry(id, spec.title)}
+                    queued={entryReload.queued}
+                    label="Reload just this gallery from the conversation"
+                  />
+                </div>
+              </div>
             }
           />
         ))}
+        {/* Quiet, always-present destructive rebuild of the whole view. */}
+        <WidgetReloadAll onReload={onReloadAll} queued={action.queued} />
       </div>
     </div>
   );
@@ -150,32 +176,34 @@ function Attribution({ img }: { img: ImageItem }) {
 }
 
 // Self-contained single-spec gallery (masonry, attribution, explore menu). Used by
-// the Images tab and BigsailCard. Pure spec → JSX; canonical renderer. `action` is
-// an optional control (e.g. the Images tab's "Get more" button) rendered on the
-// title row, right-aligned; omitted by BigsailCard.
+// the Images tab and BigsailCard. Pure spec → JSX; canonical renderer. `header`,
+// when given (the Images tab), is a sticky per-entry header rendered in place of the
+// plain title — it carries the title, a reload-this-one control, and the "Get more"
+// button. Bigsail cards omit it and just get the plain title.
 export function SpecImages({
   spec,
-  action,
+  header,
 }: {
   spec: ImagesSpec;
-  action?: ReactNode;
+  header?: ReactNode;
 }) {
   const bus = useAgentEvents();
   // Ground each image's explore prompt in the gallery title when present.
   const titleCtx = spec.title ? ` from the "${spec.title}" gallery` : "";
   return (
-    <section className="flex flex-col gap-2">
-      {(spec.title || action) && (
-        <div className="flex items-start justify-between gap-2">
-          {spec.title ? (
-            <h2 className="font-display text-sm font-semibold text-content">
-              {spec.title}
-            </h2>
-          ) : (
-            <span />
-          )}
-          {action}
+    <section className={`flex flex-col gap-2 ${header ? "pt-4" : ""}`}>
+      {header ? (
+        // Sticky per-entry header (tab). -mt-4 pt-4 pulls its solid bg up over the
+        // section's pt-4 so prior content scrolls cleanly UNDER it when pinned.
+        <div className="-mx-4 -mt-4 sticky top-0 z-10 bg-surface px-4 pt-4 pb-2">
+          {header}
         </div>
+      ) : (
+        spec.title && (
+          <h2 className="font-display text-sm font-semibold text-content">
+            {spec.title}
+          </h2>
+        )
       )}
       {spec.blurb && (
         <p className="text-xs text-content-subtle leading-snug">{spec.blurb}</p>

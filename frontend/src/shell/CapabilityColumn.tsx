@@ -149,9 +149,12 @@ export function CapabilityColumn({
                 e.currentTarget.blur();
               }}
               aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-              className="shrink-0 rounded-md px-2 py-1.5 text-sm text-content-muted hover:bg-elevated hover:text-content"
+              // Match the settings-gear chip's footprint (same padding + 1px box) so
+              // the right cluster aligns and is equally wide. A stroked SVG icon —
+              // the old ⛶/⤢ Unicode glyphs rendered thin and undersized.
+              className="flex shrink-0 items-center rounded-lg border border-transparent px-2.5 py-1.5 text-content-muted transition-colors hover:border-border hover:bg-elevated hover:text-content"
             >
-              {isFullscreen ? "⤢" : "⛶"}
+              {isFullscreen ? <ExitFullscreenIcon /> : <FullscreenIcon />}
             </button>
           </Tooltip>
         )}
@@ -324,6 +327,51 @@ function GearIcon() {
     >
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+// Enter-fullscreen: four corner brackets pointing outward. Same 18px / 1.75 stroke
+// as GearIcon so the right-cluster utilities read as one consistent set.
+function FullscreenIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+      <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+      <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+      <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+    </svg>
+  );
+}
+
+// Exit-fullscreen: four corner brackets pointing inward.
+function ExitFullscreenIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+      <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+      <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+      <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
     </svg>
   );
 }

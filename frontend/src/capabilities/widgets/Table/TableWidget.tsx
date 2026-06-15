@@ -13,11 +13,13 @@ import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { ExploreMenu } from "../ContextMenu";
+import { useAwaitingClarification } from "../useAwaitingClarification";
+import { useEntryReload } from "../useEntryReload";
 import { useFillFromConversation } from "../useFillFromConversation";
 import { useQueuedExplore } from "../useQueuedExplore";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
-import { WidgetReloadHeader } from "../WidgetReloadHeader";
+import { WidgetReloadAll, WidgetReloadHeader } from "../WidgetReloadHeader";
 import type { TableSpec } from "./types";
 import { useTableState } from "./useTableState";
 
@@ -30,9 +32,10 @@ const TABLE_BUILD_PROMPT =
 // plain styled <table> for the markup so it themes with the app's Tailwind tokens.
 // The `widget` prop is unused; state is live.
 export function TableWidget(_props: { widget: Widget }) {
-  const { entries, requestReplace } = useTableState();
+  const { entries, requestReplace, requestReplaceEntry } = useTableState();
   const busy = useAgentBusy();
   const { messages } = useSessionContext();
+  const awaitingClarification = useAwaitingClarification();
   const fill = useFillFromConversation({
     hasContent: entries.length > 0,
     gentlePrompt: TABLE_BUILD_PROMPT,
@@ -41,18 +44,20 @@ export function TableWidget(_props: { widget: Widget }) {
     displayText: "Update the Table from our conversation.",
   });
 
-  // Reload = rebuild fresh; queues if a turn's in flight (latest-wins). Replace-on-
-  // arrival: the current table stays visible until the new spec lands (then it
-  // supersedes the old), so the canvas tile never blinks out and an empty/failed
-  // rebuild can't wipe it. See useStreamingEntries.requestReplace.
+  // Bottom "Reload" = DESTRUCTIVE rebuild of the whole view: replace-on-arrival, so
+  // the current tables stay visible until the new set lands (the view never blinks
+  // out and an empty/failed rebuild can't wipe it). See useStreamingEntries.
   const reload = useQueuedExplore();
-  function onReload() {
+  function onReloadAll() {
     reload.enqueue({
       prompt: TABLE_BUILD_PROMPT,
       displayText: "Rebuild the Table from our conversation.",
       onFire: requestReplace,
     });
   }
+
+  // Per-entry header reload: rebuild just one table in place.
+  const entryReload = useEntryReload("table", requestReplaceEntry);
 
   if (entries.length === 0) {
     // Working a turn → show the loading spinner even if no table ends up landing
@@ -66,28 +71,32 @@ export function TableWidget(_props: { widget: Widget }) {
         canUpdate={fill.canUpdate}
         onUpdate={fill.onUpdate}
         onReset={fill.reset}
+        awaitingClarification={awaitingClarification}
       />
     );
   }
 
   return (
     <div className="flex h-full flex-col bg-surface">
-      <WidgetReloadHeader
-        onReload={onReload}
-        queued={reload.queued}
-        label="Rebuild the table from the conversation"
-      />
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
         {entries.map(({ id, spec }) => (
           <section key={id} className="border-b border-border last:border-b-0">
-            {spec.title && (
-              <h2 className="px-4 pt-3 pb-1 font-display text-sm font-semibold text-content">
-                {spec.title}
-              </h2>
-            )}
+            {/* Per-entry header: this table's title + a dim reload that rebuilds just
+                this one. Sticky so it pins while you scroll its rows, then the next
+                entry's header pushes it off. Solid bg covers the rows beneath. */}
+            <div className="sticky top-0 z-10 border-border border-b bg-surface px-4 pt-3 pb-2">
+              <WidgetReloadHeader
+                title={spec.title}
+                onReload={() => entryReload.reloadEntry(id, spec.title)}
+                queued={entryReload.queued}
+                label="Reload just this table from the conversation"
+              />
+            </div>
             <SpecTable spec={spec} title={spec.title} />
           </section>
         ))}
+        {/* Quiet, always-present destructive rebuild of the whole view. */}
+        <WidgetReloadAll onReload={onReloadAll} queued={reload.queued} />
       </div>
     </div>
   );

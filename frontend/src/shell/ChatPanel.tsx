@@ -191,6 +191,15 @@ export function ChatPanel() {
     const unseen = withContent.filter((id) => id !== landing);
     restore(landing, unseen);
     restoredSessionRef.current = sessionId;
+    // Make the URL agree with where we landed. A bare /c/:id that resolved to a
+    // saved default (e.g. timeline) must become /c/:id/timeline — otherwise the
+    // post-restore URL→activeId sync below sees a null view, reads it as "home base",
+    // and clobbers the restored default. With the URL authoritative, null view only
+    // ever means an explicit Tiles click. No-op when already correct (replaceRoute
+    // guards on equal paths).
+    if (!validUrlView && landing !== HOME_BASE_ID) {
+      replaceRoute(viewPath(sessionId, landing));
+    }
   }, [
     sessionId,
     routeView,
@@ -205,15 +214,21 @@ export function ChatPanel() {
 
   // Keep activeId in sync with the URL AFTER the initial restore: back/forward and
   // direct navigations (tab clicks call navigate(); see CapabilityColumn) change
-  // route.view, and this projects that onto the store. Guarded to a workspace route
-  // with a real capability view — admin routes are driven by Shell's
-  // useUrlDrivenAdmin, and a null view (bare /c/:id) leaves the restored default in
-  // place. No-op when already showing it, so it only acts on genuine URL changes.
+  // route.view, and this projects that onto the store. Admin routes are driven by
+  // Shell's useUrlDrivenAdmin, so we ignore them here. For a workspace route a null
+  // view (bare /c/:id) means HOME BASE — clicking the Tiles tab navigates there by
+  // dropping the slug, so post-restore it must activate home base, not be ignored
+  // (that left the previous tab stuck active while the URL said home — the "Tiles
+  // does nothing" bug). Initial load is unaffected: this effect only runs once the
+  // restore for this session has happened. No-op when already showing the target.
   useEffect(() => {
     if (!sessionId || restoredSessionRef.current !== sessionId) return;
-    if (route.type !== "workspace" || !route.view) return;
-    if (!CAPABILITIES.some((c) => c.id === route.view)) return;
-    if (route.view !== activeIdRef.current) activate(route.view);
+    if (route.type !== "workspace") return;
+    const target =
+      route.view && CAPABILITIES.some((c) => c.id === route.view)
+        ? route.view
+        : HOME_BASE_ID;
+    if (target !== activeIdRef.current) activate(target);
   }, [sessionId, route, activate]);
 
   // No-session workspace projection: on the home screen (no conversation yet) the

@@ -109,6 +109,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// The auto-generated title of the active conversation (its subject), or null when
+// there's no current session or it hasn't been titled yet. Convenience over the
+// raw sessions/sessionId lookup — used by widget headers to read "what is this chat
+// about" for a subject-flavoured label.
+export function useCurrentSessionTitle(): string | null {
+  const { sessions, sessionId } = useSessionContext();
+  return sessions.find((s) => s.id === sessionId)?.title ?? null;
+}
+
 export function useSessionContext(): SessionContextValue {
   const ctx = useContext(SessionContext);
   if (!ctx)

@@ -1,36 +1,102 @@
 import { RefreshCw } from "lucide-react";
 
-// A slim header bar for a POPULATED capability widget, carrying a reload control
-// at the top-right. Reload re-runs the widget's tool and REPLACES its content with
-// fresh data (the caller wires clearEntries + a rebuild prompt via onReload).
+// Per-ENTRY header: one table/chart/timeline/gallery's own title on the left, with a
+// dim reload icon on the right that rebuilds JUST THAT entry from the conversation
+// (the caller wires requestReplaceEntry(id) into onReload). It's a slim sticky bar —
+// the entry's content scrolls beneath it (callers place this as the first child of
+// the entry section). The icon is deliberately dim/low-contrast so it recedes; it
+// brightens on hover.
 //
 // Clicking mid-turn never greys out: the action is queued (latest-wins) and fires
-// when the current turn settles — see useQueuedExplore, which the callers use to
-// build onReload. `queued` lets the caller reflect that pending state in the icon.
+// when the current turn settles — see useQueuedExplore. `queued` spins the icon to
+// show the click registered.
 export function WidgetReloadHeader({
+  title,
   onReload,
   queued,
-  label = "Reload from the conversation",
+  label = "Reload this from the conversation",
+}: {
+  title?: string;
+  onReload: () => void;
+  queued?: boolean;
+  label?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      {title ? (
+        <h2 className="truncate font-display text-sm font-semibold text-content">
+          {title}
+        </h2>
+      ) : (
+        <span />
+      )}
+      <WidgetReloadHeaderButton
+        onReload={onReload}
+        queued={queued}
+        label={label}
+      />
+    </div>
+  );
+}
+
+// The dim per-entry reload icon on its own, for headers that compose their own title
+// row (e.g. Images, whose row also carries "Get more"). Same look as the button
+// inside WidgetReloadHeader.
+export function WidgetReloadHeaderButton({
+  onReload,
+  queued,
+  label = "Reload this from the conversation",
 }: {
   onReload: () => void;
   queued?: boolean;
   label?: string;
 }) {
   return (
-    <div className="flex shrink-0 items-center justify-end border-border border-b px-2 py-1.5">
+    <button
+      type="button"
+      onClick={onReload}
+      aria-label={label}
+      title={label}
+      // Dim by default (text-content-subtle/60) so it recedes; brightens on hover.
+      // Spins while a reload is queued behind an in-flight turn.
+      className="shrink-0 rounded-md p-1 text-content-subtle/60 transition-colors hover:bg-elevated hover:text-content focus-visible:bg-elevated focus-visible:text-content focus-visible:outline-none"
+    >
+      <RefreshCw
+        className={`h-4 w-4 ${queued ? "animate-spin" : ""}`}
+        aria-hidden
+      />
+    </button>
+  );
+}
+
+// The quiet, always-present destructive reload at the BOTTOM of a populated tool:
+// centered, no chrome of its own beyond the same outline as the empty-tool "Update"
+// button — it rebuilds the ENTIRE tool from scratch (every entry). Distinct from the
+// per-entry header reload above, which only refreshes one entry. `queued` reflects a
+// pending rebuild behind an in-flight turn.
+export function WidgetReloadAll({
+  onReload,
+  queued,
+  label = "Rebuild this whole view from the conversation",
+}: {
+  onReload: () => void;
+  queued?: boolean;
+  label?: string;
+}) {
+  return (
+    <div className="flex justify-center pt-2 pb-4">
       <button
         type="button"
         onClick={onReload}
         aria-label={label}
         title={label}
-        // ≥44px tap target (mobile rule); glyph stays small. Spins while a reload
-        // is queued behind an in-flight turn so the click clearly registered.
-        className="-m-1 inline-flex h-11 w-11 items-center justify-center rounded text-content-subtle transition-colors hover:bg-elevated hover:text-content focus-visible:bg-elevated focus-visible:text-content focus-visible:outline-none"
+        className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-content-muted transition-colors hover:border-content-muted hover:text-content"
       >
         <RefreshCw
-          className={`h-4 w-4 ${queued ? "animate-spin" : ""}`}
+          className={`h-3.5 w-3.5 ${queued ? "animate-spin" : ""}`}
           aria-hidden
         />
+        Reload
       </button>
     </div>
   );

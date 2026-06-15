@@ -19,6 +19,8 @@ export interface ImagesState {
   clearEntries: () => void;
   // Rebuild = replace-on-arrival: keep the current images until the new set lands.
   requestReplace: () => void;
+  // Reload ONE gallery by id: the next spec replaces just that entry, in place.
+  requestReplaceEntry: (id: number) => void;
 }
 
 const ImagesContext = createContext<ImagesState | null>(null);
@@ -68,7 +70,7 @@ export function parseImagesSpec(raw: string): ImagesSpec | null {
 
 export function ImagesProvider({ children }: { children: ReactNode }) {
   // Streamed partials + final tool_result, via the shared streaming-entries hook.
-  const { entries, setEntries, nextId, requestReplace } =
+  const { entries, setEntries, nextId, requestReplace, requestReplaceEntry } =
     useStreamingEntries<ImagesSpec>("render_images", parseImagesSpec);
 
   const loadEntries = useCallback(
@@ -82,8 +84,14 @@ export function ImagesProvider({ children }: { children: ReactNode }) {
   const clearEntries = useCallback(() => setEntries([]), [setEntries]);
 
   const value = useMemo<ImagesState>(
-    () => ({ entries, loadEntries, clearEntries, requestReplace }),
-    [entries, loadEntries, clearEntries, requestReplace]
+    () => ({
+      entries,
+      loadEntries,
+      clearEntries,
+      requestReplace,
+      requestReplaceEntry,
+    }),
+    [entries, loadEntries, clearEntries, requestReplace, requestReplaceEntry]
   );
 
   return (

@@ -33,6 +33,7 @@ export function useStreamingEntries<Spec>(
   setEntries: React.Dispatch<React.SetStateAction<StreamingEntry<Spec>[]>>;
   nextId: React.MutableRefObject<number>;
   requestReplace: () => void;
+  requestReplaceEntry: (id: number) => void;
 } {
   const bus = useAgentEvents();
   const [entries, setEntries] = useState<StreamingEntry<Spec>[]>([]);
@@ -59,6 +60,16 @@ export function useStreamingEntries<Spec>(
       replaceOnArrival.current = true;
     });
   }).current;
+  // Set by a per-entry "Reload this one" action: the first parseable spec of the
+  // rebuild turn REPLACES the entry with this id IN PLACE, leaving every other entry
+  // untouched (vs. requestReplace, which wipes the whole set). Same microtask-arm
+  // reasoning as above. Cleared on settle if nothing arrived.
+  const replaceEntryId = useRef<number | null>(null);
+  const requestReplaceEntry = useRef((id: number) => {
+    queueMicrotask(() => {
+      replaceEntryId.current = id;
+    });
+  }).current;
 
   useEffect(() => {
     function handle(event: AgentEvent) {
@@ -73,9 +84,10 @@ export function useStreamingEntries<Spec>(
       ) {
         streamingId.current = null;
         // A rebuild that ended without ever producing a parseable spec keeps the
-        // old entries; disarm the latch so a LATER unrelated turn can't replace
+        // old entries; disarm the latches so a LATER unrelated turn can't replace
         // them. (When a spec did arrive, the latch already consumed itself.)
         replaceOnArrival.current = false;
+        replaceEntryId.current = null;
         return;
       }
 
@@ -98,15 +110,23 @@ export function useStreamingEntries<Spec>(
         // Decide the target id OUTSIDE the updater so ref reads/writes are
         // deterministic (the updater can re-run under StrictMode, and `finalize`
         // below clears streamingId synchronously — reading the ref inside the
-        // updater would race that). Reuse the open streaming entry, or open one.
+        // updater would race that).
         let id = streamingId.current;
         if (id === null) {
-          id = nextId.current++;
+          // A per-entry reload binds the streaming slot to the EXISTING entry's id,
+          // so this turn's spec(s) overwrite that one entry in place. Otherwise open
+          // a fresh id (append, or whole-set replace below).
+          if (replaceEntryId.current !== null) {
+            id = replaceEntryId.current;
+            replaceEntryId.current = null;
+          } else {
+            id = nextId.current++;
+          }
           streamingId.current = id;
         }
         const targetId = id;
-        // A pending rebuild replaces the prior set with this fresh entry the moment
-        // it arrives, then behaves normally for the rest of the turn.
+        // A pending whole-set rebuild replaces the prior set with this fresh entry the
+        // moment it arrives, then behaves normally for the rest of the turn.
         const replacing = replaceOnArrival.current;
         if (replacing) replaceOnArrival.current = false;
         setEntries((prev) => {
@@ -126,5 +146,5 @@ export function useStreamingEntries<Spec>(
     return bus.subscribe(handle);
   }, [bus, toolName, parse]);
 
-  return { entries, setEntries, nextId, requestReplace };
+  return { entries, setEntries, nextId, requestReplace, requestReplaceEntry };
 }

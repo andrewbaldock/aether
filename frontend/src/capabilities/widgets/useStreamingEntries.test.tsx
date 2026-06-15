@@ -177,6 +177,53 @@ describe("useStreamingEntries", () => {
     expect(r.current.streaming.entries[0]?.spec.rows[0]?.v).toBe(1);
   });
 
+  // requestReplaceEntry arms on a microtask too; flush before driving the turn.
+  async function armEntry(
+    r: { current: { streaming: { requestReplaceEntry: (id: number) => void } } },
+    id: number
+  ) {
+    await act(async () => {
+      r.current.streaming.requestReplaceEntry(id);
+      await Promise.resolve();
+    });
+  }
+
+  it("replace-entry: the rebuild's spec overwrites ONLY the targeted entry in place", async () => {
+    const { result: r } = setup();
+    const { bus } = r.current;
+
+    // Two tables exist.
+    result(bus, '{"rows":[{"v":1}]}');
+    result(bus, '{"rows":[{"v":2}]}');
+    expect(r.current.streaming.entries).toHaveLength(2);
+    const firstId = r.current.streaming.entries[0]!.id;
+    const secondId = r.current.streaming.entries[1]!.id;
+
+    // Reload just the FIRST entry.
+    await armEntry(r, firstId);
+
+    // The rebuild's spec replaces entry 1 in place — still two entries, order kept,
+    // entry 2 untouched, and entry 1 keeps its id.
+    partial(bus, '{"rows":[{"v":11}]}');
+    result(bus, '{"rows":[{"v":11}]}');
+    expect(r.current.streaming.entries).toHaveLength(2);
+    expect(r.current.streaming.entries[0]?.id).toBe(firstId);
+    expect(r.current.streaming.entries[0]?.spec.rows[0]?.v).toBe(11);
+    expect(r.current.streaming.entries[1]?.id).toBe(secondId);
+    expect(r.current.streaming.entries[1]?.spec.rows[0]?.v).toBe(2);
+  });
+
+  it("replace-entry: a rebuild that yields nothing leaves the entry intact", async () => {
+    const { result: r } = setup();
+    const { bus } = r.current;
+    result(bus, '{"rows":[{"v":1}]}');
+    const id = r.current.streaming.entries[0]!.id;
+    await armEntry(r, id);
+    emit(bus, { type: "done" });
+    expect(r.current.streaming.entries).toHaveLength(1);
+    expect(r.current.streaming.entries[0]?.spec.rows[0]?.v).toBe(1);
+  });
+
   it("ignores events for other tools", () => {
     const { result: r } = setup();
     const { bus } = r.current;
