@@ -420,6 +420,20 @@ app.post("/api/chat", async (c) => {
           });
         },
         async () => {
+          // The conversation pane must never come back empty. The model is told
+          // to lead with real prose, but it sometimes skips straight to tool
+          // calls (notably on a familiar/repeat prompt where it figures the
+          // panels say it all). If nothing streamed, emit a short fallback line
+          // so the chat thread always has a reply, then persist that — not "".
+          if (!assistantText.trim()) {
+            const fallback =
+              "Here's what I found — take a look at the panels alongside for the details.";
+            assistantText = fallback;
+            await stream.writeSSE({
+              data: JSON.stringify({ type: "text", content: fallback }),
+            });
+          }
+
           await stream.writeSSE({ data: "[DONE]" });
 
           // Persist after [DONE] so we only save complete turns.

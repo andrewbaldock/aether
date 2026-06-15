@@ -50,6 +50,17 @@ export function planToSkeletons(plan: CompositionPlan | null): Card[] {
   return capabilitiesToSkeletons(plan.intents.map((it) => it.capability));
 }
 
+// The canvas's preferred capability order. Drives both the fallback shape and the
+// padding order below, so a thin plan grows along the same sensible sequence the
+// no-plan floor uses (kg + timeline top row, then table, chart, images).
+const CANVAS_CAPABILITY_ORDER: CardCapability[] = [
+  "knowledge-graph",
+  "timeline",
+  "table",
+  "chart",
+  "images",
+];
+
 // The fallback skeleton shape used when a turn is composing but we have NO plan to
 // shape it from — the plan event was empty, slow, or never arrived. The loading
 // contract is "EVERY new-conversation load shows skeletons in real grid slots", so
@@ -59,13 +70,47 @@ export function planToSkeletons(plan: CompositionPlan | null): Card[] {
 // feeding rows the full length of the canvas, never stalling after two) so the
 // user always sees the canvas assembling. These are superseded the instant ANY
 // real card OR a real plan arrives, so an over-guess never persists or misleads.
-export const FALLBACK_SKELETONS: Card[] = capabilitiesToSkeletons([
-  "knowledge-graph",
-  "timeline",
-  "table",
-  "chart",
-  "images",
-]);
+export const FALLBACK_SKELETONS: Card[] = capabilitiesToSkeletons(
+  CANVAS_CAPABILITY_ORDER
+);
+
+// The canvas must always assemble with a substantial shape: a thin plan (the Haiku
+// planner sometimes returns just 1–2 intents) would otherwise drip in two skeletons
+// and stall, leaving the canvas looking broken. Pad any skeleton set up to MIN_SKELETONS
+// by appending distinct extra capabilities in CANVAS_CAPABILITY_ORDER — preferring
+// capabilities the set doesn't already have so the padding spreads across template
+// slots rather than stacking duplicates. Padded skeletons behave exactly like the
+// fallback floor: a real card of that type supersedes them, and any with no real
+// counterpart simply vanish when the turn settles (cards → realCards once !busy).
+export const MIN_SKELETONS = 5;
+
+export function padSkeletons(
+  skeletons: Card[],
+  min = MIN_SKELETONS
+): Card[] {
+  if (skeletons.length >= min) return skeletons;
+  const have = new Set(skeletons.map((s) => s.capabilityType));
+  const padded = [...skeletons];
+
+  // First pass: add capabilities not yet present, in canvas order.
+  for (const cap of CANVAS_CAPABILITY_ORDER) {
+    if (padded.length >= min) break;
+    if (have.has(cap)) continue;
+    have.add(cap);
+    padded.push(skeletonFor(cap, 0));
+  }
+  // Still short (a request needing >5 of few types)? Cycle the order, bumping the
+  // ordinal so each padded id stays unique and placement stays stable.
+  let ordinal = 1;
+  while (padded.length < min) {
+    for (const cap of CANVAS_CAPABILITY_ORDER) {
+      if (padded.length >= min) break;
+      padded.push(skeletonFor(cap, ordinal));
+    }
+    ordinal++;
+  }
+  return padded;
+}
 
 // Merge real cards with plan skeletons so the canvas shows its final shape while
 // tools are still running. Rule: a real card SUPERSEDES a pending skeleton of the

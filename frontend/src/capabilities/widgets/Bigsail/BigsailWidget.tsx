@@ -19,6 +19,7 @@ import { useHiddenCards } from "./useHiddenCards";
 import {
   FALLBACK_SKELETONS,
   mergeWithSkeletons,
+  padSkeletons,
   planToSkeletons,
 } from "./skeletonCards";
 import { TilesCanvas } from "./TilesCanvas";
@@ -145,10 +146,14 @@ export function BigsailWidget(_props: { widget: Widget }) {
 
   // The skeleton set we actually drip/merge: the real plan when we have one, else the
   // fallback floor once the grace elapses, else nothing (so a plain text turn shows
-  // no skeletons). The plan path always wins over the fallback.
+  // no skeletons). The plan path always wins over the fallback. Either way we pad up
+  // to MIN_SKELETONS so a thin plan (Haiku sometimes returns 1–2 intents) still
+  // assembles a full canvas instead of dripping two skeletons and stalling — the
+  // padded extras drip in one-at-a-time like the rest and vanish if no real card
+  // supersedes them. (FALLBACK_SKELETONS is already 5, so padding is a no-op there.)
   const skeletons = useMemo(() => {
-    if (planSkeletons.length > 0) return planSkeletons;
-    if (fallbackEngaged) return FALLBACK_SKELETONS;
+    if (planSkeletons.length > 0) return padSkeletons(planSkeletons);
+    if (fallbackEngaged) return padSkeletons(FALLBACK_SKELETONS);
     return [];
   }, [planSkeletons, fallbackEngaged]);
 

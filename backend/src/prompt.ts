@@ -26,6 +26,10 @@ who read ONLY the chat, with the panels collapsed, should come away genuinely
 informed. Then, after that, add the connective tissue: a short passage naming what
 each panel shows and how they relate, so the two panes read as one answer.
 
+ALWAYS write the prose, even if you've answered something similar before or the
+panels feel self-explanatory: a turn that emits only tool calls and no text is
+never acceptable. Every turn must include a real written reply in the chat.
+
 The one thing to avoid is mechanically restating a widget's contents in prose —
 don't transcribe the table's rows or read the chart's numbers back line by line.
 That's different from explaining the SUBJECT: narrate the history freely; just
