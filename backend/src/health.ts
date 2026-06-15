@@ -36,12 +36,17 @@ const WIKIMEDIA_USER_AGENT = "Aether/1.0 (https://github.com/baldrocks; demo)";
 
 async function checkSupabase(): Promise<HealthResult["supabase"]> {
   const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
+  // Use the SAME key db.ts connects with (service-role preferred, anon fallback)
+  // so the probe reflects the backend's real access. With RLS on (sql/005), an
+  // anon-key probe of `sessions` returns zero rows but NO error — it would report
+  // healthy while actually being locked out; the service-role key tests true access.
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_ANON_KEY;
   if (!url || !key) {
     return {
       ok: false,
       latencyMs: 0,
-      error: "SUPABASE_URL / SUPABASE_ANON_KEY not set",
+      error: "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (or anon) not set",
     };
   }
   const t0 = Date.now();

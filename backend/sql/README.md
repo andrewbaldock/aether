@@ -33,6 +33,7 @@ but **nothing automatically checks SQL↔live or SQL↔TS** — that discipline 
 | `002_session_image_data.sql` | `sessions.image_data` jsonb + `increment_session_unsplash_search()`. |
 | `003_session_ui_state.sql` | `sessions.ui_state` jsonb (active tab, Tiles layout). |
 | `004_session_topic_icon.sql` | `sessions.topic_icon` text (model-chosen lucide topic icon). |
+| `005_rls_lockdown.sql` | Enables RLS on `sessions`/`messages` with no anon policy — locks user data to the service-role backend. Apply AFTER the backend uses the service-role key (see Security note). |
 
 `000_baseline.sql` already includes the columns that 002/003/004 add, so a fresh
 replay is correct even though those columns are also declared in their own files
@@ -44,8 +45,10 @@ are kept intact so the history reads cleanly and so an already-migrated database
 
 1. Create a new Supabase project (or reset the `public` schema).
 2. In the SQL editor, run each file **in numeric order**: `000` → `001` → `002`
-   → `003` → `004`.
-3. Point the backend's `SUPABASE_URL` / key env vars at the new project.
+   → `003` → `004` → `005`.
+3. Point the backend's `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` env vars at
+   the new project. (`005` enables RLS that only the service-role key can get
+   past — set that key before relying on the backend reading user data.)
 
 ## Adding a new migration
 
@@ -62,11 +65,21 @@ are kept intact so the history reads cleanly and so an already-migrated database
 
 ## Security note (RLS)
 
-`public.sessions` and `public.messages` currently have **Row Level Security
-disabled** — anyone with the project's anon key can read or modify every row.
-`app_state` has RLS enabled with an anon read/write policy (it holds only
-operational counters, no user data). Enabling RLS on `sessions`/`messages`
-without first writing access policies would lock the app out entirely, so it's
-left as a deliberate, documented decision rather than a one-line fix. Revisit
-when Aether moves past the demo stage (e.g. policies scoped to `user_id` once
-real sign-in lands).
+`public.sessions` and `public.messages` have **Row Level Security enabled with no
+anon policy** (`005`). RLS-enabled-with-no-policy denies every row to
+`anon`/`authenticated`/`public`, so a leaked anon key reads/writes nothing. The
+backend connects with the **service-role key**, which bypasses RLS — that's how
+it retains full access. `app_state` keeps its anon read/write policy (operational
+counters only, no user data).
+
+Ownership is also enforced in app code (every mutating route checks the caller's
+`user_id`); RLS is the database-level backstop beneath that.
+
+**Rollout order matters.** `005` must be applied only AFTER the backend is using
+the service-role key (`SUPABASE_SERVICE_ROLE_KEY` in Fly secrets / `backend/.env`)
+— otherwise the live app's anon connection would suddenly see zero rows. To roll
+back, `alter table … disable row level security;`.
+
+**When real sign-in lands** (Supabase Auth / Google), add `user_id = auth.uid()`
+policies on top of `005`; the service-role bypass for the backend's own queries
+is unchanged.

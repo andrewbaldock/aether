@@ -140,10 +140,17 @@ export interface DbMessage {
 
 function createDb() {
   const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
+  // Prefer the service-role key: `sessions`/`messages` have RLS enabled with no
+  // anon policy (sql/005), so only service_role — which bypasses RLS — can reach
+  // user data. Fall back to the anon key so a backend that hasn't had the secret
+  // set yet still boots (it just can't read locked tables until RLS is applied,
+  // which is the documented rollout order). The service-role key is a SECRET and
+  // lives only in Fly secrets / backend/.env — never shipped to the browser.
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_ANON_KEY;
   if (!url || !key) {
     throw new Error(
-      "SUPABASE_URL and SUPABASE_ANON_KEY must be set in backend/.env"
+      "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY) must be set in backend/.env"
     );
   }
   return createClient(url, key);

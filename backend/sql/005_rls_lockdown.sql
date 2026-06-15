@@ -1,0 +1,49 @@
+-- Lock down user data: enable Row Level Security on `sessions` and `messages`.
+--
+-- WHY THIS FILE EXISTS
+-- These two tables held user conversations with RLS DISABLED, so anyone holding
+-- the project's anon key could read or modify every row (see the old "Security
+-- note" in sql/README.md). The application now enforces ownership in app code
+-- (every mutating route checks the caller's user_id), but that is only the FIRST
+-- layer: if the anon key ever leaks, app-layer checks don't help — the leaker
+-- talks to Postgres directly. This migration adds the database-level backstop.
+--
+-- THE APPROACH (no Supabase Auth yet)
+-- Aether has no sign-in, so there is no JWT and no `auth.uid()` to write a
+-- `user_id = auth.uid()` policy against. Instead we lock the tables to the
+-- backend only: enable RLS and add NO policy for `anon`/`authenticated`/`public`.
+-- With RLS enabled and no matching policy, those roles are denied every row by
+-- default. The backend connects with the SERVICE-ROLE key, and `service_role`
+-- BYPASSES RLS entirely in Supabase — so the app keeps full access while a leaked
+-- anon key now reads/writes nothing. When Google sign-in lands, add
+-- `user_id = auth.uid()` policies on top of this; the service-role bypass for the
+-- backend's own queries is unchanged.
+--
+-- ORDER OF OPERATIONS (IMPORTANT)
+-- Applying this BEFORE the backend uses the service-role key would lock the live
+-- app out (its anon connection would suddenly see zero rows). Roll out in this
+-- order:
+--   1. Set SUPABASE_SERVICE_ROLE_KEY (Fly secret + backend/.env) and deploy the
+--      backend so db.ts/health.ts connect as service_role.
+--   2. THEN run this migration.
+-- Reversible: `alter table … disable row level security;` restores the old
+-- (open) behaviour if anything goes wrong.
+--
+-- Run this once in the Supabase SQL editor (after step 1 above).
+
+-- Enabling RLS with no policy = deny all rows to every non-bypassing role
+-- (anon/authenticated/public). service_role bypasses RLS, so the backend is
+-- unaffected. Idempotent: enabling an already-enabled table is a no-op.
+alter table sessions enable row level security;
+alter table messages enable row level security;
+
+-- NOTE: we intentionally do NOT `force row level security`. `force` would also
+-- subject the table OWNER to RLS, which can break the SECURITY DEFINER RPC
+-- `increment_session_unsplash_search` (002) that runs as the function owner and
+-- UPDATEs sessions. `force` is unnecessary here anyway: the threat is the anon
+-- key, and plain `enable` already denies anon/public; service_role bypasses RLS
+-- with or without `force`.
+--
+-- Deliberately NO policies are created here. `app_state` (001) keeps its anon
+-- read/write policy because it holds only operational counters — this migration
+-- does not touch it.
