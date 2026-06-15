@@ -167,7 +167,8 @@ export function autoLayout(
   if (kgCard) {
     // Left slot by default; dodge to the right only if a pinned timeline holds the
     // left half.
-    const partnerLeft = pinnedTimeline !== undefined && pinnedTimeline.x < HALF_W;
+    const partnerLeft =
+      pinnedTimeline !== undefined && (pinnedTimeline.x ?? 0) < HALF_W;
     out.push({
       card: kgCard,
       x: topRowPaired && partnerLeft ? HALF_W : 0,
@@ -180,7 +181,7 @@ export function autoLayout(
   if (timelineCard) {
     // Right slot by default; dodge to the left only if a pinned KG holds the right
     // half (e.g. the user dragged the KG into the timeline's slot to swap them).
-    const partnerRight = pinnedKg !== undefined && pinnedKg.x >= HALF_W;
+    const partnerRight = pinnedKg !== undefined && (pinnedKg.x ?? 0) >= HALF_W;
     out.push({
       card: timelineCard,
       x: topRowPaired && !partnerRight ? HALF_W : 0,
