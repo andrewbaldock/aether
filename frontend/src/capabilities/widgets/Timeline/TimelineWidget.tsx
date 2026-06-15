@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
+import { EditWidgetDialog } from "../../../shell/EditWidgetDialog";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
 import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
@@ -14,6 +15,7 @@ import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
 import {
   WidgetDuplicateButton,
+  WidgetEditButton,
   WidgetReloadAll,
   WidgetReloadHeader,
 } from "../WidgetReloadHeader";
@@ -25,8 +27,15 @@ const TIMELINE_BUILD_PROMPT =
   "Build the best timeline you can about what we've been discussing. Draw on the events, dates, periods, and developments in the subject so far — and broaden from what was literally said: lay out the real chronology of the topic, not only dates someone typed. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call render_timeline now. Only skip if the subject genuinely has no chronological dimension at all.";
 
 export function TimelineWidget(_props: { widget: Widget }) {
-  const { entries, requestReplace, requestReplaceEntry, duplicateEntry } =
-    useTimelineState();
+  const {
+    entries,
+    requestReplace,
+    requestReplaceEntry,
+    duplicateEntry,
+    updateEntry,
+  } = useTimelineState();
+  const [editId, setEditId] = useState<number | null>(null);
+  const editing = entries.find((e) => e.id === editId) ?? null;
   const busy = useAgentBusy();
   const { messages } = useSessionContext();
   const awaitingClarification = useAwaitingClarification();
@@ -85,6 +94,7 @@ export function TimelineWidget(_props: { widget: Widget }) {
                 label="Reload just this timeline from the conversation"
                 extraAction={
                   <>
+                    <WidgetEditButton onClick={() => setEditId(id)} />
                     <WidgetDuplicateButton
                       onClick={() => duplicateEntry(id)}
                       label="Duplicate this timeline"
@@ -99,6 +109,15 @@ export function TimelineWidget(_props: { widget: Widget }) {
         {/* Quiet, always-present destructive rebuild of the whole view. */}
         <WidgetReloadAll onReload={onReloadAll} queued={reload.queued} />
       </div>
+      {editing ? (
+        <EditWidgetDialog
+          open={editId !== null}
+          onOpenChange={(o) => !o && setEditId(null)}
+          type="timeline"
+          spec={editing.spec}
+          onSave={(next) => updateEntry(editing.id, next as TimelineSpec)}
+        />
+      ) : null}
     </div>
   );
 }

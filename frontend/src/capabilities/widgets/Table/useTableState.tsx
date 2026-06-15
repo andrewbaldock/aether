@@ -35,6 +35,9 @@ export interface TableState {
   // and insert it directly AFTER the source so the copy lands right beneath the
   // original in both the tool tab and the Bigsail canvas.
   duplicateEntry: (id: number) => void;
+  // Replace ONE table's spec in place by id (a direct edit — no model call, unlike
+  // requestReplaceEntry). Used by the param/prompt editor and the prompt backfill.
+  updateEntry: (id: number, spec: TableSpec) => void;
 }
 
 const TableContext = createContext<TableState | null>(null);
@@ -115,6 +118,19 @@ export function TableProvider({ children }: { children: ReactNode }) {
     [nextId, setEntries]
   );
 
+  const updateEntry = useCallback(
+    (id: number, spec: TableSpec) => {
+      setEntries((prev) => {
+        const idx = prev.findIndex((e) => e.id === id);
+        if (idx === -1) return prev;
+        const next = prev.slice();
+        next[idx] = { id, spec };
+        return next;
+      });
+    },
+    [setEntries]
+  );
+
   const value = useMemo<TableState>(
     () => ({
       entries,
@@ -123,6 +139,7 @@ export function TableProvider({ children }: { children: ReactNode }) {
       requestReplace,
       requestReplaceEntry,
       duplicateEntry,
+      updateEntry,
     }),
     [
       entries,
@@ -131,6 +148,7 @@ export function TableProvider({ children }: { children: ReactNode }) {
       requestReplace,
       requestReplaceEntry,
       duplicateEntry,
+      updateEntry,
     ]
   );
 

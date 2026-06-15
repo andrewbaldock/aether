@@ -317,7 +317,7 @@ export const RENDER_TABLE_TOOL: ToolDefinition = {
         description: "one object per row, keyed by column key",
       },
     },
-    required: ["columns", "rows"],
+    required: ["columns", "rows", "summary"],
   },
 };
 
@@ -374,7 +374,7 @@ export const RENDER_CHART_TOOL: ToolDefinition = {
         },
       },
     },
-    required: ["type", "data", "xKey", "series"],
+    required: ["type", "data", "xKey", "series", "summary"],
   },
 };
 
@@ -424,7 +424,7 @@ export const RENDER_TIMELINE_TOOL: ToolDefinition = {
         description: "optional swimlane groups items reference by group id",
       },
     },
-    required: ["items"],
+    required: ["items", "summary"],
   },
 };
 
@@ -473,7 +473,7 @@ export const RENDER_IMAGES_TOOL: ToolDefinition = {
         },
       },
     },
-    required: ["images"],
+    required: ["images", "blurb"],
   },
 };
 

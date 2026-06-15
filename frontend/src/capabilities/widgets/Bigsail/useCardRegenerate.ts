@@ -90,6 +90,29 @@ export function useCardRegenerate(card: Card): CardRegenerate {
 // others as `summary`. Empty string when the widget predates the field (the box just
 // starts blank, the user can type their own steer).
 export function cardSummarySeed(card: Card): string {
-  const spec = card.spec as { summary?: string; blurb?: string };
-  return spec.summary ?? spec.blurb ?? "";
+  return recreationPromptOf(card.capabilityType, card.spec);
+}
+
+// The recreation-prompt field is `blurb` for images, `summary` for everyone else.
+// Centralised so the back face, the edit dialog, and any reader agree.
+function promptFieldFor(type: CardCapability): "summary" | "blurb" {
+  return type === "images" ? "blurb" : "summary";
+}
+
+// Read the recreation prompt off any spec (handles the images/blurb vs summary
+// split). Empty string when absent.
+export function recreationPromptOf(type: CardCapability, spec: unknown): string {
+  const field = promptFieldFor(type);
+  const v = (spec as Record<string, unknown>)?.[field];
+  return typeof v === "string" ? v : "";
+}
+
+// Return a copy of `spec` with the recreation prompt set to `text` (into the right
+// field for the capability). Used by the edit dialog to write the prompt back.
+export function withRecreationPrompt<S>(
+  type: CardCapability,
+  spec: S,
+  text: string
+): S {
+  return { ...(spec as object), [promptFieldFor(type)]: text } as S;
 }

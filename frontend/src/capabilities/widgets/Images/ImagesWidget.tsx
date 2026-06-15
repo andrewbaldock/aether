@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
+import { EditWidgetDialog } from "../../../shell/EditWidgetDialog";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
 import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
@@ -13,6 +14,7 @@ import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
 import {
   WidgetDuplicateButton,
+  WidgetEditButton,
   WidgetReloadAll,
   WidgetReloadHeaderButton,
 } from "../WidgetReloadHeader";
@@ -24,8 +26,15 @@ const IMAGES_BUILD_PROMPT =
   "Build the best gallery you can about what we've been discussing. Search the web for real images of the subject — and broaden from what was literally said: illustrate the topic itself, its people, places, and objects, not only things named outright. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call search_images and then render_images now. Only skip if the subject genuinely can't be illustrated at all.";
 
 export function ImagesWidget(_props: { widget: Widget }) {
-  const { entries, requestReplace, requestReplaceEntry, duplicateEntry } =
-    useImagesState();
+  const {
+    entries,
+    requestReplace,
+    requestReplaceEntry,
+    duplicateEntry,
+    updateEntry,
+  } = useImagesState();
+  const [editId, setEditId] = useState<number | null>(null);
+  const editing = entries.find((e) => e.id === editId) ?? null;
   const busy = useAgentBusy();
   const { messages } = useSessionContext();
   const awaitingClarification = useAwaitingClarification();
@@ -118,6 +127,7 @@ export function ImagesWidget(_props: { widget: Widget }) {
                           : "Get more"}
                     </button>
                   )}
+                  <WidgetEditButton onClick={() => setEditId(id)} />
                   <WidgetDuplicateButton
                     onClick={() => duplicateEntry(id)}
                     label="Duplicate this gallery"
@@ -136,6 +146,15 @@ export function ImagesWidget(_props: { widget: Widget }) {
         {/* Quiet, always-present destructive rebuild of the whole view. */}
         <WidgetReloadAll onReload={onReloadAll} queued={action.queued} />
       </div>
+      {editing ? (
+        <EditWidgetDialog
+          open={editId !== null}
+          onOpenChange={(o) => !o && setEditId(null)}
+          type="images"
+          spec={editing.spec}
+          onSave={(next) => updateEntry(editing.id, next as ImagesSpec)}
+        />
+      ) : null}
     </div>
   );
 }

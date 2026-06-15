@@ -20,8 +20,10 @@ import { useFillFromConversation } from "../useFillFromConversation";
 import { useQueuedExplore } from "../useQueuedExplore";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
+import { EditWidgetDialog } from "../../../shell/EditWidgetDialog";
 import {
   WidgetDuplicateButton,
+  WidgetEditButton,
   WidgetReloadAll,
   WidgetReloadHeader,
 } from "../WidgetReloadHeader";
@@ -37,8 +39,17 @@ const TABLE_BUILD_PROMPT =
 // plain styled <table> for the markup so it themes with the app's Tailwind tokens.
 // The `widget` prop is unused; state is live.
 export function TableWidget(_props: { widget: Widget }) {
-  const { entries, requestReplace, requestReplaceEntry, duplicateEntry } =
-    useTableState();
+  const {
+    entries,
+    requestReplace,
+    requestReplaceEntry,
+    duplicateEntry,
+    updateEntry,
+  } = useTableState();
+  // Which entry's edit dialog is open (its id), or null. One shared dialog driven by
+  // the selected entry — the gear in each header opens it for that entry.
+  const [editId, setEditId] = useState<number | null>(null);
+  const editing = entries.find((e) => e.id === editId) ?? null;
   const busy = useAgentBusy();
   const { messages } = useSessionContext();
   const awaitingClarification = useAwaitingClarification();
@@ -98,6 +109,7 @@ export function TableWidget(_props: { widget: Widget }) {
                 label="Reload just this table from the conversation"
                 extraAction={
                   <>
+                    <WidgetEditButton onClick={() => setEditId(id)} />
                     <WidgetDuplicateButton
                       onClick={() => duplicateEntry(id)}
                       label="Duplicate this table"
@@ -113,6 +125,15 @@ export function TableWidget(_props: { widget: Widget }) {
         {/* Quiet, always-present destructive rebuild of the whole view. */}
         <WidgetReloadAll onReload={onReloadAll} queued={reload.queued} />
       </div>
+      {editing ? (
+        <EditWidgetDialog
+          open={editId !== null}
+          onOpenChange={(o) => !o && setEditId(null)}
+          type="table"
+          spec={editing.spec}
+          onSave={(next) => updateEntry(editing.id, next as TableSpec)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Copy, RefreshCw } from "lucide-react";
+import { Copy, RefreshCw, Settings } from "lucide-react";
 import type { ReactNode } from "react";
 import { Tooltip } from "../../shell/Tooltip";
 
@@ -101,6 +101,30 @@ export function WidgetDuplicateButton({
         className="shrink-0 rounded-md p-1 text-content-subtle/60 transition-colors hover:bg-elevated hover:text-content focus-visible:bg-elevated focus-visible:text-content focus-visible:outline-none"
       >
         <Copy className="h-4 w-4" aria-hidden />
+      </button>
+    </Tooltip>
+  );
+}
+
+// A dim per-entry gear icon, same look as the reload/duplicate icons, for a tool
+// tab's entry header. Opens the edit dialog (the tool-tab counterpart to the Bigsail
+// card's flip) where the user edits this widget's recreation prompt + raw params.
+export function WidgetEditButton({
+  onClick,
+  label = "Edit prompt & parameters",
+}: {
+  onClick: () => void;
+  label?: string;
+}) {
+  return (
+    <Tooltip label={label} contentClassName="w-64 whitespace-normal leading-snug">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        className="shrink-0 rounded-md p-1 text-content-subtle/60 transition-colors hover:bg-elevated hover:text-content focus-visible:bg-elevated focus-visible:text-content focus-visible:outline-none"
+      >
+        <Settings className="h-4 w-4" aria-hidden />
       </button>
     </Tooltip>
   );

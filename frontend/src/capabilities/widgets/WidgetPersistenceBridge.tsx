@@ -19,6 +19,19 @@ import {
 } from "./widgetSavePayload";
 
 const SAVE_DEBOUNCE_MS = 900;
+
+// Whether a serialised entry array has any spec missing its recreation prompt
+// (summary, or blurb for images) — the seed for the back-face/edit re-prompt box.
+// Conversations made before summary was required have these blank; we ask the
+// backend to backfill them once on load. Defensive: any non-array is "nothing missing".
+function hasMissingPrompts(value: unknown, field: "summary" | "blurb"): boolean {
+  if (!Array.isArray(value)) return false;
+  return value.some((entry) => {
+    const spec = (entry as { spec?: Record<string, unknown> })?.spec;
+    const v = spec?.[field];
+    return typeof v !== "string" || v.trim().length === 0;
+  });
+}
 // A failed GET means "we don't know yet" — never the same as "empty". We keep the
 // tiles on screen and retry once after a short delay so a backend cold-start (Fly
 // scale-to-zero, see the 502 history) self-corrects without the user reloading.
@@ -44,21 +57,25 @@ export function WidgetPersistenceBridge() {
     entries: tableEntries,
     loadEntries: loadTable,
     clearEntries: clearTable,
+    updateEntry: updateTable,
   } = useTableState();
   const {
     entries: chartEntries,
     loadEntries: loadChart,
     clearEntries: clearChart,
+    updateEntry: updateChart,
   } = useChartState();
   const {
     entries: timelineEntries,
     loadEntries: loadTimeline,
     clearEntries: clearTimeline,
+    updateEntry: updateTimeline,
   } = useTimelineState();
   const {
     entries: imageEntries,
     loadEntries: loadImages,
     clearEntries: clearImages,
+    updateEntry: updateImages,
   } = useImagesState();
 
   const loadedSessionRef = useRef<string | null>(null);
@@ -144,6 +161,42 @@ export function WidgetPersistenceBridge() {
             ),
           }).catch((err) => logApiError(`widget heal ${sessionId}`, err));
         loadedSessionRef.current = sessionId;
+
+        // Backfill missing recreation prompts for pre-feature conversations: if any
+        // restored widget lacks its summary/blurb, ask the backend to fill them
+        // (cheap Haiku, capped, no-op when none missing), then re-apply the patched
+        // specs so the back-face/edit re-prompt box seeds correctly. Fire-and-forget
+        // and one-shot per load — runs only when there's an actual gap.
+        const needsRepair =
+          hasMissingPrompts(s.table, "summary") ||
+          hasMissingPrompts(s.chart, "summary") ||
+          hasMissingPrompts(s.timeline, "summary") ||
+          hasMissingPrompts(s.images, "blurb");
+        if (needsRepair) {
+          const repairFor = sessionId;
+          apiFetch<{
+            filled: number;
+            widgets: Record<string, unknown> | null;
+          }>(`/api/sessions/${repairFor}/repair-prompts`, { method: "POST" })
+            .then((res) => {
+              // Ignore if the session changed under us or nothing was filled.
+              if (
+                cancelled ||
+                loadedSessionRef.current !== repairFor ||
+                !res?.widgets ||
+                res.filled === 0
+              )
+                return;
+              const w = res.widgets;
+              applyField(w.table, loadTable, clearTable);
+              applyField(w.chart, loadChart, clearChart);
+              applyField(w.timeline, loadTimeline, clearTimeline);
+              applyField(w.images, loadImages, clearImages);
+            })
+            .catch((err) =>
+              logApiError(`widget repair-prompts ${repairFor}`, err)
+            );
+        }
       } catch (err) {
         logApiError(`widget load ${sessionId}`, err);
         if (cancelled) return;

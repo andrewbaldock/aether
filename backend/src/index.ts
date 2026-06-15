@@ -23,6 +23,7 @@ import {
 } from "./db";
 import { checkHealth, checkProviders } from "./health";
 import { type ChatMessage, createClient, generateTitle } from "./llm";
+import { backfillSnapshotPrompts } from "./recreationPrompt";
 import { MODELS, type Provider, resolveModel } from "./models";
 import { toolStatusLabel } from "./tools";
 
@@ -329,6 +330,25 @@ app.put("/api/sessions/:id/widgets", async (c) => {
   } catch (err) {
     console.error("PUT /api/sessions/:id/widgets failed:", err);
     return c.json({ error: "Failed to save widgets" }, 500);
+  }
+});
+
+// Backfill missing widget recreation prompts (summary/blurb) for a conversation
+// made before summary was required. Loads the stored snapshot, fills any entry that
+// lacks a prompt via a cheap Haiku call, persists, and returns the patched snapshot
+// so the client can update its tiles in place. No-op (and no model calls) when every
+// widget already has a prompt. Called lazily by the client after a load detects gaps.
+app.post("/api/sessions/:id/repair-prompts", async (c) => {
+  const id = c.req.param("id");
+  try {
+    const existing = await getSessionWidgets(id);
+    if (!existing) return c.json({ filled: 0, widgets: null });
+    const { filled } = await backfillSnapshotPrompts(existing);
+    if (filled > 0) await updateSessionWidgetData(id, existing);
+    return c.json({ filled, widgets: existing });
+  } catch (err) {
+    console.error("POST /api/sessions/:id/repair-prompts failed:", err);
+    return c.json({ error: "Failed to repair prompts" }, 500);
   }
 });
 

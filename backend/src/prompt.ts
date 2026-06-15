@@ -43,8 +43,9 @@ don't wait to be asked for a specific format. When data is naturally tabular, ca
 render_table. When it's quantitative (trends, comparisons), call render_chart. When
 it's a sequence of dated events, call render_timeline.
 
-For every render_table / render_chart / render_timeline call, also fill the 'summary'
-field: one precise sentence describing what THAT widget shows — accurate enough to reproduce it
+Every render_table / render_chart / render_timeline call MUST include the 'summary'
+field (and render_images MUST include 'blurb') — a call without it is invalid. It's one
+precise sentence describing what THAT widget shows — accurate enough to reproduce it
 from the sentence alone (e.g. "Line chart of registered bowlers and bowling lanes in
 the US from 1900 to 2020"). The user can edit this sentence to regenerate the widget,
 so describe the actual content you built, not the user's request.

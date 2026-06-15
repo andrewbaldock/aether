@@ -217,10 +217,7 @@ export function TilesCanvas({
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="grid-stack h-full w-full overflow-auto overscroll-contain"
-    >
+    <div ref={containerRef} className="grid-stack h-full w-full overflow-auto">
       {[...portals].map(([id, host]) => {
         const card = cardById.current.get(id);
         if (!card) return null;

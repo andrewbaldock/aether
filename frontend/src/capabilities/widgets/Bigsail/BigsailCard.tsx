@@ -69,10 +69,11 @@ function CardBody({ card }: { card: Card }) {
     case "table": {
       const spec = card.spec as TableSpec;
       // Title now lives in the card's top bar (CardShell), so it's omitted here.
-      // overscroll-contain keeps a wheel that reaches the card's scroll edge from
-      // chaining out to the canvas/page (the "it scrolls the whole page" bug).
+      // Plain overflow-auto (no overscroll-*): a wheel that reaches the card's scroll
+      // edge chains OUT to pan the canvas — the long-standing behavior (scroll a
+      // table to its bottom, keep going, the whole Bigsail moves).
       return (
-        <div className="flex h-full flex-col overflow-auto overscroll-contain">
+        <div className="flex h-full flex-col overflow-auto">
           <SpecTable spec={spec} title={spec.title} />
         </div>
       );
@@ -80,14 +81,14 @@ function CardBody({ card }: { card: Card }) {
     case "timeline":
       // Title lives in the card's top bar (CardShell) → hideTitle here.
       return (
-        <div className="h-full overflow-auto overscroll-contain p-3">
+        <div className="h-full overflow-auto p-3">
           <SpecTimeline spec={card.spec as TimelineSpec} hideTitle />
         </div>
       );
     case "images":
       // Title lives in the card's top bar (CardShell) → hideTitle here.
       return (
-        <div className="h-full overflow-auto overscroll-contain p-3">
+        <div className="h-full overflow-auto p-3">
           <SpecImages spec={card.spec as ImagesSpec} hideTitle />
         </div>
       );

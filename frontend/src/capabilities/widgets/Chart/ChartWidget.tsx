@@ -17,6 +17,7 @@ import {
   type XAxisTickContentProps,
   YAxis,
 } from "recharts";
+import { useState } from "react";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
 import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
@@ -29,8 +30,10 @@ import { useFillFromConversation } from "../useFillFromConversation";
 import { useQueuedExplore } from "../useQueuedExplore";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
+import { EditWidgetDialog } from "../../../shell/EditWidgetDialog";
 import {
   WidgetDuplicateButton,
+  WidgetEditButton,
   WidgetReloadAll,
   WidgetReloadHeader,
 } from "../WidgetReloadHeader";
@@ -82,8 +85,15 @@ function seriesColor(color: string | undefined, index: number): string {
 // scrollable tab. Recharts for the rendering; brand colors as defaults. The
 // `widget` prop is unused; state is live.
 export function ChartWidget(_props: { widget: Widget }) {
-  const { entries, requestReplace, requestReplaceEntry, duplicateEntry } =
-    useChartState();
+  const {
+    entries,
+    requestReplace,
+    requestReplaceEntry,
+    duplicateEntry,
+    updateEntry,
+  } = useChartState();
+  const [editId, setEditId] = useState<number | null>(null);
+  const editing = entries.find((e) => e.id === editId) ?? null;
   const awaitingClarification = useAwaitingClarification();
   const bus = useAgentEvents();
   const busy = useAgentBusy();
@@ -147,6 +157,7 @@ export function ChartWidget(_props: { widget: Widget }) {
                   label="Reload just this chart from the conversation"
                   extraAction={
                     <>
+                      <WidgetEditButton onClick={() => setEditId(id)} />
                       <WidgetDuplicateButton
                         onClick={() => duplicateEntry(id)}
                         label="Duplicate this chart"
@@ -255,6 +266,15 @@ export function ChartWidget(_props: { widget: Widget }) {
         {/* Quiet, always-present destructive rebuild of the whole view. */}
         <WidgetReloadAll onReload={onReloadAll} queued={reload.queued} />
       </div>
+      {editing ? (
+        <EditWidgetDialog
+          open={editId !== null}
+          onOpenChange={(o) => !o && setEditId(null)}
+          type="chart"
+          spec={editing.spec}
+          onSave={(next) => updateEntry(editing.id, next as ChartSpec)}
+        />
+      ) : null}
     </div>
   );
 }
