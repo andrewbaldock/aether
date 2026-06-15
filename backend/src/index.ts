@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import {
   createSession,
+  deleteMessages,
   deleteSession,
   forkSession,
   type GraphSnapshot,
@@ -230,6 +231,21 @@ app.get("/api/sessions/:id/messages", async (c) => {
   }
 });
 
+// Delete a chunk of a conversation (the user+assistant pair behind a turn's
+// trash control). The client computes which rows form the chunk and sends their
+// ids; we delete them scoped to the session.
+app.delete("/api/sessions/:id/messages", async (c) => {
+  const id = c.req.param("id");
+  try {
+    const { ids } = await c.req.json<{ ids: string[] }>();
+    await deleteMessages(id, ids);
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("DELETE /api/sessions/:id/messages failed:", err);
+    return c.json({ error: "Failed to delete messages" }, 500);
+  }
+});
+
 // The persisted knowledge-graph snapshot for a session. Loaded alongside
 // messages when a conversation is reopened so the graph the user built (and any
 // dragged-pinned positions) is restored. Returns { nodes: [], links: [] } when
@@ -434,22 +450,31 @@ app.post("/api/chat", async (c) => {
             });
           }
 
-          await stream.writeSSE({ data: "[DONE]" });
-
-          // Persist after [DONE] so we only save complete turns.
+          // Persist before [DONE] so the `persisted` id round-trip (below) is
+          // consumed by the client, whose read loop breaks on [DONE].
           if (persistSession && lastUserMessage) {
             // Message persistence is the critical path. If it fails, warn the
-            // client after [DONE] so the turn isn't silently lost on reload.
+            // client so the turn isn't silently lost on reload.
             try {
               // Persist the transcript stand-in when the client sent one, so a
               // verbose fill instruction never reappears on reload — the model
               // already received the full `content` for this turn.
-              await saveMessage(
+              const userId = await saveMessage(
                 persistSession,
                 "user",
                 lastUserMessage.displayText ?? lastUserMessage.content
               );
-              await saveMessage(persistSession, "assistant", assistantText);
+              const assistantId = await saveMessage(
+                persistSession,
+                "assistant",
+                assistantText
+              );
+              // Hand the client the real DB ids so its placeholder ids become
+              // the actual row ids — lets a same-session delete hit the right
+              // rows without a reload. Only sent once both saves succeeded.
+              await stream.writeSSE({
+                data: JSON.stringify({ type: "persisted", userId, assistantId }),
+              });
             } catch (err) {
               console.error("Failed to persist chat turn:", err);
               await stream.writeSSE({
@@ -460,26 +485,32 @@ app.post("/api/chat", async (c) => {
                 }),
               });
             }
+          }
 
-            // Auto-title the session from the first user message. A one-shot
-            // Haiku micro-agent names it in a few words; if that fails (bad key,
-            // rate limit) it returns null and we fall back to the truncated
-            // message. The conditional UPDATE is a no-op once a title exists, and
-            // a failure here must never affect message persistence — so it's
-            // decoupled.
-            if (lastUserMessage.content) {
-              try {
-                const generated = await generateTitle(lastUserMessage.content);
-                const title =
-                  generated?.title ?? lastUserMessage.content.slice(0, 60);
-                await updateSessionTitleIfEmpty(
-                  persistSession,
-                  title,
-                  generated?.icon ?? null
-                );
-              } catch (err) {
-                console.error("Failed to auto-title session:", err);
-              }
+          // Terminal signal now — after persistence + the `persisted` round-trip
+          // (so the client's read loop, which breaks on [DONE], consumes them),
+          // but BEFORE auto-titling so the turn finishes immediately and doesn't
+          // wait on the title micro-agent's network call.
+          await stream.writeSSE({ data: "[DONE]" });
+
+          // Auto-title the session from the first user message. A one-shot Haiku
+          // micro-agent names it in a few words; if that fails (bad key, rate
+          // limit) it returns null and we fall back to the truncated message. The
+          // conditional UPDATE is a no-op once a title exists, and a failure here
+          // must never affect message persistence — so it's decoupled, and runs
+          // after [DONE] since the client doesn't block on it.
+          if (persistSession && lastUserMessage && lastUserMessage.content) {
+            try {
+              const generated = await generateTitle(lastUserMessage.content);
+              const title =
+                generated?.title ?? lastUserMessage.content.slice(0, 60);
+              await updateSessionTitleIfEmpty(
+                persistSession,
+                title,
+                generated?.icon ?? null
+              );
+            } catch (err) {
+              console.error("Failed to auto-title session:", err);
             }
           }
         },

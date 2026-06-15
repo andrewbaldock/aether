@@ -1,6 +1,12 @@
 import * as RadixTooltip from "@radix-ui/react-tooltip";
-import { ChevronDown, Share2 } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { ChevronDown, Share2, Trash2 } from "lucide-react";
+import {
+  type FormEvent,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ThinkingGlyph } from "../brand/ThinkingGlyph";
@@ -39,6 +45,21 @@ function readLastModel(): string | undefined {
   return localStorage.getItem(LAST_MODEL_KEY) ?? undefined;
 }
 
+// Relative timestamp for the label under assistant replies — "just now",
+// "3 mins ago", "2 hours ago", "4 days ago", then a plain date past a week.
+// Finer-grained than the Sidebar's day-bucket formatter (kept independent).
+function formatRelative(iso: string): string {
+  const sec = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+  if (sec < 45) return "just now";
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min} min${min === 1 ? "" : "s"} ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr} hour${hr === 1 ? "" : "s"} ago`;
+  const day = Math.round(hr / 24);
+  if (day < 7) return `${day} day${day === 1 ? "" : "s"} ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
 export function ChatPanel() {
   const {
     userId,
@@ -50,9 +71,47 @@ export function ChatPanel() {
     refreshSessions,
     registerAbort,
     renameSession,
+    deleteMessages,
+    loadSession,
   } = useSessionContext();
 
   const route = useRoute();
+
+  // Re-render once a minute so the relative "3 hours ago" timestamps under
+  // assistant replies stay fresh during a long-lived session. Cheap (one render/
+  // min) and torn down on unmount.
+  const [, tickRelativeTimes] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    const id = setInterval(tickRelativeTimes, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Which assistant message currently shows its inline "Delete?" confirm (the
+  // trash control was clicked once). null = none confirming.
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(
+    null
+  );
+
+  // Delete a turn: the assistant message plus its immediately-preceding user
+  // question. Optimistic in-memory removal for instant feedback; on failure
+  // resync from the DB (source of truth). Ids are real DB ids, so the request
+  // targets the right rows even for a turn created this session.
+  const handleDeleteTurn = (assistantId: string) => {
+    const idx = messages.findIndex((m) => m.id === assistantId);
+    const prev = idx > 0 ? messages[idx - 1] : undefined;
+    const userMsg = prev?.role === "user" ? prev : null;
+    const toRemove = new Set([
+      assistantId,
+      ...(userMsg ? [userMsg.id] : []),
+    ]);
+    setMessages(messages.filter((m) => !toRemove.has(m.id)));
+    setConfirmingDeleteId(null);
+    if (sessionId) {
+      void deleteMessages(sessionId, [...toRemove]).catch(() => {
+        void loadSession(sessionId);
+      });
+    }
+  };
 
   // Knowledge Graph is always on — no per-session toggle.
   const graphMode = true;
@@ -547,6 +606,46 @@ export function ChatPanel() {
                             {option}
                           </button>
                         ))}
+                      </div>
+                    )}
+                    {/* Footer: relative timestamp + a subtle delete control.
+                        Only once the reply has text (so nothing flashes before
+                        it lands). The trash stays hidden until hover (group),
+                        and is suppressed on the streaming message. Clicking it
+                        swaps to an inline "Delete?" confirm — no modal. */}
+                    {m.createdAt && m.text && (
+                      <div className="group/turn mt-1 flex items-center gap-2 text-xs text-content-subtle">
+                        <span title={new Date(m.createdAt).toLocaleString()}>
+                          {formatRelative(m.createdAt)}
+                        </span>
+                        {!(mi === messages.length - 1 && isLoading) &&
+                          (confirmingDeleteId === m.id ? (
+                            <span className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTurn(m.id)}
+                                className="text-danger-content hover:underline"
+                              >
+                                Delete?
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmingDeleteId(null)}
+                                className="hover:text-content"
+                              >
+                                Cancel
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              aria-label="Delete this exchange"
+                              onClick={() => setConfirmingDeleteId(m.id)}
+                              className="opacity-0 transition-opacity hover:text-content group-hover/turn:opacity-100"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          ))}
                       </div>
                     )}
                   </>

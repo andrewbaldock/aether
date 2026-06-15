@@ -13,6 +13,10 @@ export interface Message {
   // chips; tapping one sends a follow-up turn flagged `clarified` so the planner
   // won't clarify again. Absent on every normal turn.
   clarifyOptions?: string[];
+  // ISO timestamp. On reload it's the DB `created_at`; for a live turn it's
+  // stamped client-side at creation (within a second of the DB value, which
+  // replaces it on the next reload). Drives the relative "3 hours ago" label.
+  createdAt?: string;
 }
 
 interface UseChatOptions {
@@ -129,7 +133,12 @@ export function useChat({
     const shownText = displayText ?? text;
     const withUser: Message[] = [
       ...messagesRef.current,
-      { id: crypto.randomUUID(), role: "user", text: shownText },
+      {
+        id: crypto.randomUUID(),
+        role: "user",
+        text: shownText,
+        createdAt: new Date().toISOString(),
+      },
     ];
     onMessagesChange(withUser);
     messagesRef.current = withUser;
@@ -172,10 +181,19 @@ export function useChat({
     setIsLoading(true);
     setError(null);
 
+    // The user bubble for this turn is the last message in `next` — capture its
+    // id so the `persisted` event can swap it for the real DB id (step 8b).
+    const localUserId = next.at(-1)?.id;
+
     const assistantId = crypto.randomUUID();
     const withPlaceholder: Message[] = [
       ...next,
-      { id: assistantId, role: "assistant", text: "" },
+      {
+        id: assistantId,
+        role: "assistant",
+        text: "",
+        createdAt: new Date().toISOString(),
+      },
     ];
     onMessagesChange(withPlaceholder);
     messagesRef.current = withPlaceholder;
@@ -294,6 +312,11 @@ export function useChat({
             plan?: CompositionPlan;
             question?: string;
             options?: string[];
+            // `persisted`: real DB ids for this turn's saved rows, so the
+            // in-memory placeholder ids become the actual row ids (enables a
+            // same-session delete to target the right rows — no reload needed).
+            userId?: string;
+            assistantId?: string;
           };
 
           if (event.type === "text" && event.content) {
@@ -361,6 +384,24 @@ export function useChat({
               question: event.question,
               options,
             });
+          } else if (
+            event.type === "persisted" &&
+            event.userId &&
+            event.assistantId
+          ) {
+            // The turn was saved; swap our client placeholder ids for the real
+            // DB row ids so a later delete this session targets the right rows.
+            // Drop if this stream has been superseded.
+            if (epoch === epochRef.current) {
+              const remap = new Map<string, string>();
+              if (localUserId) remap.set(localUserId, event.userId);
+              remap.set(assistantId, event.assistantId);
+              const updated = messagesRef.current.map((m) =>
+                remap.has(m.id) ? { ...m, id: remap.get(m.id)! } : m
+              );
+              messagesRef.current = updated;
+              onMessagesChange(updated);
+            }
           } else if (event.type === "warning") {
             // The turn streamed fine but couldn't be persisted. Surface it
             // without stripping the assistant message — it's on screen, just

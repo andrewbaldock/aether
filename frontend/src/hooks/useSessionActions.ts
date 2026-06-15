@@ -20,12 +20,15 @@ export interface SessionActions {
   loadSession: (id: string) => Promise<void>;
   renameSession: (id: string, title: string) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
+  // Delete a chunk of a conversation (the user+assistant pair behind a turn).
+  deleteMessages: (id: string, ids: string[]) => Promise<void>;
 }
 
 interface DbMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  created_at: string;
 }
 
 // Session-list CRUD, lifted out of the Sidebar so it's pure UI. Reads go through
@@ -100,6 +103,7 @@ export function useSessionActions({
         id: m.id,
         role: m.role,
         text: m.content,
+        createdAt: m.created_at,
       }));
       switchSession(id, messages);
       // Preserve a deep-linked tool tab: if the URL already points at THIS session
@@ -142,6 +146,20 @@ export function useSessionActions({
     },
   });
 
+  // Delete a chunk of a conversation (the user+assistant pair behind a turn's
+  // trash control). The caller removes the rows from the in-memory transcript
+  // optimistically; this just persists the deletion. `ids` are real DB ids — the
+  // `persisted` SSE round-trip ensures even a same-session turn carries them.
+  const deleteMessagesMutation = useMutation({
+    mutationKey: ["deleteMessages"],
+    mutationFn: ({ id, ids }: { id: string; ids: string[] }) =>
+      apiFetch<void>(`/api/sessions/${id}/messages`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      }),
+  });
+
   // Depend on the stable `mutateAsync` callbacks, NOT the whole mutation objects:
   // React Query's useMutation returns a fresh result object every render, so listing
   // the mutation here would give these callbacks a new identity every render and
@@ -149,6 +167,7 @@ export function useSessionActions({
   // is referentially stable.
   const renameAsync = renameMutation.mutateAsync;
   const deleteAsync = deleteMutation.mutateAsync;
+  const deleteMessagesAsync = deleteMessagesMutation.mutateAsync;
 
   // Fire-and-forget from the UI: the mutation cache's onError logs failures, so we
   // swallow the rejection here to avoid unhandled-rejection noise (callers don't await).
@@ -166,5 +185,12 @@ export function useSessionActions({
     [deleteAsync]
   );
 
-  return { loadSession, renameSession, deleteSession };
+  // Returns the promise (not swallowed) so ChatPanel can resync from the DB on
+  // failure after its optimistic in-memory removal.
+  const deleteMessages = useCallback(
+    (id: string, ids: string[]) => deleteMessagesAsync({ id, ids }),
+    [deleteMessagesAsync]
+  );
+
+  return { loadSession, renameSession, deleteSession, deleteMessages };
 }

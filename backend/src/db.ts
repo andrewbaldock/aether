@@ -213,11 +213,17 @@ export async function saveMessage(
   sessionId: string,
   role: "user" | "assistant",
   content: string
-): Promise<void> {
-  const { error } = await getDb()
+): Promise<string> {
+  // Return the inserted row id so the client can swap its placeholder id for
+  // the real DB id (the `persisted` SSE event), making a same-session delete
+  // target the right row without a reload.
+  const { data, error } = await getDb()
     .from("messages")
-    .insert({ session_id: sessionId, role, content });
+    .insert({ session_id: sessionId, role, content })
+    .select("id")
+    .single();
   if (error) throw new Error(`saveMessage: ${error.message}`);
+  return data.id as string;
 }
 
 export async function updateSessionTitle(
@@ -384,6 +390,23 @@ export async function forkSession(
 export async function deleteSession(sessionId: string): Promise<void> {
   const { error } = await getDb().from("sessions").delete().eq("id", sessionId);
   if (error) throw new Error(`deleteSession: ${error.message}`);
+}
+
+// Delete specific message rows, scoped to a session so a stray id can't reach
+// across sessions. Used by the per-turn trash control (deletes the user+assistant
+// pair). When the by-id session ownership filter lands, add a user_id check here
+// too (e.g. require the session to belong to the caller before deleting).
+export async function deleteMessages(
+  sessionId: string,
+  ids: string[]
+): Promise<void> {
+  if (ids.length === 0) return;
+  const { error } = await getDb()
+    .from("messages")
+    .delete()
+    .eq("session_id", sessionId)
+    .in("id", ids);
+  if (error) throw new Error(`deleteMessages: ${error.message}`);
 }
 
 export async function getSessionWidgets(
