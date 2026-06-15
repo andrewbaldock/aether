@@ -200,3 +200,35 @@ describe("reads stay open (sharing must keep working)", () => {
     });
   }
 });
+
+describe("read endpoints support ETag/304 (egress guard)", () => {
+  // The conversation reads carry the heavy payloads (graph/widgets/messages) that
+  // a tab-refocus refetch would otherwise re-download in full. They send an ETag +
+  // Cache-Control so the browser revalidates and an unchanged snapshot returns 304
+  // with no body. This is silent if it breaks (just quietly costs egress again), so
+  // assert the contract: a first GET returns an ETag + a revalidation Cache-Control,
+  // and a second GET with that If-None-Match returns 304.
+  const graphPath = `/api/sessions/${SESSION_ID}/graph`;
+
+  it("first GET returns an ETag and a revalidating Cache-Control", async () => {
+    const res = await req("GET", graphPath);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("ETag")).toBeTruthy();
+    expect(res.headers.get("Cache-Control")).toContain("no-cache");
+  });
+
+  it("GET with matching If-None-Match returns 304 (empty body)", async () => {
+    const first = await req("GET", graphPath);
+    const tag = first.headers.get("ETag");
+    expect(tag).toBeTruthy();
+    const second = await Promise.resolve(
+      server.fetch(
+        new Request(`http://localhost${graphPath}`, {
+          headers: { "If-None-Match": tag as string },
+        })
+      )
+    );
+    expect(second.status).toBe(304);
+    expect(await second.text()).toBe("");
+  });
+});

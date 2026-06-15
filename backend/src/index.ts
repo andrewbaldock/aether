@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { etag } from "hono/etag";
 import { streamSSE } from "hono/streaming";
 import {
   createSession,
@@ -33,6 +34,37 @@ import { toolStatusLabel } from "./tools";
 const app = new Hono();
 
 app.get("/api/health", (c) => c.json({ ok: true }));
+
+// ETag/304 on the conversation READ endpoints — the heavy payloads (messages,
+// graph snapshot, widget snapshot) that a tab-refocus refetch would otherwise
+// re-download in full every time react-query considers them stale. The middleware
+// hashes the response body, sets an ETag, and returns 304 (empty body) when the
+// client's If-None-Match matches — so an unchanged snapshot costs ~no egress while
+// staying fully fresh (a changed snapshot hashes differently and sends normally).
+// GET-only: mutations on these same paths (PUT/DELETE) skip it via the guard, and
+// it's never applied to /api/chat (a stream — must not be buffered/hashed).
+const READ_PATHS = [
+  "/api/sessions/:id",
+  "/api/sessions/:id/messages",
+  "/api/sessions/:id/graph",
+  "/api/sessions/:id/widgets",
+];
+const etagMiddleware = etag();
+for (const path of READ_PATHS) {
+  app.use(path, async (c, next) => {
+    if (c.req.method !== "GET") return next();
+    await etagMiddleware(c, next);
+    // The ETag is useless unless the browser is told to REVALIDATE with it:
+    // without a caching directive the browser refetches fresh (full 200) and
+    // never sends If-None-Match, so no 304 ever fires. `private` keeps it out of
+    // shared/edge caches (responses are per-session, not public); `no-cache`
+    // means "cache but always revalidate first" — which is precisely the round
+    // trip that yields a 304 on unchanged data. `must-revalidate` forbids serving
+    // stale on error. Applied to both the 200 and the 304 (RETAINED_304_HEADERS
+    // keeps cache-control on the 304).
+    c.res.headers.set("Cache-Control", "private, no-cache, must-revalidate");
+  });
+}
 
 // The caller's identity for ownership checks on mutating routes. Today it's the
 // client's anonymous localStorage UUID, sent as the X-User-Id header on every
