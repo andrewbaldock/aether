@@ -217,7 +217,10 @@ export function TilesCanvas({
   }
 
   return (
-    <div ref={containerRef} className="grid-stack h-full w-full overflow-auto">
+    <div
+      ref={containerRef}
+      className="grid-stack h-full w-full overflow-auto overscroll-contain"
+    >
       {[...portals].map(([id, host]) => {
         const card = cardById.current.get(id);
         if (!card) return null;
@@ -295,8 +298,17 @@ function CardShell({
           flipped ? "[transform:rotateY(180deg)]" : ""
         }`}
       >
-        {/* FRONT — the live widget. Hidden from the back via backface-visibility. */}
-        <div className="absolute inset-0 flex flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg [backface-visibility:hidden]">
+        {/* FRONT — the live widget. Hidden from the back via backface-visibility.
+            backface-visibility hides the AWAY face visually but does NOT stop it
+            from capturing wheel/pointer events: in a preserve-3d scene the rotated
+            back face still projects onto the card's screen box and was intercepting
+            scroll over part of the card (the "top half won't scroll" bug). Gate
+            pointer-events on flip so only the face you see is interactive. */}
+        <div
+          className={`absolute inset-0 flex flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg [backface-visibility:hidden] ${
+            flipped ? "pointer-events-none" : ""
+          }`}
+        >
           {/* Top bar doubles as the drag handle (the whole strip starts a drag) and
               carries the card's title, which stays fixed while the body scrolls.
               The gear button swallows its own pointer gesture so a click flips
@@ -325,8 +337,14 @@ function CardShell({
         </div>
 
         {/* BACK — read-only JSON spec + hide action. Pre-rotated 180° so it faces
-            the viewer once the flipper turns. Still draggable (same handle strip). */}
-        <div className="absolute inset-0 flex flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg [backface-visibility:hidden] [transform:rotateY(180deg)]">
+            the viewer once the flipper turns. Still draggable (same handle strip).
+            pointer-events gated to the flipped state so the away-facing back never
+            steals wheel/clicks from the front (see the FRONT note above). */}
+        <div
+          className={`absolute inset-0 flex flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg [backface-visibility:hidden] [transform:rotateY(180deg)] ${
+            flipped ? "" : "pointer-events-none"
+          }`}
+        >
           <div
             className="bigsail-card-drag flex h-7 shrink-0 cursor-grab items-center gap-2 px-3 bg-elevated/60 active:cursor-grabbing"
             title="Drag to rearrange"
