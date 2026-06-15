@@ -252,18 +252,25 @@ export function ChatPanel() {
   // never overwrite the saved view with a transient mid-restore value). Admin
   // pages aren't capabilities, so viewing one clears the remembered view (next
   // bare /c/:id load falls back to home base).
+  // Depend on the stable `mutate` callback, NOT the whole `updateSession` object:
+  // React Query's `useMutation` returns a fresh result object every render, so
+  // listing `updateSession` here re-ran this effect every render → rescheduled the
+  // debounced PATCH → onMutate rewrote the cache → re-render → repeat, a PATCH storm
+  // (only `updateSession` flipped identity each cycle). `mutate` is referentially
+  // stable, so the effect now re-runs only when sessionId/activeId actually change.
+  const patchSession = updateSession.mutate;
   useEffect(() => {
     if (!sessionId || restoredSessionRef.current !== sessionId) return;
     const isCapabilityView = CAPABILITIES.some((c) => c.id === activeId);
     const activeWidget = isCapabilityView ? activeId : null;
     const timer = setTimeout(() => {
-      updateSession.mutate({
+      patchSession({
         id: sessionId,
         patch: { ui_state: { activeWidget } },
       });
     }, 900);
     return () => clearTimeout(timer);
-  }, [sessionId, activeId, updateSession]);
+  }, [sessionId, activeId, patchSession]);
 
   // Surface the home-base Tiles canvas while the model works: on request_start,
   // jump to Tiles. Tiles mirrors every capability (including the knowledge graph's

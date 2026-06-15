@@ -45,7 +45,15 @@ function CardBody({ card }: { card: Card }) {
               </div>
             ) : null}
             <div className="min-h-0 min-w-0 flex-1">
-              <ResponsiveContainer width="100%" height="100%">
+              {/* Positive initialDimension: GridStack sizes this cell a tick after
+                  mount, so recharts' default -1×-1 seed would log "width(-1) and
+                  height(-1)" on every card mount. The ResizeObserver corrects it
+                  next frame, so the seed is never visible. */}
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                initialDimension={{ width: 100, height: 100 }}
+              >
                 <SpecChart spec={spec} hideAxisLabels />
               </ResponsiveContainer>
             </div>

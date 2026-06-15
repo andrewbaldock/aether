@@ -22,6 +22,10 @@
          status-bar tint. theme-color matches the manifest (near-black shell). -->
     <meta name="theme-color" content="#110d1a" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Standalone install. The unprefixed mobile-web-app-capable is the standard
+         (Chrome warns if it's missing); the apple- prefixed one is still required by
+         iOS Safari, so we keep BOTH rather than replacing. -->
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Aether" />

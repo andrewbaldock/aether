@@ -38,13 +38,19 @@ export function useSession(
       }),
   });
 
+  // Depend on the stable `mutateAsync`, NOT the whole mutation object: React Query's
+  // useMutation returns a fresh result object every render, so listing `createSession`
+  // below would give getOrCreateSession a new identity every render and thrash the
+  // deps of every effect/callback that consumes it (the chat send path). `mutateAsync`
+  // is referentially stable.
+  const createSessionAsync = createSession.mutateAsync;
+
   const getOrCreateSession = useCallback(
     async (graphMode?: boolean): Promise<string> => {
       if (sessionId) return sessionId;
       if (pendingRef.current) return pendingRef.current;
 
-      const pending = createSession
-        .mutateAsync(graphMode)
+      const pending = createSessionAsync(graphMode)
         .then((data) => {
           setSessionId(data.id);
           pendingRef.current = null;
@@ -60,7 +66,7 @@ export function useSession(
       pendingRef.current = pending;
       return pending;
     },
-    [userId, sessionId, createSession, queryClient]
+    [userId, sessionId, createSessionAsync, queryClient]
   );
 
   // Point at an existing session (e.g. the user clicked a past conversation).

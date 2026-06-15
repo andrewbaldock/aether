@@ -142,20 +142,28 @@ export function useSessionActions({
     },
   });
 
+  // Depend on the stable `mutateAsync` callbacks, NOT the whole mutation objects:
+  // React Query's useMutation returns a fresh result object every render, so listing
+  // the mutation here would give these callbacks a new identity every render and
+  // break memoization for everything downstream that depends on them. `mutateAsync`
+  // is referentially stable.
+  const renameAsync = renameMutation.mutateAsync;
+  const deleteAsync = deleteMutation.mutateAsync;
+
   // Fire-and-forget from the UI: the mutation cache's onError logs failures, so we
   // swallow the rejection here to avoid unhandled-rejection noise (callers don't await).
   const renameSession = useCallback(
     async (id: string, title: string) => {
-      await renameMutation.mutateAsync({ id, title }).catch(() => {});
+      await renameAsync({ id, title }).catch(() => {});
     },
-    [renameMutation]
+    [renameAsync]
   );
 
   const deleteSession = useCallback(
     async (id: string) => {
-      await deleteMutation.mutateAsync(id).catch(() => {});
+      await deleteAsync(id).catch(() => {});
     },
-    [deleteMutation]
+    [deleteAsync]
   );
 
   return { loadSession, renameSession, deleteSession };

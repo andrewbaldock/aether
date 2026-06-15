@@ -158,7 +158,16 @@ export function ChartWidget(_props: { widget: Widget }) {
                 ) : null}
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                   <div className="min-h-0 flex-1">
-                    <ResponsiveContainer width="100%" height="100%">
+                    {/* Seed a positive initialDimension so the first render (before
+                        the ResizeObserver measures) isn't recharts' default -1×-1,
+                        which logs "width(-1) and height(-1)" — spammed in Bigsail
+                        where cards mount in grid cells sized a tick after mount. The
+                        observer overwrites this next frame, so it's never visible. */}
+                    <ResponsiveContainer
+                      width="100%"
+                      height="100%"
+                      initialDimension={{ width: 100, height: 100 }}
+                    >
                       <SpecChart spec={spec} hideAxisLabels />
                     </ResponsiveContainer>
                   </div>
