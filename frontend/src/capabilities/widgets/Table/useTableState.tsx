@@ -44,7 +44,7 @@ export function parseTableSpec(raw: string): TableSpec | null {
     return null;
   }
   if (data == null || typeof data !== "object") return null;
-  const { title, columns, rows } = data as Record<string, unknown>;
+  const { title, summary, columns, rows } = data as Record<string, unknown>;
   if (!Array.isArray(columns) || !Array.isArray(rows)) return null;
 
   const validColumns = columns.filter(
@@ -62,6 +62,7 @@ export function parseTableSpec(raw: string): TableSpec | null {
 
   return {
     title: typeof title === "string" ? title : undefined,
+    summary: typeof summary === "string" ? summary : undefined,
     columns: validColumns,
     rows: validRows,
   };

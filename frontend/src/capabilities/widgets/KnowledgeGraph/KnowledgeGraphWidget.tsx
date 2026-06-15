@@ -5,6 +5,7 @@ import {
   useSessionContext,
 } from "../../../shell/SessionContext";
 import type { Widget } from "../../registry";
+import { BigsailReAddButton } from "../BigsailReAddButton";
 import { useAwaitingClarification } from "../useAwaitingClarification";
 import { useFillFromConversation } from "../useFillFromConversation";
 import { useQueuedExplore } from "../useQueuedExplore";
@@ -92,6 +93,9 @@ export function KnowledgeGraphWidget(_props: { widget: Widget }) {
               onReload={onReload}
               queued={reload.queued}
               label="Rebuild the knowledge graph from the conversation"
+              extraAction={
+                <BigsailReAddButton cardId="knowledge-graph:graph" />
+              }
             />
             <div className="relative min-h-0 flex-1">
               <ForceGraph

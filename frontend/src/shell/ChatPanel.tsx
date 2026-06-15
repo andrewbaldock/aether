@@ -713,7 +713,7 @@ function ConversationTitle({
 
   if (editing) {
     return (
-      <div className="aether-titlebar-texture relative flex items-center justify-center border-b border-border px-4 pb-2 pt-3.5">
+      <div className="aether-titlebar-texture relative flex h-11 items-center justify-center border-b border-border px-4">
         <input
           ref={inputRef}
           value={draft}
@@ -727,11 +727,11 @@ function ConversationTitle({
   }
 
   return (
-    <div className="aether-titlebar-texture relative border-b border-border">
+    <div className="aether-titlebar-texture relative flex h-11 items-center border-b border-border">
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="group flex w-full items-center justify-center gap-1.5 px-4 pb-2 pt-3.5 text-[0.9375rem] text-content-muted hover:text-content transition-colors"
+        className="group flex h-full w-full items-center justify-center gap-1.5 px-4 text-[0.9375rem] text-content-muted hover:text-content transition-colors"
       >
         {iconName ? (
           <DynamicIcon

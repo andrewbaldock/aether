@@ -14,6 +14,9 @@ export interface ChartSeries {
 
 export interface ChartSpec {
   title?: string;
+  // A one-sentence, reproduce-it description of what this chart shows, emitted by
+  // the model. Seeds the editable "regenerate" prompt on the card's back face.
+  summary?: string;
   type: ChartType;
   // One object per data point, keyed by xKey and each series key.
   data: Record<string, unknown>[];

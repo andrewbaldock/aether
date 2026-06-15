@@ -20,6 +20,9 @@ export interface TimelineGroup {
 
 export interface TimelineSpec {
   title?: string;
+  // A one-sentence, reproduce-it description of what this timeline shows, emitted
+  // by the model. Seeds the editable "regenerate" prompt on the card's back face.
+  summary?: string;
   items: TimelineItem[];
   groups?: TimelineGroup[];
 }

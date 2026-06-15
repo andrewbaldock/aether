@@ -52,6 +52,7 @@ export function parseChartSpec(raw: string): ChartSpec | null {
   if (data == null || typeof data !== "object") return null;
   const {
     title,
+    summary,
     type,
     data: points,
     xKey,
@@ -80,6 +81,7 @@ export function parseChartSpec(raw: string): ChartSpec | null {
 
   return {
     title: typeof title === "string" ? title : undefined,
+    summary: typeof summary === "string" ? summary : undefined,
     type: type as ChartType,
     data: validData,
     xKey,

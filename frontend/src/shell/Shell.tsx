@@ -12,13 +12,14 @@ import { Sidebar, SidebarToggleIcon } from "./Sidebar";
 import { Tooltip } from "./Tooltip";
 import { useIsMobile } from "./useIsMobile";
 
-// The resize handle: a wide-enough-to-grab hit zone (w-2.5) centered on the
-// divider. A full-height hairline (the `before` pseudo) draws the actual border
-// between the panels; a small grip pill sits on top of it carrying three dot
-// bumps so it reads as a draggable. Line, grip, and dots all brighten on
-// hover/drag. `group` lets the inner grip react to the separator's hover state.
+// The resize handle IS the 1px divider line: it takes only 1px of layout width
+// so both panels butt flush against it (no gap on either side). The grab area is
+// widened invisibly via the `before` pseudo (-inset-x-1.5, transparent) which
+// overflows ±6px without consuming layout. The line itself (the element's own
+// bg) and the grip + dots brighten on hover/drag. `group` lets the grip react to
+// the separator's hover state.
 const handle =
-  "group relative flex w-2.5 shrink-0 cursor-col-resize items-center justify-center before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-border before:transition-colors group-hover:before:bg-border-strong group-data-[separator-state=hover]:before:bg-border-strong group-data-[separator-state=drag]:before:bg-content-subtle";
+  "group relative flex w-0.5 shrink-0 cursor-col-resize items-center justify-center bg-border transition-colors hover:bg-border-strong data-[separator-state=hover]:bg-border-strong data-[separator-state=drag]:bg-content-subtle before:absolute before:inset-y-0 before:-inset-x-1.5 before:content-['']";
 // The grip: a rounded pill riding on the hairline, holding three dot bumps. Its
 // background matches the panels so the hairline appears to break around it.
 const handleGrip =

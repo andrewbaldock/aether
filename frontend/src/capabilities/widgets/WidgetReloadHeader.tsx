@@ -1,4 +1,5 @@
 import { RefreshCw } from "lucide-react";
+import type { ReactNode } from "react";
 import { Tooltip } from "../../shell/Tooltip";
 
 // Per-ENTRY header: one table/chart/timeline/gallery's own title on the left, with a
@@ -16,11 +17,15 @@ export function WidgetReloadHeader({
   onReload,
   queued,
   label = "Reload this from the conversation",
+  extraAction,
 }: {
   title?: string;
   onReload: () => void;
   queued?: boolean;
   label?: string;
+  // Optional trailing control rendered just before the reload icon — used by the
+  // tool tabs to surface a "re-add to Bigsail canvas" button on a hidden entry.
+  extraAction?: ReactNode;
 }) {
   return (
     <div className="flex items-center justify-between gap-2">
@@ -31,11 +36,14 @@ export function WidgetReloadHeader({
       ) : (
         <span />
       )}
-      <WidgetReloadHeaderButton
-        onReload={onReload}
-        queued={queued}
-        label={label}
-      />
+      <div className="flex shrink-0 items-center gap-1">
+        {extraAction}
+        <WidgetReloadHeaderButton
+          onReload={onReload}
+          queued={queued}
+          label={label}
+        />
+      </div>
     </div>
   );
 }

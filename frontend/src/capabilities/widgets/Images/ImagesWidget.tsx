@@ -3,6 +3,7 @@ import { useAgentEvents } from "../../../shell/AgentEventContext";
 import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
+import { BigsailReAddButton } from "../BigsailReAddButton";
 import { WithContextMenu } from "../ContextMenu";
 import { useAwaitingClarification } from "../useAwaitingClarification";
 import { useEntryReload } from "../useEntryReload";
@@ -115,6 +116,7 @@ export function ImagesWidget(_props: { widget: Widget }) {
                           : "Get more"}
                     </button>
                   )}
+                  <BigsailReAddButton cardId={`images:${id}`} />
                   <WidgetReloadHeaderButton
                     onReload={() => entryReload.reloadEntry(id, spec.title)}
                     queued={entryReload.queued}

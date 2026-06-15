@@ -92,6 +92,10 @@ export type UiState = {
   // a version mismatch. Sibling rather than inline because the array shape is
   // awkward to stamp. Absent on legacy rows → treated as a mismatch.
   tilesLayoutVersion?: number;
+  // Card ids (`${capability}:${entryId}`) the user has hidden from the Bigsail
+  // canvas. A hide, not a delete — the widget still lives in its tool tab and can
+  // be re-added from there. Frontend-owned; the backend just round-trips it.
+  hiddenCards?: string[];
 };
 
 // One placed card in the Tiles layout. Grid units (columns/rows), not pixels, so

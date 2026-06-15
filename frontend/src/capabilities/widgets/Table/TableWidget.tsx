@@ -12,6 +12,7 @@ import { useAgentEvents } from "../../../shell/AgentEventContext";
 import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
+import { BigsailReAddButton } from "../BigsailReAddButton";
 import { ExploreMenu } from "../ContextMenu";
 import { useAwaitingClarification } from "../useAwaitingClarification";
 import { useEntryReload } from "../useEntryReload";
@@ -90,6 +91,7 @@ export function TableWidget(_props: { widget: Widget }) {
                 onReload={() => entryReload.reloadEntry(id, spec.title)}
                 queued={entryReload.queued}
                 label="Reload just this table from the conversation"
+                extraAction={<BigsailReAddButton cardId={`table:${id}`} />}
               />
             </div>
             <SpecTable spec={spec} title={spec.title} />

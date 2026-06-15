@@ -3,6 +3,7 @@ import { useAgentEvents } from "../../../shell/AgentEventContext";
 import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
+import { BigsailReAddButton } from "../BigsailReAddButton";
 import { ExploreMenu } from "../ContextMenu";
 import { DynamicIcon, resolveIconName } from "../lucideIcon";
 import { useAwaitingClarification } from "../useAwaitingClarification";
@@ -77,6 +78,7 @@ export function TimelineWidget(_props: { widget: Widget }) {
                 onReload={() => entryReload.reloadEntry(id, spec.title)}
                 queued={entryReload.queued}
                 label="Reload just this timeline from the conversation"
+                extraAction={<BigsailReAddButton cardId={`timeline:${id}`} />}
               />
             }
           />

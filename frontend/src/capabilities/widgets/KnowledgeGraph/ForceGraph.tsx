@@ -9,6 +9,11 @@ import {
   type Simulation,
 } from "d3-force";
 import { select } from "d3-selection";
+// Imported for its side effect: registers `.transition()` on d3 selections so
+// the zoom-to-fit can animate instead of snapping. Present transitively via
+// d3-zoom's deps. The `interrupt` named import is used to cancel an in-flight
+// fit animation when the user grabs the view mid-transition.
+import { interrupt } from "d3-transition";
 import {
   type ZoomBehavior,
   type ZoomTransform,
@@ -67,6 +72,10 @@ const AUTO_FIT_TICKS = 40;
 // sim. Collapses a burst of build_knowledge_graph updates (some models fire many
 // per turn) into a single settle instead of one violent re-layout per update.
 const RECONCILE_DEBOUNCE_MS = 150;
+// How long the zoom-to-fit tween runs. The final auto-fit and the manual Fit
+// button both animate over this; the first early auto-fit jumps instantly
+// (there's no prior view to ease away from).
+const FIT_DURATION = 500;
 
 interface ContextMenuState {
   id: string;
@@ -434,13 +443,27 @@ export function ForceGraph({
       .scale(k);
   }, []);
 
-  // Apply the fit transform (animated by d3 via the zoom behaviour).
-  function fitView() {
+  // Apply the fit transform. When `animate` is true, d3 tweens the zoom
+  // transform over FIT_DURATION ms — each transition tick fires a `zoom` event
+  // that bumps the `transform` state, so the <g> re-renders smoothly instead of
+  // snapping. When false (the very first early auto-fit, before there's a view
+  // to disturb), it jumps instantly. Any in-flight fit is interrupted first so a
+  // second fit doesn't fight the first.
+  function fitView(animate = true) {
     const svgEl = svgRef.current;
     const zoomBehavior = zoomRef.current;
     const target = computeFitTransform();
     if (!svgEl || !zoomBehavior || !target) return;
-    select(svgEl).call(zoomBehavior.transform, target);
+    const sel = select(svgEl);
+    interrupt(svgEl); // cancel any running fit transition before starting/snapping
+    if (animate) {
+      sel
+        .transition()
+        .duration(FIT_DURATION)
+        .call(zoomBehavior.transform, target);
+    } else {
+      sel.call(zoomBehavior.transform, target);
+    }
   }
 
   // Auto-fit one stage (see the refs up top). The early stage frames the rough
@@ -459,7 +482,8 @@ export function ForceGraph({
       return;
     }
     done.current = true;
-    fitView();
+    // Early fit jumps (no prior framing to ease from); the final settle animates.
+    fitView(isFinal);
   }
 
   // Whether clicking Fit would actually move the view — false when there are no
@@ -781,7 +805,7 @@ export function ForceGraph({
         >
           <button
             type="button"
-            onClick={fitView}
+            onClick={() => fitView()}
             aria-label="Fit graph to view"
             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-content-muted transition-colors hover:bg-surface-raised hover:text-content"
           >

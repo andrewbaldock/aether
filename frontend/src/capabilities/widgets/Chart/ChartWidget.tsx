@@ -21,6 +21,7 @@ import { useAgentEvents } from "../../../shell/AgentEventContext";
 import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
+import { BigsailReAddButton } from "../BigsailReAddButton";
 import { ExploreMenu, WithContextMenu } from "../ContextMenu";
 import { useAwaitingClarification } from "../useAwaitingClarification";
 import { useEntryReload } from "../useEntryReload";
@@ -139,6 +140,7 @@ export function ChartWidget(_props: { widget: Widget }) {
                   onReload={() => entryReload.reloadEntry(id, spec.title)}
                   queued={entryReload.queued}
                   label="Reload just this chart from the conversation"
+                  extraAction={<BigsailReAddButton cardId={`chart:${id}`} />}
                 />
               </div>
               {/* Render the axis TITLES ourselves in a dedicated frame (vertical

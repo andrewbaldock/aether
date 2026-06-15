@@ -213,6 +213,11 @@ export const RENDER_TABLE_TOOL: ToolDefinition = {
     type: "object",
     properties: {
       title: { type: "string", description: "optional table title" },
+      summary: {
+        type: "string",
+        description:
+          "A precise one-sentence description of what THIS table shows — accurate enough that someone could reproduce it from the sentence alone (the entities/attributes compared and any scope). The user can edit this sentence to regenerate the table differently, so describe the actual content, not the request.",
+      },
       columns: {
         type: "array",
         items: {
@@ -243,6 +248,11 @@ export const RENDER_CHART_TOOL: ToolDefinition = {
     type: "object",
     properties: {
       title: { type: "string", description: "optional chart title" },
+      summary: {
+        type: "string",
+        description:
+          "A precise one-sentence description of what THIS chart shows — accurate enough to reproduce it from the sentence alone (chart type, the series/metrics plotted, the x dimension, and the range, e.g. 'Line chart of registered bowlers and bowling lanes in the US from 1900 to 2020'). The user can edit this sentence to regenerate the chart differently, so describe the actual content, not the request.",
+      },
       type: { type: "string", enum: ["line", "bar", "area", "pie"] },
       data: {
         type: "array",
@@ -295,6 +305,11 @@ export const RENDER_TIMELINE_TOOL: ToolDefinition = {
     type: "object",
     properties: {
       title: { type: "string", description: "optional timeline title" },
+      summary: {
+        type: "string",
+        description:
+          "A precise one-sentence description of what THIS timeline shows — accurate enough to reproduce it from the sentence alone (the kind of events and the span/scope). The user can edit this sentence to regenerate the timeline differently, so describe the actual content, not the request.",
+      },
       items: {
         type: "array",
         items: {

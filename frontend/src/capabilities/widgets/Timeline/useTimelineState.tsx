@@ -33,7 +33,7 @@ export function parseTimelineSpec(raw: string): TimelineSpec | null {
     return null;
   }
   if (data == null || typeof data !== "object") return null;
-  const { title, items, groups } = data as Record<string, unknown>;
+  const { title, summary, items, groups } = data as Record<string, unknown>;
   if (!Array.isArray(items)) return null;
 
   const validItems = items.filter(
@@ -58,6 +58,7 @@ export function parseTimelineSpec(raw: string): TimelineSpec | null {
 
   return {
     title: typeof title === "string" ? title : undefined,
+    summary: typeof summary === "string" ? summary : undefined,
     items: validItems,
     groups: validGroups,
   };

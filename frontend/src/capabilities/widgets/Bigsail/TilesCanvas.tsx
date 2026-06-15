@@ -1,9 +1,12 @@
 import "gridstack/dist/gridstack.min.css";
 import { GridStack, type GridStackNode } from "gridstack";
-import { GripVertical } from "lucide-react";
+import { EyeOff, GripVertical, RotateCcw, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ConfirmDialog } from "../../../shell/ConfirmDialog";
+import { Tooltip } from "../../../shell/Tooltip";
 import { BigsailCard } from "./BigsailCard";
+import { CardBack } from "./CardBack";
 import type { Card } from "./cards";
 import {
   GRID_CELL_HEIGHT,
@@ -27,6 +30,9 @@ import {
 interface TilesCanvasProps {
   placed: PlacedCard[];
   onLayoutChange: (layout: TilesLayoutItem[]) => void;
+  // Hide a card from the canvas (reversible — re-addable from its tool tab). Wired
+  // to the EyeOff action on the card's back face.
+  onHide: (cardId: string) => void;
 }
 
 function serialize(
@@ -52,7 +58,11 @@ function serialize(
     });
 }
 
-export function TilesCanvas({ placed, onLayoutChange }: TilesCanvasProps) {
+export function TilesCanvas({
+  placed,
+  onLayoutChange,
+  onHide,
+}: TilesCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<GridStack | null>(null);
   // cardId → the GridStack-created content element we portal React into.
@@ -208,7 +218,11 @@ export function TilesCanvas({ placed, onLayoutChange }: TilesCanvasProps) {
         const card = cardById.current.get(id);
         if (!card) return null;
         return createPortal(
-          <CardShell card={card} staggerIndex={skeletonIndex.get(id)} />,
+          <CardShell
+            card={card}
+            staggerIndex={skeletonIndex.get(id)}
+            onHide={onHide}
+          />,
           host,
           id
         );
@@ -221,47 +235,166 @@ export function TilesCanvas({ placed, onLayoutChange }: TilesCanvasProps) {
 // the handle starts a drag, so card contents stay interactive) + the live widget.
 // A placeholder (skeleton) card gets the staggered entrance class so a planned
 // answer cascades into the canvas; staggerIndex feeds the per-card --i delay.
+//
+// Real cards have a BACK side: a settings gear in the top bar flips the card 180°
+// on its Y axis to reveal the read-only JSON spec that rules the widget, plus an
+// EyeOff "hide from canvas" action. Flip state is intentionally EPHEMERAL — local
+// state only, never persisted — so a reload/URL-change always returns to the front.
 function CardShell({
   card,
   staggerIndex,
+  onHide,
 }: {
   card: Card;
   staggerIndex?: number;
+  onHide: (cardId: string) => void;
 }) {
   const isSkeleton = card.placeholder === true;
   // Title lives in the top bar (fixed) so it stays put while the card body
   // scrolls. Skeleton cards have no real spec yet, so no title.
   const title = isSkeleton ? undefined : card.spec.title;
-  return (
-    <div
-      className={`group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg ${
-        isSkeleton ? "tiles-skeleton-in" : ""
-      }`}
-      style={
-        isSkeleton
-          ? ({ "--i": staggerIndex ?? 0 } as React.CSSProperties)
-          : undefined
-      }
-    >
-      {/* Top bar doubles as the drag handle (the whole strip starts a drag) and
-          carries the card's title, which stays fixed while the body scrolls. */}
+  // Ephemeral flip state — never persisted; always starts on the front.
+  const [flipped, setFlipped] = useState(false);
+
+  // Skeletons never flip: no back side until real data exists. Render the plain
+  // (non-3D) shell so the shimmer entrance is unaffected.
+  if (isSkeleton) {
+    return (
       <div
-        className="bigsail-card-drag flex h-7 shrink-0 cursor-grab items-center gap-2 px-3 bg-elevated/60 active:cursor-grabbing"
-        title="Drag to rearrange"
+        className="group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg tiles-skeleton-in"
+        style={{ "--i": staggerIndex ?? 0 } as React.CSSProperties}
       >
-        <span className="truncate font-display text-sm font-semibold text-content">
-          {title}
-        </span>
-        {/* Subtle drag-affordance dots, right-aligned. Faint by default so they
-            recede; brighten a touch on card hover to hint the bar is draggable. */}
-        <GripVertical
-          className="ml-auto h-4 w-4 shrink-0 text-content-faint/50 transition-colors group-hover:text-content-faint"
-          aria-hidden
-        />
+        <div
+          className="bigsail-card-drag flex h-7 shrink-0 cursor-grab items-center gap-2 px-3 bg-elevated/60 active:cursor-grabbing"
+          title="Drag to rearrange"
+        >
+          <GripVertical
+            className="ml-auto h-4 w-4 shrink-0 text-content-faint/50"
+            aria-hidden
+          />
+        </div>
+        <div className="bigsail-card min-h-0 flex-1 overflow-hidden">
+          <BigsailCard card={card} />
+        </div>
       </div>
-      <div className="bigsail-card min-h-0 flex-1 overflow-hidden">
-        <BigsailCard card={card} />
+    );
+  }
+
+  return (
+    // Outer host gives the 3D scene perspective; the flipper rotates inside it.
+    <div className="group h-full w-full [perspective:1200px]">
+      <div
+        className={`relative h-full w-full transition-transform duration-500 [transform-style:preserve-3d] ${
+          flipped ? "[transform:rotateY(180deg)]" : ""
+        }`}
+      >
+        {/* FRONT — the live widget. Hidden from the back via backface-visibility. */}
+        <div className="absolute inset-0 flex flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg [backface-visibility:hidden]">
+          {/* Top bar doubles as the drag handle (the whole strip starts a drag) and
+              carries the card's title, which stays fixed while the body scrolls.
+              The gear button swallows its own pointer gesture so a click flips
+              rather than starting a drag. */}
+          <div
+            className="bigsail-card-drag flex h-7 shrink-0 cursor-grab items-center gap-2 px-3 bg-elevated/60 active:cursor-grabbing"
+            title="Drag to rearrange"
+          >
+            <CardChromeButton
+              label="Show this widget's parameters"
+              onClick={() => setFlipped(true)}
+            >
+              <Settings className="h-3.5 w-3.5" aria-hidden />
+            </CardChromeButton>
+            <span className="truncate font-display text-sm font-semibold text-content">
+              {title}
+            </span>
+            <GripVertical
+              className="ml-auto h-4 w-4 shrink-0 text-content-faint/50 transition-colors group-hover:text-content-faint"
+              aria-hidden
+            />
+          </div>
+          <div className="bigsail-card min-h-0 flex-1 overflow-hidden">
+            <BigsailCard card={card} />
+          </div>
+        </div>
+
+        {/* BACK — read-only JSON spec + hide action. Pre-rotated 180° so it faces
+            the viewer once the flipper turns. Still draggable (same handle strip). */}
+        <div className="absolute inset-0 flex flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-lg [backface-visibility:hidden] [transform:rotateY(180deg)]">
+          <div
+            className="bigsail-card-drag flex h-7 shrink-0 cursor-grab items-center gap-2 px-3 bg-elevated/60 active:cursor-grabbing"
+            title="Drag to rearrange"
+          >
+            <CardChromeButton
+              label="Back to the widget"
+              onClick={() => setFlipped(false)}
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+            </CardChromeButton>
+            <span className="truncate font-display text-sm font-semibold text-content">
+              {title}
+            </span>
+            {/* Plain button (no Tooltip wrapper) as the dialog trigger: AlertDialog's
+                asChild clones a single DOM element, so nesting a Tooltip (which is
+                its own Radix tree) inside the trigger would be fragile. The title
+                attr carries the hover hint instead. */}
+            <ConfirmDialog
+              title="Hide from canvas?"
+              description="This removes the widget from the Bigsail canvas. You can add it back from its tool tab."
+              confirmLabel="Hide"
+              affirmative="primary"
+              onConfirm={() => onHide(card.id)}
+              trigger={
+                <button
+                  type="button"
+                  aria-label="Hide from canvas"
+                  title="Hide from canvas"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="ml-auto shrink-0 rounded p-0.5 text-content-faint/60 transition-colors hover:text-content focus-visible:text-content focus-visible:outline-none"
+                >
+                  <EyeOff className="h-3.5 w-3.5" aria-hidden />
+                </button>
+              }
+            />
+          </div>
+          {/* Editable summary ("re-prompt") + read-only spec JSON. Regenerating
+              flips back to the front so the user watches the new result land. */}
+          <div className="bigsail-card min-h-0 flex-1 overflow-hidden">
+            <CardBack card={card} onRegenerated={() => setFlipped(false)} />
+          </div>
+        </div>
       </div>
     </div>
+  );
+}
+
+// A small icon button living in a card's drag-handle strip. It stops its own
+// pointer gesture so clicking it acts (flip / hide) instead of starting a GridStack
+// drag, and recedes by default, brightening on hover. `className` is for LAYOUT
+// (e.g. ml-auto) and lands on the Tooltip's flex wrapper — the real DOM node in the
+// handle row — so positioning works even when this is also an AlertDialog trigger.
+function CardChromeButton({
+  label,
+  onClick,
+  className,
+  children,
+}: {
+  label: string;
+  onClick?: () => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip label={label} className={`shrink-0${className ? ` ${className}` : ""}`}>
+      <button
+        type="button"
+        aria-label={label}
+        onClick={onClick}
+        // Keep the drag handle from claiming this gesture.
+        onPointerDown={(e) => e.stopPropagation()}
+        className="rounded p-0.5 text-content-faint/60 transition-colors hover:text-content focus-visible:text-content focus-visible:outline-none"
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }

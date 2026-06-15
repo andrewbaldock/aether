@@ -14,6 +14,7 @@ import { useTimelineState } from "../Timeline/useTimelineState";
 import { BigsailLoading } from "./BigsailLoading";
 import { useBigsailPlan } from "./BigsailPlanProvider";
 import { toCards } from "./cards";
+import { useHiddenCards } from "./useHiddenCards";
 import {
   FALLBACK_SKELETONS,
   mergeWithSkeletons,
@@ -43,6 +44,7 @@ export function BigsailWidget(_props: { widget: Widget }) {
   const busy = useAgentBusy();
   const bus = useAgentEvents();
   const { userId, sessionId, sessions, messages } = useSessionContext();
+  const { isHidden, hide } = useHiddenCards();
 
   // Awaiting a clarifier answer: the planner asked ONE question instead of
   // composing, so the canvas shows a calm "let's aim this first" state rather than
@@ -180,12 +182,22 @@ export function BigsailWidget(_props: { widget: Widget }) {
     return skeletons.slice(0, dripCount);
   }, [busy, realCards, firstPanelArrived, skeletons, dripCount]);
 
+  // Drop user-hidden cards from what the canvas actually renders. Applied HERE, at
+  // the render layer — never at arrival detection (firstPanelArrived) — so hiding a
+  // widget can't wedge the loading contract. Skeleton ids (`skeleton:*`) are never
+  // in hiddenCards, so dripping skeletons are untouched; a real card superseding a
+  // skeleton simply doesn't appear if the user has hidden it.
+  const visibleCards = useMemo(
+    () => cards.filter((c) => !isHidden(c.id)),
+    [cards, isHidden]
+  );
+
   // Merge the saved arrangement with the current card set: saved cards keep their
   // spot, new cards auto-place. Recompute when cards, the saved layout, or the
   // grid dimensions change.
   const placed = useMemo(
-    () => placeCards(cards, savedLayout, stacked),
-    [cards, savedLayout, stacked]
+    () => placeCards(visibleCards, savedLayout, stacked),
+    [visibleCards, savedLayout, stacked]
   );
 
   // Debounced persistence of the grid arrangement. Keep the latest activeWidget
@@ -262,7 +274,7 @@ export function BigsailWidget(_props: { widget: Widget }) {
   // lands — for the first ~10s it plays alone, then over the skeletons as they drip
   // in beneath it. It stops the instant a real panel arrives.
   const waitingForFirstPanel = busy && realCards.length === 0;
-  const hasContent = cards.length > 0;
+  const hasContent = visibleCards.length > 0;
 
   return (
     <div ref={hostRef} className="relative h-full w-full bg-surface">
@@ -287,6 +299,7 @@ export function BigsailWidget(_props: { widget: Widget }) {
           key={`${sessionId ?? "none"}:${resetTick}`}
           placed={placed}
           onLayoutChange={persistLayout}
+          onHide={hide}
         />
       ) : awaitingClarification ? (
         // Calm wait-on-user state — NOT the empty copy, NOT the gathering animation.

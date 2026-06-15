@@ -25,6 +25,10 @@ export interface Session {
     // mismatch on load → ignore the saved arrangement and auto-place. See
     // lib/schemaVersion.ts.
     tilesLayoutVersion?: number;
+    // Card ids (`${capability}:${entryId}`) the user has hidden from the Bigsail
+    // canvas. A hide, not a delete — the widget still lives in its tool tab and
+    // can be re-added from there.
+    hiddenCards?: string[];
   } | null;
   created_at: string;
   updated_at: string;

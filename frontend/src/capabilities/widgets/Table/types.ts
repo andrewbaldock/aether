@@ -12,6 +12,9 @@ export interface TableColumn {
 
 export interface TableSpec {
   title?: string;
+  // A one-sentence, reproduce-it description of what this table shows, emitted by
+  // the model. Seeds the editable "regenerate" prompt on the card's back face.
+  summary?: string;
   columns: TableColumn[];
   // One object per row, keyed by column key. Values are unknown — rendered as text.
   rows: Record<string, unknown>[];
