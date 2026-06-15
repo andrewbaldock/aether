@@ -85,3 +85,33 @@ jobs:
             frontend/playwright-report/
             frontend/test-results/
           retention-days: 7
+
+  # Production deploy to Vercel, GATED on all three test layers above. Runs only
+  # on push to main (never on PRs). Vercel's own Git auto-deploy is disconnected
+  # so this job is the *only* path to production — a red test job here means no
+  # deploy. The build runs on this runner (`vercel build`) and ships prebuilt, so
+  # nothing builds on Vercel and nothing deploys until the suite is green.
+  deploy:
+    name: Deploy (Vercel prod)
+    needs: [frontend-unit, backend-unit, e2e]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    # The project is linked under frontend/ (Root Directory = frontend); the
+    # Vercel CLI reads frontend/.vercel + frontend/vercel.json from there.
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Pull Vercel production env & project settings
+        run: bunx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Build (prebuilt, production)
+        run: bunx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Deploy prebuilt to production
+        run: bunx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
