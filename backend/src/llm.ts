@@ -860,7 +860,15 @@ function createOpenAICompatClient(
               if (sig) existing.thoughtSignature = sig;
             } else {
               pendingTools.set(tc.index, {
-                id: tc.id ?? "",
+                // The id ties the assistant `tool_calls[].id` to its `tool`
+                // result's `tool_call_id`. OpenAI/DeepSeek/Mistral always send a
+                // non-empty id, but Gemini's OpenAI-compat endpoint can omit it —
+                // and two calls both defaulting to "" become indistinguishable on
+                // the wire (the provider can't tell which result answers which
+                // call → 400 / mis-bind). Synthesize a unique, stable id from the
+                // call's index when absent; it flows to both the assistant entry
+                // and the result entry below, keeping the pair tied together.
+                id: tc.id || `call_${tc.index}`,
                 name: tc.function?.name ?? "",
                 argChunks: tc.function?.arguments
                   ? [tc.function.arguments]
