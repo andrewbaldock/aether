@@ -159,6 +159,47 @@ export function getDb() {
   return _db;
 }
 
+// Thrown when a write targets a session the caller doesn't own (or that doesn't
+// exist). The backend connects with the anon key and these tables have no RLS,
+// so ownership is enforced HERE: every mutating query is scoped to the caller's
+// user_id, and a zero-row result means "not yours / not found". Distinct error
+// type so the route can map it to 403 rather than a generic 500. When Google
+// auth lands, the caller id becomes the verified Google sub instead of the
+// client-supplied localStorage UUID — the ownership predicate is unchanged.
+export class NotOwnerError extends Error {
+  constructor(sessionId: string) {
+    super(`Session ${sessionId} not found or not owned by caller`);
+    this.name = "NotOwnerError";
+  }
+}
+
+// Confirm a session exists AND belongs to `ownerId` before a write proceeds.
+// Reads are intentionally NOT gated this way — opening/forking a shared
+// conversation requires reading a session you don't own (see useSessionActions
+// in the frontend), so only mutations carry an owner check. Throws NotOwnerError
+// when the row is missing or owned by someone else.
+async function assertOwner(sessionId: string, ownerId: string): Promise<void> {
+  if (!(await isSessionOwner(sessionId, ownerId)))
+    throw new NotOwnerError(sessionId);
+}
+
+// Non-throwing ownership probe: true when the session exists and belongs to
+// ownerId. Used by the chat route to decide whether a turn may PERSIST into the
+// given session (a foreign or missing session → don't persist), where the result
+// is a branch rather than an error.
+export async function isSessionOwner(
+  sessionId: string,
+  ownerId: string
+): Promise<boolean> {
+  const { data, error } = await getDb()
+    .from("sessions")
+    .select("user_id")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (error) throw new Error(`isSessionOwner: ${error.message}`);
+  return !!data && data.user_id === ownerId;
+}
+
 export async function createSession(
   userId: string,
   title?: string,
@@ -228,8 +269,10 @@ export async function saveMessage(
 
 export async function updateSessionTitle(
   sessionId: string,
-  title: string
+  title: string,
+  ownerId: string
 ): Promise<void> {
+  await assertOwner(sessionId, ownerId);
   const { error } = await getDb()
     .from("sessions")
     .update({ title, updated_at: new Date().toISOString() })
@@ -258,8 +301,10 @@ export async function updateSessionTitleIfEmpty(
 
 export async function updateSessionGraphMode(
   sessionId: string,
-  graphMode: boolean
+  graphMode: boolean,
+  ownerId: string
 ): Promise<void> {
+  await assertOwner(sessionId, ownerId);
   const { error } = await getDb()
     .from("sessions")
     .update({ graph_mode: graphMode, updated_at: new Date().toISOString() })
@@ -269,8 +314,10 @@ export async function updateSessionGraphMode(
 
 export async function updateSessionModel(
   sessionId: string,
-  model: string
+  model: string,
+  ownerId: string
 ): Promise<void> {
+  await assertOwner(sessionId, ownerId);
   const { error } = await getDb()
     .from("sessions")
     .update({ model, updated_at: new Date().toISOString() })
@@ -285,16 +332,20 @@ export async function updateSessionModel(
 // idempotent "last value wins" UI memories, not transactional data).
 export async function updateSessionUiState(
   sessionId: string,
-  patch: UiState
+  patch: UiState,
+  ownerId: string
 ): Promise<void> {
   const db = getDb();
+  // Read user_id alongside ui_state so the same round-trip both authorizes the
+  // write (must belong to ownerId) and supplies the value to merge into.
   const { data, error: readErr } = await db
     .from("sessions")
-    .select("ui_state")
+    .select("user_id, ui_state")
     .eq("id", sessionId)
-    .single();
+    .maybeSingle();
   if (readErr)
     throw new Error(`updateSessionUiState (read): ${readErr.message}`);
+  if (!data || data.user_id !== ownerId) throw new NotOwnerError(sessionId);
   const merged: UiState = {
     ...((data?.ui_state as UiState | null) ?? {}),
     ...patch,
@@ -322,8 +373,10 @@ export async function getSessionGraph(
 
 export async function updateSessionGraphData(
   sessionId: string,
-  graphData: GraphSnapshot
+  graphData: GraphSnapshot,
+  ownerId: string
 ): Promise<void> {
+  await assertOwner(sessionId, ownerId);
   const { error } = await getDb()
     .from("sessions")
     .update({ graph_data: graphData, updated_at: new Date().toISOString() })
@@ -387,20 +440,26 @@ export async function forkSession(
   return { id: newSession.id };
 }
 
-export async function deleteSession(sessionId: string): Promise<void> {
+export async function deleteSession(
+  sessionId: string,
+  ownerId: string
+): Promise<void> {
+  await assertOwner(sessionId, ownerId);
   const { error } = await getDb().from("sessions").delete().eq("id", sessionId);
   if (error) throw new Error(`deleteSession: ${error.message}`);
 }
 
 // Delete specific message rows, scoped to a session so a stray id can't reach
 // across sessions. Used by the per-turn trash control (deletes the user+assistant
-// pair). When the by-id session ownership filter lands, add a user_id check here
-// too (e.g. require the session to belong to the caller before deleting).
+// pair). Owner-checked: the session must belong to the caller before any row is
+// deleted, so a known message/session id alone can't delete another user's turns.
 export async function deleteMessages(
   sessionId: string,
-  ids: string[]
+  ids: string[],
+  ownerId: string
 ): Promise<void> {
   if (ids.length === 0) return;
+  await assertOwner(sessionId, ownerId);
   const { error } = await getDb()
     .from("messages")
     .delete()
@@ -423,8 +482,10 @@ export async function getSessionWidgets(
 
 export async function updateSessionWidgetData(
   sessionId: string,
-  widgetData: WidgetSnapshot
+  widgetData: WidgetSnapshot,
+  ownerId: string
 ): Promise<void> {
+  await assertOwner(sessionId, ownerId);
   const { error } = await getDb()
     .from("sessions")
     .update({ widget_data: widgetData, updated_at: new Date().toISOString() })

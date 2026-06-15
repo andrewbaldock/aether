@@ -10,8 +10,10 @@ import {
   getSession,
   getSessionGraph,
   getSessionWidgets,
+  isSessionOwner,
   listSessions,
   mergeWidgetSnapshot,
+  NotOwnerError,
   saveMessage,
   type UiState,
   updateSessionGraphData,
@@ -30,7 +32,15 @@ import { toolStatusLabel } from "./tools";
 
 const app = new Hono();
 
-app.get("/api/health", (c) => c.json({ ok: true }));
+// The caller's identity for ownership checks on mutating routes. Today it's the
+// client's anonymous localStorage UUID, sent as the X-User-Id header on every
+// write (see frontend apiFetch). When Google sign-in lands this becomes the
+// verified Google sub — extracted from a bearer token HERE instead — and every
+// owner-checked db call keeps working unchanged. Returns null when absent.
+function callerId(c: { req: { header: (name: string) => string | undefined } }) {
+  const id = c.req.header("X-User-Id");
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
 
 app.get("/api/health/full", async (c) => {
   const result = await checkHealth();
@@ -161,6 +171,8 @@ app.get("/api/sessions/:id", async (c) => {
 
 app.patch("/api/sessions/:id", async (c) => {
   const id = c.req.param("id");
+  const owner = callerId(c);
+  if (!owner) return c.json({ error: "Missing X-User-Id" }, 401);
   let body: unknown;
   try {
     body = await c.req.json();
@@ -198,12 +210,14 @@ app.patch("/api/sessions/:id", async (c) => {
     );
   }
   try {
-    if (hasTitle) await updateSessionTitle(id, (title as string).trim());
-    if (hasGraphMode) await updateSessionGraphMode(id, graphMode as boolean);
-    if (validModel) await updateSessionModel(id, validModel);
-    if (hasUiState) await updateSessionUiState(id, uiState as UiState);
+    if (hasTitle) await updateSessionTitle(id, (title as string).trim(), owner);
+    if (hasGraphMode)
+      await updateSessionGraphMode(id, graphMode as boolean, owner);
+    if (validModel) await updateSessionModel(id, validModel, owner);
+    if (hasUiState) await updateSessionUiState(id, uiState as UiState, owner);
     return c.json({ ok: true });
   } catch (err) {
+    if (err instanceof NotOwnerError) return c.json({ error: "Forbidden" }, 403);
     console.error("PATCH /api/sessions/:id failed:", err);
     return c.json({ error: "Failed to update session" }, 500);
   }
@@ -211,10 +225,13 @@ app.patch("/api/sessions/:id", async (c) => {
 
 app.delete("/api/sessions/:id", async (c) => {
   const id = c.req.param("id");
+  const owner = callerId(c);
+  if (!owner) return c.json({ error: "Missing X-User-Id" }, 401);
   try {
-    await deleteSession(id);
+    await deleteSession(id, owner);
     return c.json({ ok: true });
   } catch (err) {
+    if (err instanceof NotOwnerError) return c.json({ error: "Forbidden" }, 403);
     console.error("DELETE /api/sessions/:id failed:", err);
     return c.json({ error: "Failed to delete session" }, 500);
   }
@@ -236,11 +253,14 @@ app.get("/api/sessions/:id/messages", async (c) => {
 // ids; we delete them scoped to the session.
 app.delete("/api/sessions/:id/messages", async (c) => {
   const id = c.req.param("id");
+  const owner = callerId(c);
+  if (!owner) return c.json({ error: "Missing X-User-Id" }, 401);
   try {
     const { ids } = await c.req.json<{ ids: string[] }>();
-    await deleteMessages(id, ids);
+    await deleteMessages(id, ids, owner);
     return c.json({ ok: true });
   } catch (err) {
+    if (err instanceof NotOwnerError) return c.json({ error: "Forbidden" }, 403);
     console.error("DELETE /api/sessions/:id/messages failed:", err);
     return c.json({ error: "Failed to delete messages" }, 500);
   }
@@ -266,6 +286,8 @@ app.get("/api/sessions/:id/graph", async (c) => {
 // check it has node/link arrays so a malformed save can't corrupt the column.
 app.put("/api/sessions/:id/graph", async (c) => {
   const id = c.req.param("id");
+  const owner = callerId(c);
+  if (!owner) return c.json({ error: "Missing X-User-Id" }, 401);
   let body: unknown;
   try {
     body = await c.req.json();
@@ -288,9 +310,10 @@ app.put("/api/sessions/:id/graph", async (c) => {
       nodes,
       links,
     };
-    await updateSessionGraphData(id, snapshot);
+    await updateSessionGraphData(id, snapshot, owner);
     return c.json({ ok: true });
   } catch (err) {
+    if (err instanceof NotOwnerError) return c.json({ error: "Forbidden" }, 403);
     console.error("PUT /api/sessions/:id/graph failed:", err);
     return c.json({ error: "Failed to save graph" }, 500);
   }
@@ -317,6 +340,8 @@ app.get("/api/sessions/:id/widgets", async (c) => {
 // expected top-level keys so a malformed save can't corrupt the column.
 app.put("/api/sessions/:id/widgets", async (c) => {
   const id = c.req.param("id");
+  const owner = callerId(c);
+  if (!owner) return c.json({ error: "Missing X-User-Id" }, 401);
   let body: unknown;
   try {
     body = await c.req.json();
@@ -341,9 +366,10 @@ app.put("/api/sessions/:id/widgets", async (c) => {
     const existing =
       b.reset === true ? null : await getSessionWidgets(id).catch(() => null);
     const snapshot = mergeWidgetSnapshot(b, existing);
-    await updateSessionWidgetData(id, snapshot);
+    await updateSessionWidgetData(id, snapshot, owner);
     return c.json({ ok: true });
   } catch (err) {
+    if (err instanceof NotOwnerError) return c.json({ error: "Forbidden" }, 403);
     console.error("PUT /api/sessions/:id/widgets failed:", err);
     return c.json({ error: "Failed to save widgets" }, 500);
   }
@@ -356,13 +382,16 @@ app.put("/api/sessions/:id/widgets", async (c) => {
 // widget already has a prompt. Called lazily by the client after a load detects gaps.
 app.post("/api/sessions/:id/repair-prompts", async (c) => {
   const id = c.req.param("id");
+  const owner = callerId(c);
+  if (!owner) return c.json({ error: "Missing X-User-Id" }, 401);
   try {
     const existing = await getSessionWidgets(id);
     if (!existing) return c.json({ filled: 0, widgets: null });
     const { filled } = await backfillSnapshotPrompts(existing);
-    if (filled > 0) await updateSessionWidgetData(id, existing);
+    if (filled > 0) await updateSessionWidgetData(id, existing, owner);
     return c.json({ filled, widgets: existing });
   } catch (err) {
+    if (err instanceof NotOwnerError) return c.json({ error: "Forbidden" }, 403);
     console.error("POST /api/sessions/:id/repair-prompts failed:", err);
     return c.json({ error: "Failed to repair prompts" }, 500);
   }
@@ -400,13 +429,20 @@ app.post("/api/chat", async (c) => {
 
   // Narrow once here; persistSession is a string exactly when persist is true,
   // so the streaming callback below doesn't need to re-cast at every call site.
-  const persistSession =
+  let persistSession =
     typeof sessionId === "string" &&
     sessionId.length > 0 &&
     typeof userId === "string" &&
     userId.length > 0
       ? sessionId
       : null;
+
+  // A turn must never persist into a session the caller doesn't own. We don't
+  // hard-fail (the user may be viewing a shared conversation before forking it);
+  // we just stream the answer without writing. Their own copy persists normally
+  // once they fork. Skipped when there's nothing to persist into.
+  if (persistSession && !(await isSessionOwner(persistSession, userId as string)))
+    persistSession = null;
 
   // Build the client per request so the tool surface (and graph-mode prompt)
   // matches this conversation's mode, and so the chosen model applies this turn.

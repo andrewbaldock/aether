@@ -74,9 +74,11 @@ describe("useSessionList", () => {
     await waitFor(() => expect(result.current.sessions).toHaveLength(2));
 
     expect(fetch).toHaveBeenCalledTimes(1);
+    // apiFetch always passes an init carrying the X-User-Id header machinery, so
+    // the URL is the meaningful assertion; the second arg is an object, not undefined.
     expect(fetch).toHaveBeenCalledWith(
       "/api/sessions?userId=user-1",
-      undefined
+      expect.objectContaining({ headers: expect.any(Headers) })
     );
     expect(result.current.sessions[0]?.id).toBe("s1");
     expect(result.current.sessions[1]?.id).toBe("s2");
@@ -97,7 +99,7 @@ describe("useSessionList", () => {
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(fetch).toHaveBeenCalledWith(
       "/api/sessions?userId=user%20id%20with%20spaces",
-      undefined
+      expect.objectContaining({ headers: expect.any(Headers) })
     );
   });
 

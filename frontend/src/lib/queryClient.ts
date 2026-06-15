@@ -38,12 +38,33 @@ function isNetworkError(err: unknown): boolean {
   return err instanceof TypeError; // fetch throws TypeError on network failure
 }
 
+// The anonymous per-browser user id, read from the same localStorage key that
+// useUserId owns. apiFetch attaches it as X-User-Id so the backend can enforce
+// ownership on mutating routes (only the owner may edit/delete a session; reads
+// stay open so a shared /c/:id link can still be opened and forked). This is the
+// SINGLE place that turns "who is the caller" into a request header — when Google
+// sign-in lands, swap this for the verified token (Authorization: Bearer) and the
+// rest of the data layer is unchanged. Returns "" before the id is ever set
+// (first paint), which the backend treats as unauthenticated.
+const USER_ID_STORAGE_KEY = "aether_user_id";
+function currentUserId(): string {
+  try {
+    return localStorage.getItem(USER_ID_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
 // The single fetch used by every query/mutation. Relative /api URLs only.
 export async function apiFetch<T>(
   path: string,
   init?: RequestInit
 ): Promise<T> {
-  const res = await fetch(path, init);
+  // Merge X-User-Id into whatever headers the caller passed (Content-Type etc.).
+  const uid = currentUserId();
+  const headers = new Headers(init?.headers);
+  if (uid) headers.set("X-User-Id", uid);
+  const res = await fetch(path, { ...init, headers });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new ApiError(path, res.status, body);
