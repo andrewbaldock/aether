@@ -587,6 +587,12 @@ function createClaudeClient(
             if (!tool.streamable) continue;
             const closed = closeTruncatedJson(tool.inputChunks.join(""));
             if (parseBestEffort(closed) === undefined) continue;
+            // Parsing isn't enough: closeTruncatedJson happily turns `{"rows":[`
+            // into a valid-but-EMPTY `{"rows":[]}`. Emitting that would show a
+            // blank widget under a "showing what came through" status — worse than
+            // the honest error. Only count a salvage that retained real content
+            // (reusing the same degeneracy test the self-correction loop uses).
+            if (isDegenerate(tool.name, closed)) continue;
             await onToolPartial?.(tool.name, closed, true);
             salvaged = true;
           }
@@ -905,6 +911,12 @@ function createOpenAICompatClient(
             if (!tool.streamable) continue;
             const closed = closeTruncatedJson(tool.argChunks.join(""));
             if (parseBestEffort(closed) === undefined) continue;
+            // Parsing isn't enough: closeTruncatedJson happily turns `{"rows":[`
+            // into a valid-but-EMPTY `{"rows":[]}`. Emitting that would show a
+            // blank widget under a "showing what came through" status — worse than
+            // the honest error. Only count a salvage that retained real content
+            // (reusing the same degeneracy test the self-correction loop uses).
+            if (isDegenerate(tool.name, closed)) continue;
             await onToolPartial?.(tool.name, closed, true);
             salvaged = true;
           }

@@ -7,7 +7,10 @@
     "dev": "bun run --watch src/index.ts",
     "check": "biome check .",
     "check:fix": "biome check --write .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "verify": "bun run typecheck && bun test",
+    "deploy": "bun run verify && fly deploy"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",

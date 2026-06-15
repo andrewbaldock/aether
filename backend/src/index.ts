@@ -32,6 +32,8 @@ import { toolStatusLabel } from "./tools";
 
 const app = new Hono();
 
+app.get("/api/health", (c) => c.json({ ok: true }));
+
 // The caller's identity for ownership checks on mutating routes. Today it's the
 // client's anonymous localStorage UUID, sent as the X-User-Id header on every
 // write (see frontend apiFetch). When Google sign-in lands this becomes the

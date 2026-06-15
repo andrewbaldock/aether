@@ -69,7 +69,13 @@ export PATH="$HOME/.fly/bin:$PATH"
 
 # 2. from the backend directory:
 cd ~/Code/aether/backend
-fly deploy       # builds Docker image, pushes, rolling restart (~60s)
+bun run deploy   # typecheck + tests (incl. smoke), THEN fly deploy if green
+
+# `bun run deploy` runs `verify` (tsc + bun test) first and only shells out to
+# `fly deploy` if it passes. The smoke test (src/smoke.test.ts) boots the app and
+# asserts the fly.toml health-check route returns 200 — a missing/renamed route
+# (which unit tests can't see) fails here instead of taking prod down on deploy.
+# Use bare `fly deploy` only to ship an image you've already verified.
 
 # 3. verify health check after deploy completes
 curl https://aether-ab-api.fly.dev/api/health
