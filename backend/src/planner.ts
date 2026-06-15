@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { getAnthropicClient } from "./anthropicClient";
 
 // The Strongification intelligence pre-pass: a cheap router that decides whether a
 // turn is complex enough to warrant planning, and a conditional planner that emits
@@ -287,11 +288,10 @@ export async function planTurn(
   const canPlan = opts.clarified === true || mightNeedPlan(message);
   if (!canClarify && !canPlan) return null;
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
+  const client = getAnthropicClient();
+  if (!client) return null;
 
   try {
-    const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
       model: PLANNER_MODEL,
       max_tokens: 256,

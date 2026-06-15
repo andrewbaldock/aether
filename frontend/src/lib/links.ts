@@ -17,3 +17,21 @@ export const CASE_STUDY_URL = `${SITE_URL}/aether`;
 
 // Aether source on GitHub — static, no dev/prod split.
 export const REPO_URL = "https://github.com/andrewbaldock/aether";
+
+// Guard a model-/data-supplied URL before it becomes an <a href>. Image credits
+// and knowledge-graph node links carry URLs the model or an external API produced,
+// so a `javascript:`/`data:`/`vbscript:` href could smuggle script into a click.
+// Returns the URL only when it parses as http(s); otherwise undefined (render no
+// href / a disabled link). Protocol-relative and relative URLs resolve against the
+// current origin via the URL constructor, so they're judged on their final scheme.
+export function safeHref(url: string | undefined | null): string | undefined {
+  if (!url) return undefined;
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? url
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}

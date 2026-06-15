@@ -1,3 +1,4 @@
+import { safeHref } from "../../../lib/links";
 import { Tooltip } from "../../../shell/Tooltip";
 import { TYPE_COLOR, TYPE_LABEL } from "./colors";
 import type { GraphNode } from "./types";
@@ -58,9 +59,9 @@ export function NodeDetail({ node, onClose }: NodeDetailProps) {
             <p className="text-xs leading-relaxed text-content-muted line-clamp-4">
               {summary.extract}
             </p>
-            {summary.pageUrl && (
+            {safeHref(summary.pageUrl) && (
               <a
-                href={summary.pageUrl}
+                href={safeHref(summary.pageUrl)}
                 target="_blank"
                 rel="noreferrer"
                 className="mt-1 inline-block text-xs text-neon-cyan hover:underline"

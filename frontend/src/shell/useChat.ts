@@ -298,7 +298,7 @@ export function useChat({
             break outer;
           }
 
-          const event = JSON.parse(data) as {
+          type SseEvent = {
             type: string;
             content?: string;
             message?: string;
@@ -318,6 +318,16 @@ export function useChat({
             userId?: string;
             assistantId?: string;
           };
+          // One malformed event line must not kill the whole stream. A truncated
+          // or non-JSON line (mid-chunk split, proxy hiccup) would otherwise throw
+          // out of the read loop and abort the turn — skip it and keep reading.
+          let event: SseEvent;
+          try {
+            event = JSON.parse(data) as SseEvent;
+          } catch {
+            console.warn("[useChat] skipping unparseable SSE line:", data);
+            continue;
+          }
 
           if (event.type === "text" && event.content) {
             bus.emit({ type: "text", content: event.content });

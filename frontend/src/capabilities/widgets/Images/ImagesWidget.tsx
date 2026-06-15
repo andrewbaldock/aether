@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from "react";
+import { safeHref } from "../../../lib/links";
 import { EditWidgetDialog } from "../../../shell/EditWidgetDialog";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
 import { useSessionContext } from "../../../shell/SessionContext";
@@ -168,9 +169,9 @@ function Attribution({ img }: { img: ImageItem }) {
     return (
       <p className="mt-0.5 text-[0.65rem] text-content-subtle leading-snug">
         Photo by{" "}
-        {img.href ? (
+        {safeHref(img.href) ? (
           <a
-            href={img.href}
+            href={safeHref(img.href)}
             target="_blank"
             rel="noreferrer"
             className="underline hover:text-content"
@@ -264,7 +265,7 @@ export function SpecImages({
             >
               <figure className="overflow-hidden">
                 <a
-                  href={img.href ?? img.url}
+                  href={safeHref(img.href ?? img.url)}
                   target="_blank"
                   rel="noreferrer"
                   className="block"

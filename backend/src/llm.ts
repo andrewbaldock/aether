@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
+import { getAnthropicClient } from "./anthropicClient";
 import { closeTruncatedJson, parseBestEffort } from "./bestEffortJson";
 import { DEFAULT_MODEL, type Provider, providerForModel } from "./models";
 import {
@@ -1070,10 +1071,9 @@ export function createClient(opts: {
 export async function generateTitle(
   firstMessage: string
 ): Promise<{ title: string; icon: string | null } | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
+  const client = getAnthropicClient();
+  if (!client) return null;
   try {
-    const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 64,
