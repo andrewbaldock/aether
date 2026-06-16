@@ -11,14 +11,20 @@ import { useId } from "react";
 // `compact` renders just the capital "A" (matching the favicon) in a square box —
 // used in the sidebar when the full hero wordmark is already on screen, so the
 // brand doesn't read twice.
+// `decorative` drops the <title> (and its native browser tooltip) plus the
+// aria-label — use it when the wordmark sits inside a labelled control (e.g. the
+// sidebar's "new conversation" button) so the SVG's "Aether" tooltip doesn't
+// compete with the parent's own tooltip/label.
 export function Wordmark({
   height = 40,
   title = "Aether",
   compact = false,
+  decorative = false,
 }: {
   height?: number;
   title?: string;
   compact?: boolean;
+  decorative?: boolean;
 }) {
   const uid = useId().replace(/:/g, "");
   const grad = `grad-${uid}`;
@@ -51,11 +57,12 @@ export function Wordmark({
       width={width}
       height={height}
       viewBox={viewBox}
-      role="img"
-      aria-label={title}
+      role={decorative ? "presentation" : "img"}
+      aria-label={decorative ? undefined : title}
+      aria-hidden={decorative || undefined}
       xmlns="http://www.w3.org/2000/svg"
     >
-      <title>{title}</title>
+      {!decorative && <title>{title}</title>}
       <defs>
         {/* Pink(bottom-left) → cyan(top-right), even 50/50, subtle upward slant */}
         <linearGradient id={grad} x1="0" y1="0.65" x2="1" y2="0.35">

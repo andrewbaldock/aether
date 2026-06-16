@@ -75,9 +75,21 @@ export function Sidebar({
           </button>
         </Tooltip>
         {/* Absolutely centred against the full bar so the differing widths of the
-            toggle (left) and theme toggle (right) don't push it off-centre. */}
+            toggle (left) and theme toggle (right) don't push it off-centre. The
+            wrapper stays pointer-events-none so only the wordmark itself is a
+            click target — clicking it goes home / starts a new conversation. */}
         <div className="pointer-events-none absolute left-1/2 -translate-x-1/2">
-          <Wordmark height={28} compact={!started} />
+          <button
+            type="button"
+            onClick={() => {
+              startNewConversation();
+              onNavigate?.();
+            }}
+            aria-label="Aether — new conversation"
+            className="pointer-events-auto block rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong"
+          >
+            <Wordmark height={28} compact={!started} decorative />
+          </button>
         </div>
         <ThemeToggle />
       </div>
