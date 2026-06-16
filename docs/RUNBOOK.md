@@ -57,7 +57,11 @@ No build step — Bun runs TypeScript directly.
 
 ### Deploy
 
-**Frontend:** Auto-deploys on push to `main` via **Vercel**.
+**Frontend:** Ships to **Vercel via CI**, not Vercel's own git integration.
+A push to `main` runs the three test jobs (see [Test → CI](#ci)); the gated `deploy`
+job then builds with `vercel build --prod` and ships **prebuilt**. Vercel's native
+git auto-deploy is **disconnected**, so CI is the only path to prod — a red test job
+means no deploy.
 - Config: `frontend/vercel.json`
 - Proxy: `/api/*` → `https://aether-ab-api.fly.dev/api/:path*` (at the edge, no CORS issues)
 - Env vars: set in Vercel dashboard, not in repo
@@ -161,7 +165,7 @@ fly ssh console --app aether-ab-api
 
 ### Manage Vercel
 
-Vercel hosts the Aether **frontend**. It auto-deploys on every push to `main`, serves the static React build, and proxies `/api/*` calls to Fly.io at the edge so the frontend never needs a hardcoded backend URL.
+Vercel hosts the Aether **frontend**: it serves the static React build and proxies `/api/*` calls to Fly.io at the edge so the frontend never needs a hardcoded backend URL. Deploys come from the gated CI `deploy` job (push to `main`, after tests pass) — **not** Vercel's own git integration, which is disconnected. See [Deploy → Frontend](#deploy) and [Test → CI](#ci).
 
 | | |
 |---|---|
@@ -255,15 +259,24 @@ bun run check:fix     # auto-fix
 
 ### Test
 
+Three runners, all wired into [CI](#ci): **vitest** (frontend unit), **bun:test**
+(backend unit), and **Playwright** (e2e). Tests live in:
+- `frontend/src/**/*.test.ts*` — frontend unit (vitest+jsdom)
+- `backend/src/*.test.ts` — backend unit (bun:test, includes `smoke.test.ts`)
+- `frontend/e2e/*.spec.ts` — e2e (Playwright, 7 viewport projects)
+
 Unit (frontend, from `frontend/`):
 ```bash
 bun run test          # Vitest, watch mode
 bun run test:run      # Vitest, single run (what CI runs)
 ```
+The frontend unit suite **also runs as the first step of `bun run build`** — a failing
+test blocks the build (see [Build & Typecheck](#build--typecheck)).
 
 Unit (backend, from `backend/`):
 ```bash
 bun test              # bun:test
+bun run verify        # typecheck + bun test (the gate `bun run deploy` runs first)
 ```
 
 End-to-end (Playwright, from `frontend/`):
@@ -305,6 +318,30 @@ bun run screenshots   # captures all 7 viewports → public/screenshots-out/ (gi
 ```
 The tab and its `/api/screenshots/run` endpoint exist **only in dev** — absent from any
 prod build.
+
+**Smoke tests (two layers, both gate automatically):**
+- **Backend** — `backend/src/smoke.test.ts` runs inside `bun test` / `bun run verify` /
+  `bun run deploy`. It boots the app and asserts the `fly.toml` health-check route returns
+  200, so a missing/renamed route fails here instead of taking prod down (see
+  [Deploy → Backend](#deploy)).
+- **Frontend** — `frontend/e2e/smoke.spec.ts` is the cheapest e2e gate: across all 7
+  viewports it loads the app, checks the compose box renders, and asserts **no
+  `console.error`** (filtering benign `/api` load-race noise).
+
+### CI
+
+`.github/workflows/ci.yml` runs on **every PR** and on **push to `main`**. Three test jobs
+run in parallel; the deploy job is gated on all three.
+
+| Job | Command | Notes |
+|---|---|---|
+| `frontend-unit` | `bun run test:run` | vitest (from `frontend/`) |
+| `backend-unit`  | `bun test`        | bun:test, incl. `smoke.test.ts` (from `backend/`) |
+| `e2e`           | `bun run test:e2e` | Playwright builds its own preview; caches browser binaries; uploads report + traces on failure (7-day retention) |
+| `deploy`        | `vercel build --prod` → `vercel deploy --prebuilt` | **`needs` all three**; **push-to-`main` only**; this is the sole path to prod (see [Deploy → Frontend](#deploy)) |
+
+- **Biome lint is NOT in CI.** Run `bun run check` locally; it does not gate.
+- A red test job blocks the Vercel deploy — Vercel's own git auto-deploy is disconnected.
 
 ---
 
@@ -385,6 +422,7 @@ bun run lint         # ESLint
 - **E2E full runs: use the built preview server, not the dev server** — `test:e2e` builds its own preview (robust). The `:dev` variants drive the live dev server, which can flake under full parallel load (it compiles on demand) — fine for watching one flow, not ideal for a clean full run.
 - **Two Vite servers are normal** — Aether frontend on 5174, website on 5173. These run concurrently.
 - **Aether build has two TS configs** — `tsc --noEmit` (typecheck) and `tsc -b && vite build` (build) use different settings. A green typecheck doesn't guarantee a successful build. Always run `bun run build` before pushing.
+- **CI gates the Vercel deploy** — a red `frontend-unit` / `backend-unit` / `e2e` job blocks prod. Vercel's own git auto-deploy is off; the gated CI `deploy` job is the only path to production. (Biome lint is *not* in CI — run `bun run check` yourself.)
 - **react-resizable-panels v4 gotcha** — `resize()` reads bare numbers as **pixels**, not percent. Always pass `"32%"` (string with unit).
 - **Fly: one always-on machine, no scale-to-zero** — `min_machines_running = 1` in `fly.toml` keeps a machine warm so chat requests don't hit a cold-start 502. (It was previously scale-to-zero; the cold-start 502s are why that changed.)
 - **Service worker is off in dev, on in preview/prod** — `vite dev` never registers the SW (`devOptions.enabled: false`). To test PWA/offline behavior, `bun run build:app && bunx vite preview`. After a deploy, the SW updates in the background (`autoUpdate`); a hard-stuck old version usually clears with one reload, or DevTools → Application → Service Workers → Unregister.

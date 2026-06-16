@@ -8,7 +8,9 @@ The menu-bar glyph (𑁍) is teal when all servers are up, red when something's 
 dropdown has:
 
 - **Per server** — a Start/Stop toggle + "Open log", and (for website + aether-backend) a
-  manual deploy action (website → FTP/ASL, backend → `fly deploy`).
+  manual deploy action (website → FTP/ASL, backend → `fly deploy`). The **orion-web** row also has
+  an **"Open Orion"** link and a **"Build Orion web (`bun run build`)"** action — prod serves
+  `web/dist`, so frontend source changes only show after a rebuild.
 - **Tests** submenu — launchers that open a Terminal window (too long/loud for the menu): full
   E2E run, E2E **UI mode**, frontend unit (vitest), backend unit (`bun test`), and the
   screenshots capture. UI mode + screenshots need the frontend dev server up on :5174.
@@ -24,6 +26,8 @@ dropdown has:
 | website | 5173 | HTTP 200 on `/` |
 | aether-frontend | 5174 | HTTP 200 on `/` |
 | aether-backend | 8000 | `/api/health` returns `{"ok":true}` |
+| orion-web | 5176 | HTTP 200 on `/` |
+| orion-api | 3000 | `/api/stats` returns JSON with `total` |
 
 ## Install
 

@@ -145,6 +145,12 @@ case "$1" in
     osascript -e "tell application \"Terminal\" to do script \"cd ${CODE_DIR}/aether/backend && ${FLY} deploy; echo; echo Done. Press any key to close.; read -n 1; exit\"" -e 'tell application "Terminal" to activate'
     exit 0
     ;;
+  build-orion-web)
+    # Rebuild Orion's frontend bundle (web/dist). Prod serves web/dist, so source
+    # changes only show after this. Run in Terminal so build output is visible.
+    run_in_terminal "cd ${CODE_DIR}/orion/web && ${BUN} run build"
+    exit 0
+    ;;
   test-e2e)
     # Full Playwright run — builds its own preview server, mocks /api. ~50s.
     run_in_terminal "cd ${AETHER_FE} && ${BUN} run test:e2e"
@@ -200,6 +206,7 @@ for s in "${SERVERS[@]}"; do
     rows+="-- Deploy aether (fly → supabase) | bash=\"${SELF}\" param0=deploy-aether terminal=false color=#C77D3A\n"
   elif [ "$name" = "orion-web" ]; then
     rows+="-- Open Orion (${ORION_URL}) | href=${ORION_URL} color=#5B8DEF\n"
+    rows+="-- Build Orion web (bun run build) | bash=\"${SELF}\" param0=build-orion-web terminal=false color=#C77D3A\n"
   fi
 done
 
