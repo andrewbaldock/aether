@@ -13,10 +13,12 @@ create table if not exists app_state (
   updated_at timestamptz not null default now()
 );
 
--- The backend connects with the anon key, so RLS applies. These tables hold no
--- user data — just operational counters/flags — so allow the anon role to read
--- and write rows directly. (The counter increment goes through the SECURITY
--- DEFINER function below, but setState/getState use the table directly.)
+-- NOTE (superseded by sql/006): when this file was written the backend connected
+-- with the ANON key, so it needed the anon read/write policy and EXECUTE grant
+-- below. The backend now uses the SERVICE-ROLE key (sql/005, src/db.ts), which
+-- bypasses RLS and grants entirely — so sql/006 narrows the anon policy to
+-- SELECT-only and revokes the anon EXECUTE grant. This file is kept as historical
+-- record; the live policy/grants are whatever 006 left in place.
 alter table app_state enable row level security;
 
 drop policy if exists app_state_anon_rw on app_state;
