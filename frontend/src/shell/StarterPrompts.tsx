@@ -65,7 +65,13 @@ function sample<T>(items: readonly T[], n: number): T[] {
   const copy = items.slice();
   for (let i = copy.length - 1; i > copy.length - 1 - n && i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
+    // Read sides asserted: both indices are provably in-bounds (i is loop-guarded,
+    // j ∈ [0, i]), but under noUncheckedIndexedAccess a tuple-destructuring swap
+    // assigns T | undefined back into T slots — which tsc -b rejects. A plain
+    // three-step swap with non-null reads sidesteps that.
+    const tmp = copy[i]!;
+    copy[i] = copy[j]!;
+    copy[j] = tmp;
   }
   return copy.slice(Math.max(0, copy.length - n));
 }

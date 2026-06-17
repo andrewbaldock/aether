@@ -3,10 +3,25 @@ import type { CompositionPlan } from "../lib/composition";
 import { useAgentEvents } from "./AgentEventContext";
 import { parseSseChunk } from "./parseSseChunk";
 
+// An ephemeral attachment for a turn — an image or PDF carried inline as base64.
+// Mirrors the backend Attachment wire shape, plus a client-only `name`/`previewUrl`
+// for rendering chips. Never persisted: only the just-sent user turn carries these,
+// and reloading a conversation shows the text only (the bytes are gone).
+export interface Attachment {
+  kind: "image" | "document";
+  mediaType: string;
+  data: string; // base64, no data: URI prefix
+  name: string; // filename or a synthesized label, shown on the chip
+  previewUrl?: string; // object URL for image thumbnails (images only)
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
   text: string;
+  // Attachments shown alongside this user bubble for the current turn. Live state
+  // only — not restored on reload (attachments are ephemeral).
+  attachments?: Attachment[];
   toolActivity?: string;
   // Tappable clarifier options, set when the planner asked ONE expanding question
   // this turn (the question is the message `text`). ChatPanel renders these as
@@ -45,7 +60,7 @@ export interface UseChatResult {
   sendMessage: (
     text: string,
     displayText?: string,
-    opts?: { clarified?: boolean }
+    opts?: { clarified?: boolean; attachments?: Attachment[] }
   ) => Promise<void>;
   // Cancels any in-flight stream and invalidates its late writes. Called when
   // the user switches or starts a conversation so a previous turn can't bleed
@@ -95,7 +110,12 @@ export function useChat({
   // already shown as a user bubble (appended at enqueue time); we hold only what
   // the next turn needs to fire. Drained one-at-a-time as each turn completes.
   const queueRef = useRef<
-    { text: string; displayText?: string; clarified?: boolean }[]
+    {
+      text: string;
+      displayText?: string;
+      clarified?: boolean;
+      attachments?: Attachment[];
+    }[]
   >([]);
 
   const abortStream = useCallback(() => {
@@ -126,17 +146,19 @@ export function useChat({
   async function sendMessage(
     text: string,
     displayText?: string,
-    opts?: { clarified?: boolean }
+    opts?: { clarified?: boolean; attachments?: Attachment[] }
   ) {
     // What the transcript shows. The full `text` still goes to the model later;
     // displayText only swaps the on-screen bubble.
     const shownText = displayText ?? text;
+    const attachments = opts?.attachments;
     const withUser: Message[] = [
       ...messagesRef.current,
       {
         id: crypto.randomUUID(),
         role: "user",
         text: shownText,
+        ...(attachments && attachments.length > 0 ? { attachments } : {}),
         createdAt: new Date().toISOString(),
       },
     ];
@@ -146,11 +168,16 @@ export function useChat({
     // A turn is in flight — queue this one and let the current turn's drain pick
     // it up. The bubble is already on screen; only the send payload waits.
     if (abortRef.current !== null) {
-      queueRef.current.push({ text, displayText, clarified: opts?.clarified });
+      queueRef.current.push({
+        text,
+        displayText,
+        clarified: opts?.clarified,
+        attachments,
+      });
       return;
     }
 
-    await runTurn(text, displayText, opts?.clarified);
+    await runTurn(text, displayText, opts?.clarified, attachments);
   }
 
   // Runs one network turn. The user bubble for `text` is already in
@@ -159,7 +186,8 @@ export function useChat({
   async function runTurn(
     text: string,
     displayText?: string,
-    clarified?: boolean
+    clarified?: boolean,
+    attachments?: Attachment[]
   ) {
     // Supersede any lingering aborted stream so its late writes are dropped.
     abortRef.current?.abort();
@@ -233,12 +261,32 @@ export function useChat({
       // model and would fail the backend's non-empty-content validation, breaking
       // otherwise-valid saved conversations. The just-added user turn is always
       // last and never empty, so the displayText swap below stays aligned.
-      const sendable = next.filter((m) => m.text.trim().length > 0);
-      const wireMessages = sendable.map((m, i) =>
-        i === sendable.length - 1 && displayText
-          ? { role: m.role, content: text, displayText }
-          : { role: m.role, content: m.text }
+      // Keep the just-added user turn even when its text is empty — an image- or
+      // PDF-only message has no prose but must still be sent (the backend accepts
+      // empty content when attachments are present). Prior empty rows are still
+      // dropped (errored assistant placeholders add nothing and fail validation).
+      const sendable = next.filter(
+        (m, i) => m.text.trim().length > 0 || i === next.length - 1
       );
+      // Only the wire fields go over the network — strip the client-only
+      // name/previewUrl. Attachments ride only the final (just-sent) user turn.
+      const wireAttachments =
+        attachments && attachments.length > 0
+          ? attachments.map((a) => ({
+              kind: a.kind,
+              mediaType: a.mediaType,
+              data: a.data,
+            }))
+          : undefined;
+      const wireMessages = sendable.map((m, i) => {
+        const isLast = i === sendable.length - 1;
+        return {
+          role: m.role,
+          content: isLast && displayText ? text : m.text,
+          ...(isLast && displayText ? { displayText } : {}),
+          ...(isLast && wireAttachments ? { attachments: wireAttachments } : {}),
+        };
+      });
       const requestInit: RequestInit = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -462,7 +510,12 @@ export function useChat({
         if (queued) {
           // Not awaited: this finally must unwind so the current turn settles
           // before the next one mutates refs. runTurn re-arms abortRef/epoch.
-          void runTurn(queued.text, queued.displayText, queued.clarified);
+          void runTurn(
+            queued.text,
+            queued.displayText,
+            queued.clarified,
+            queued.attachments
+          );
         } else {
           setIsLoading(false);
         }

@@ -32,6 +32,17 @@ const MAX_CORRECTIONS = Number(process.env.LLM_MAX_CORRECTIONS) || 1;
 // provider (see ./models): Claude → the Anthropic SDK; Google / DeepSeek / Mistral
 // → one shared OpenAI-compatible client (they all speak /chat/completions).
 
+// An ephemeral file the user attached to a turn — an image or a PDF, carried
+// inline as base64. Not persisted: only the just-sent user turn carries these
+// (the frontend never re-sends them on follow-ups), and the DB stores text only.
+// `kind` maps to the Anthropic block type: "image" → image block, "document" →
+// document block (PDF). `mediaType` is the IANA type (image/png, application/pdf).
+export interface Attachment {
+  kind: "image" | "document";
+  mediaType: string;
+  data: string; // base64, no data: URI prefix
+}
+
 // One message in the conversation, as the connector sees it. This is the wire
 // shape the frontend sends — independent of any provider's SDK types.
 export interface ChatMessage {
@@ -42,6 +53,10 @@ export interface ChatMessage {
   // UI send a long fill instruction without surfacing it in the conversation. The
   // model never receives this field (the SDK mappers project to {role, content}).
   displayText?: string;
+  // Ephemeral image/PDF attachments for THIS turn (last user message only). Folded
+  // into the Anthropic content blocks alongside the text; ignored by the
+  // OpenAI-compat clients for now (Claude-only feature). Never persisted.
+  attachments?: Attachment[];
 }
 
 export interface LlmClient {
@@ -258,6 +273,45 @@ function applySelfCorrection(
   return { modelResults, consumedCorrection };
 }
 
+// Map a ChatMessage to an Anthropic MessageParam, folding any attachments into
+// content blocks. With no attachments, content stays a plain string (the common
+// path). With attachments, content becomes a block array: media blocks first,
+// then the text block (Anthropic's convention — the question reads after what it's
+// about). Only user turns carry attachments; assistant turns pass through as text.
+function toApiMessage(m: ChatMessage): ApiMessage {
+  if (!m.attachments || m.attachments.length === 0) {
+    return { role: m.role, content: m.content };
+  }
+  const mediaBlocks: Anthropic.Messages.ContentBlockParam[] = m.attachments.map(
+    (a) =>
+      a.kind === "image"
+        ? {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type:
+                a.mediaType as Anthropic.Messages.Base64ImageSource["media_type"],
+              data: a.data,
+            },
+          }
+        : {
+            type: "document",
+            source: {
+              type: "base64",
+              media_type: "application/pdf",
+              data: a.data,
+            },
+          }
+  );
+  // A text block must follow even when content is empty-ish: an image/PDF with no
+  // prose still needs the turn to be non-empty, and the model reads better with the
+  // question last. Drop the text block only if content is truly empty.
+  const blocks: Anthropic.Messages.ContentBlockParam[] = m.content
+    ? [...mediaBlocks, { type: "text", text: m.content }]
+    : mediaBlocks;
+  return { role: m.role, content: blocks };
+}
+
 function createClaudeClient(
   tools: ToolDefinition[],
   systemPrompt: string,
@@ -355,10 +409,7 @@ function createClaudeClient(
 
   return {
     async complete(messages) {
-      const apiMessages: ApiMessage[] = messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      const apiMessages: ApiMessage[] = messages.map(toApiMessage);
       const response = await getClient().messages.create(
         apiParams(apiMessages)
       );
@@ -388,10 +439,8 @@ function createClaudeClient(
     ) {
       // The agent loop: call the API, handle tool_use if the model requests it,
       // feed results back, and repeat until the model produces a terminal response.
-      const history: ApiMessage[] = messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      // toApiMessage folds any attachments on the last user turn into content blocks.
+      const history: ApiMessage[] = messages.map(toApiMessage);
 
       // Conditional planner pre-pass (gated). It yields a steering preamble (run the
       // loop), a clarifier (end the turn asking ONE question — no loop), or nothing.

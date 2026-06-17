@@ -1,5 +1,5 @@
 import * as RadixTooltip from "@radix-ui/react-tooltip";
-import { ChevronDown, Share2, Trash2 } from "lucide-react";
+import { ChevronDown, FileText, Plus, Share2, Trash2, X } from "lucide-react";
 import {
   type FormEvent,
   useEffect,
@@ -9,6 +9,7 @@ import {
 } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { toast } from "sonner";
 import { ThinkingGlyph } from "../brand/ThinkingGlyph";
 import { Wordmark } from "../brand/Wordmark";
 import { CAPABILITIES, HOME_BASE_ID } from "../capabilities/catalog";
@@ -33,7 +34,8 @@ import { ModelPicker } from "./ModelPicker";
 import { useSessionContext } from "./SessionContext";
 import { StarterPrompts } from "./StarterPrompts";
 import { Tooltip } from "./Tooltip";
-import { useChat } from "./useChat";
+import { ACCEPTED_TYPES, filesToAttachments } from "./attachments";
+import { type Attachment, useChat } from "./useChat";
 import { useIsMobile } from "./useIsMobile";
 import { useToolProgress } from "./useToolProgress";
 import { useWaitingMessage } from "./useWaitingMessage";
@@ -188,10 +190,58 @@ export function ChatPanel() {
   // the streaming message; superseded the instant a real status/result/text lands.
   const toolProgress = useToolProgress(isLoading);
   const [draft, setDraft] = useState("");
+  // Pending attachments for the next send — images/PDFs picked, pasted, or dropped
+  // into the composer. Ephemeral: cleared on send, never persisted. Show a chip per
+  // attachment above the textarea with a remove control.
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  // Drag-over affordance: highlight the composer while a file is being dragged over
+  // it. A counter (not a boolean) so nested dragenter/dragleave from child elements
+  // don't prematurely clear the highlight.
+  const [dragDepth, setDragDepth] = useState(0);
   const started = messages.length > 0;
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Add a batch of files: validate/downscale/encode off the helper, append the
+  // good ones, and toast a single line summarizing any that were rejected. Shared
+  // by the file picker, paste, and drop paths.
+  async function addFiles(files: File[]) {
+    if (files.length === 0) return;
+    const { attachments: added, errors } = await filesToAttachments(files);
+    if (added.length > 0) setAttachments((prev) => [...prev, ...added]);
+    if (errors.length > 0) {
+      const detail =
+        errors.length === 1
+          ? `${errors[0]!.name}: ${errors[0]!.reason}`
+          : `${errors.length} files couldn't be attached`;
+      toast.error(detail);
+    }
+  }
+
+  function removeAttachment(index: number) {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  // Paste handler: pull any image files off the clipboard (a pasted screenshot
+  // arrives as a File item). Don't preventDefault for text — only act when there
+  // are files, so normal text paste is untouched.
+  function handlePaste(e: React.ClipboardEvent) {
+    const files = Array.from(e.clipboardData.files).filter((f) =>
+      f.type.startsWith("image/")
+    );
+    if (files.length === 0) return;
+    e.preventDefault();
+    void addFiles(files);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragDepth(0);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) void addFiles(files);
+  }
 
   // Restore the active capability view from a saved conversation. Every
   // capability is always present now; on load we just pick which view is active
@@ -421,18 +471,25 @@ export function ChatPanel() {
     if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: "auto" });
   }, [messages.length, messages.at(-1)?.text, isLoading]);
 
-  // The send button is a Stop control only while a turn streams and the field is
-  // empty; with text present it stays a Send button (the message queues). Used by
-  // the button's type, click handler, label, and rendered glyph.
-  const isStop = isLoading && draft.trim().length === 0;
+  // The send button is a Stop control only while a turn streams and there's
+  // nothing staged to send — empty field AND no attachments; with either present
+  // it stays a Send button (the message queues). Used by the button's type, click
+  // handler, label, and rendered glyph.
+  const hasStaged = draft.trim().length > 0 || attachments.length > 0;
+  const isStop = isLoading && !hasStaged;
 
   function submit() {
     const text = draft.trim();
-    // Empty draft does nothing. A non-empty draft sends even mid-stream — useChat
-    // queues it behind the running turn and fires it when that turn finishes.
-    if (!text) return;
+    // Nothing to send unless there's text OR at least one attachment (an image/PDF
+    // can be sent with no prose). Sends even mid-stream — useChat queues it behind
+    // the running turn and fires it when that turn finishes.
+    if (!text && attachments.length === 0) return;
+    const toSend = attachments;
     setDraft("");
-    sendMessage(text);
+    setAttachments([]);
+    sendMessage(text, undefined, {
+      ...(toSend.length > 0 ? { attachments: toSend } : {}),
+    });
     textareaRef.current?.focus();
   }
 
@@ -485,7 +542,36 @@ export function ChatPanel() {
                 }
               >
                 {m.role === "user" ? (
-                  m.text
+                  <>
+                    {/* Attachments sent with this turn — thumbnails for images, a
+                        file icon for PDFs. Live state only (not restored on reload,
+                        since attachments are ephemeral). */}
+                    {m.attachments && m.attachments.length > 0 && (
+                      <div className="mb-2 flex flex-wrap gap-2">
+                        {m.attachments.map((a, ai) =>
+                          a.kind === "image" && a.previewUrl ? (
+                            <img
+                              key={`${a.name}-${ai}`}
+                              src={a.previewUrl}
+                              alt={a.name}
+                              className="h-20 w-20 rounded-lg object-cover"
+                            />
+                          ) : (
+                            <span
+                              key={`${a.name}-${ai}`}
+                              className="flex items-center gap-1.5 rounded-lg bg-surface px-2 py-1 text-xs text-content-muted"
+                            >
+                              <FileText size={14} />
+                              <span className="max-w-40 truncate">
+                                {a.name}
+                              </span>
+                            </span>
+                          )
+                        )}
+                      </div>
+                    )}
+                    {m.text}
+                  </>
                 ) : (
                   <>
                     {/* Activity line: the scripted tool progress wins on the
@@ -704,8 +790,59 @@ export function ChatPanel() {
         )}
         <div className="mx-auto w-full max-w-2xl">
           <div
-            className={`relative rounded-lg border bg-elevated transition-colors ${isLoading ? "aether-loading-border" : "border-border-strong focus-within:border-content-subtle"}`}
+            // Drop zone for files. dragDepth (a counter, not a flag) survives the
+            // dragenter/dragleave churn from child elements so the highlight only
+            // clears when the cursor truly leaves the box.
+            onDragEnter={(e) => {
+              e.preventDefault();
+              setDragDepth((d) => d + 1);
+            }}
+            onDragOver={(e) => e.preventDefault()}
+            onDragLeave={() => setDragDepth((d) => Math.max(0, d - 1))}
+            onDrop={handleDrop}
+            className={`relative rounded-lg border bg-elevated transition-colors ${
+              dragDepth > 0
+                ? "border-[#c35ed1] ring-2 ring-[#c35ed1]/40"
+                : isLoading
+                  ? "aether-loading-border"
+                  : "border-border-strong focus-within:border-content-subtle"
+            }`}
           >
+            {/* Staged-attachment chips: a thumbnail for images, a file icon for
+                PDFs, each removable. Sits above the textarea inside the box. */}
+            {attachments.length > 0 && (
+              <ul className="flex flex-wrap gap-2 px-3 pt-3">
+                {attachments.map((a, i) => (
+                  <li
+                    key={`${a.name}-${i}`}
+                    className="group/att relative flex items-center gap-2 rounded-lg border border-border-strong bg-surface py-1 pr-2 pl-1"
+                  >
+                    {a.kind === "image" && a.previewUrl ? (
+                      <img
+                        src={a.previewUrl}
+                        alt={a.name}
+                        className="h-9 w-9 rounded object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-9 w-9 items-center justify-center rounded bg-elevated text-content-muted">
+                        <FileText size={18} />
+                      </span>
+                    )}
+                    <span className="max-w-32 truncate text-xs text-content-muted">
+                      {a.name}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${a.name}`}
+                      onClick={() => removeAttachment(i)}
+                      className="flex h-5 w-5 items-center justify-center rounded-full text-content-subtle transition-colors hover:bg-elevated hover:text-content"
+                    >
+                      <X size={13} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             <textarea
               ref={textareaRef}
               value={draft}
@@ -714,6 +851,7 @@ export function ChatPanel() {
               autoFocus={!isMobile}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               placeholder="Type a message… (Shift+Enter for newline)"
               rows={1}
               // text-base (16px) on mobile: iOS Safari auto-zooms the page when a
@@ -721,6 +859,32 @@ export function ChatPanel() {
               // on load — leaving the whole UI zoomed in. 16px disables that zoom.
               className={`w-full resize-none bg-transparent px-4 pt-3 pb-10 text-sm max-md:text-base text-content placeholder:text-content-subtle focus:outline-none transition-opacity${isLoading ? " opacity-50" : ""}${started ? "" : " min-h-24"}`}
             />
+            {/* Attach (+) button — bottom-left. Opens the hidden file picker;
+                images can also be pasted or dropped anywhere in the box. */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept={ACCEPTED_TYPES.join(",")}
+              className="hidden"
+              onChange={(e) => {
+                void addFiles(Array.from(e.target.files ?? []));
+                // Reset so re-picking the same file fires onChange again.
+                e.target.value = "";
+              }}
+            />
+            <div className="absolute bottom-2 left-2 flex items-center">
+              <Tooltip label="Attach image or PDF" side="top">
+                <button
+                  type="button"
+                  aria-label="Attach image or PDF"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-border-strong text-content-muted transition hover:bg-surface hover:text-content max-md:h-11 max-md:w-11"
+                >
+                  <Plus size={18} />
+                </button>
+              </Tooltip>
+            </div>
             <div className="absolute bottom-2 right-2 flex items-center gap-2">
               {/* Model picker — which Claude answers this conversation. */}
               <ModelPicker
@@ -751,8 +915,9 @@ export function ChatPanel() {
                   aria-label={isStop ? "Stop generating" : "Send message"}
                   className="relative flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-r from-[#fd40a4] to-[#c35ed1] text-2xl leading-none text-white transition hover:brightness-110 disabled:opacity-40 max-md:h-11 max-md:w-11"
                   // Disabled only when there's nothing to do: not in stop mode and
-                  // the field is empty. (Stop mode is always actionable.)
-                  disabled={!isStop && draft.trim().length === 0}
+                  // nothing staged (empty field + no attachments). Stop mode is
+                  // always actionable.
+                  disabled={!isStop && !hasStaged}
                 >
                   {isStop ? (
                     <>

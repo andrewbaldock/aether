@@ -26,7 +26,12 @@ import {
   updateSessionWidgetData,
 } from "./db";
 import { checkHealth, checkProviders } from "./health";
-import { type ChatMessage, createClient, generateTitle } from "./llm";
+import {
+  type Attachment,
+  type ChatMessage,
+  createClient,
+  generateTitle,
+} from "./llm";
 import { backfillSnapshotPrompts } from "./recreationPrompt";
 import { MODELS, type Provider, resolveModel } from "./models";
 import { toolStatusLabel } from "./tools";
@@ -706,19 +711,74 @@ if (IS_DEV) {
   });
 }
 
+// Attachment limits, enforced server-side (never trust the client's downscaling).
+// Anthropic accepts these image types and PDFs; the byte caps mirror the API's own
+// per-file limits (5MB image / 32MB PDF) so a too-large attachment is rejected here
+// with a clean 400 rather than bubbling up as an opaque API error.
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+]);
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_PDF_BYTES = 32 * 1024 * 1024;
+
+// Decoded byte length of a base64 string, computed from its length (4 chars → 3
+// bytes, minus padding) without allocating the buffer — cheap to check up front.
+function base64ByteLength(b64: string): number {
+  const len = b64.length;
+  if (len === 0) return 0;
+  const padding = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
+  return (len * 3) / 4 - padding;
+}
+
+function isAttachmentArray(value: unknown): value is Attachment[] {
+  return (
+    Array.isArray(value) &&
+    value.every((a): a is Attachment => {
+      if (a == null || typeof a !== "object") return false;
+      const { kind, mediaType, data } = a as Record<string, unknown>;
+      if (typeof data !== "string" || data.length === 0) return false;
+      if (typeof mediaType !== "string") return false;
+      if (kind === "image") {
+        return (
+          ALLOWED_IMAGE_TYPES.has(mediaType) &&
+          base64ByteLength(data) <= MAX_IMAGE_BYTES
+        );
+      }
+      if (kind === "document") {
+        return (
+          mediaType === "application/pdf" &&
+          base64ByteLength(data) <= MAX_PDF_BYTES
+        );
+      }
+      return false;
+    })
+  );
+}
+
 function isChatMessageArray(value: unknown): value is ChatMessage[] {
   return (
     Array.isArray(value) &&
     value.length > 0 &&
     value.every((m): m is ChatMessage => {
       if (m == null || typeof m !== "object") return false;
-      const { role, content, displayText } = m as Record<string, unknown>;
-      return (
-        (role === "user" || role === "assistant") &&
-        typeof content === "string" &&
-        content.length > 0 &&
-        (displayText === undefined || typeof displayText === "string")
-      );
+      const { role, content, displayText, attachments } = m as Record<
+        string,
+        unknown
+      >;
+      if (role !== "user" && role !== "assistant") return false;
+      if (typeof content !== "string") return false;
+      // Content may be empty only when this turn carries attachments (an image/PDF
+      // sent with no prose); otherwise a non-empty string is required.
+      const hasAttachments =
+        attachments !== undefined && isAttachmentArray(attachments);
+      if (attachments !== undefined && !hasAttachments) return false;
+      if (content.length === 0 && !hasAttachments) return false;
+      if (displayText !== undefined && typeof displayText !== "string")
+        return false;
+      return true;
     })
   );
 }
