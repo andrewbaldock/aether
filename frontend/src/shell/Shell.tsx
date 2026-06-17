@@ -189,7 +189,7 @@ function ShellInner() {
         <Panel
           id="capability"
           defaultSize={isFullscreen ? "100%" : `${savedCapabilitySize}%`}
-          minSize="20%"
+          minSize="260px"
           style={{
             // react-resizable-panels sets `overflow: auto` inline on the Panel
             // element; that produced a spurious horizontal scrollbar across the

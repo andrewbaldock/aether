@@ -470,6 +470,30 @@ body {
   }
 }
 
+/* ── Starter prompts ─────────────────────────────────────────────────────────
+   The clickable starter pills on the blank conversation page float up and fade
+   in on a staggered delay, reading as the empty page coming alive. The stagger
+   is driven by a per-pill --i set inline (matches the tiles-skeleton convention). */
+@keyframes starter-pill-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.starter-pill {
+  animation: starter-pill-in 360ms ease-out both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .starter-pill {
+    animation: none;
+  }
+}
+
 /* Unseen-content indicator on a capability tab: a small dot that pulses its glow
    so a tab updated in the background catches the eye. Pink to match the brand
    accent (the send button / loading border). */

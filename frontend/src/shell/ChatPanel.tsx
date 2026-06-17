@@ -31,6 +31,7 @@ import { useUpdateSession } from "../hooks/useUpdateSession";
 import { useAgentEvents } from "./AgentEventContext";
 import { ModelPicker } from "./ModelPicker";
 import { useSessionContext } from "./SessionContext";
+import { StarterPrompts } from "./StarterPrompts";
 import { Tooltip } from "./Tooltip";
 import { useChat } from "./useChat";
 import { useIsMobile } from "./useIsMobile";
@@ -458,25 +459,16 @@ export function ChatPanel() {
       )}
       <div
         ref={scrollRef}
-        className={`flex-1 overflow-y-auto px-6 pb-6${started ? " pt-2.5" : " py-6"}${
-          // Empty state on mobile: centre the hero in the scroll region so the
-          // wordmark + tagline + the (static) form just beneath read as one
-          // centred cluster, rather than split top-and-bottom or jammed at the
-          // very bottom behind the URL bar.
+        className={
+          // When started, the scroll area is the flex-1 transcript. In the empty
+          // state it has no messages, so collapse it to nothing (flex-none, no
+          // padding) and let the form below become the flex-1 column that lays out
+          // hero + pills + input.
           started
-            ? ""
-            : " max-md:flex max-md:flex-col max-md:items-center max-md:justify-center"
-        }`}
+            ? "flex-1 overflow-y-auto px-6 pb-6 pt-2.5"
+            : "flex-none overflow-y-auto px-6"
+        }
       >
-        {!started && (
-          <div className="mx-auto mt-20 flex w-full max-w-md flex-col items-center gap-4 text-center max-md:mt-0 max-md:gap-3">
-            <Wordmark height={72} />
-            <p className="text-sm text-content-muted max-md:px-2">
-              Ask me anything. I'll answer in whatever form fits best — text, a
-              chart, a table, a graph — rendered live beside us.
-            </p>
-          </div>
-        )}
         <ul className="mx-auto max-w-2xl space-y-4">
           {messages.map((m, mi) => (
             <li
@@ -681,14 +673,36 @@ export function ChatPanel() {
             ? // On mobile the form sits at the bottom edge; clear the iOS home
               // indicator with a safe-area bottom inset (no-op on desktop/no inset).
               "p-4 max-md:px-5 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-600 ease-in-out"
-            : // Desktop empty state floats the input vertically centred. On mobile
-              // that absolute centring collides with the hero copy on a short
-              // screen, so keep the form in normal flow (static) — the hero +
-              // input + tool row stack and the scroll area centres them.
-              "absolute inset-x-0 top-1/2 -translate-y-1/2 px-6 max-md:static max-md:inset-auto max-md:translate-y-0 max-md:px-5 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-600 ease-in-out"
+            : // Empty state: the form becomes the flex-1 column for the whole hero.
+              // Hero (near the top), starter pills, and the input are three stacked
+              // blocks that share the vertical space — nothing floats over anything,
+              // and the input is not pinned to the bottom. They sit as one group
+              // around the upper-middle with breathing room between each.
+              "flex flex-1 flex-col items-center px-6 pt-20 pb-6 max-md:px-5 max-md:pt-10 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-600 ease-in-out"
         }
       >
-        <div className="mx-auto max-w-2xl">
+        {!started && (
+          <>
+            {/* Hero — kept near the top, where it was before starter pills existed. */}
+            <div className="flex w-full max-w-md flex-col items-center gap-4 text-center max-md:gap-3">
+              <Wordmark height={72} />
+              <p className="text-sm text-content-muted max-md:px-2">
+                Ask me anything. I'll answer in whatever form fits best — text, a
+                chart, a table, a graph — rendered live beside us.
+              </p>
+            </div>
+            {/* Pills float in the gap between hero and input. The spacers are
+                weighted so the cluster sits in the UPPER-middle: a small fixed gap
+                under the hero, pills, a small fixed gap, then the input — and a big
+                flex-1 spacer below pushes all of it up off the bottom. */}
+            <div className="h-12 shrink-0 max-md:h-8" />
+            <div className="w-full max-w-xl">
+              <StarterPrompts onPick={sendMessage} disabled={isLoading} />
+            </div>
+            <div className="h-12 shrink-0 max-md:h-8" />
+          </>
+        )}
+        <div className="mx-auto w-full max-w-2xl">
           <div
             className={`relative rounded-lg border bg-elevated transition-colors ${isLoading ? "aether-loading-border" : "border-border-strong focus-within:border-content-subtle"}`}
           >
@@ -765,6 +779,10 @@ export function ChatPanel() {
             </div>
           </div>
         </div>
+        {/* Empty state: a big flexible spacer below the input pushes the whole
+            hero + pills + input cluster up into the top portion of the column,
+            so the input is never pinned to the bottom on a tall viewport. */}
+        {!started && <div className="flex-1" />}
       </form>
     </div>
   );

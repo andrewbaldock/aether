@@ -80,7 +80,7 @@ export function CapabilityColumn({
           tap-sized on mobile. `items-start` keeps the right cluster top-aligned
           when the left group grows to two rows. */}
       <div
-        className={`@container flex h-11 items-center gap-1 overflow-hidden border-b border-border px-2${
+        className={`@container flex min-h-11 items-start gap-1 border-b border-border px-2 py-1.5${
           // When the sidebar is collapsed AND this column is fullscreen, it
           // becomes the leftmost panel and the floating "Open sidebar" button
           // (absolute left-2 top-3) overlaps the first chip. Reserve space.
