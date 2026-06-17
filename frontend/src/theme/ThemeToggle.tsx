@@ -1,8 +1,8 @@
 import { Tooltip } from "../shell/Tooltip";
 import { useTheme } from "./useTheme";
 
-// Sun/moon theme switch. Shows the icon for the theme you'd switch TO so the
-// affordance reads at a glance. Lives in the sidebar header next to the wordmark.
+// Sun/moon theme switch. Shows the icon for the current theme (moon = dark,
+// sun = light). Lives in the sidebar header next to the wordmark.
 export function ThemeToggle() {
   const { theme, toggle } = useTheme();
   const isDark = theme === "dark";
@@ -15,13 +15,13 @@ export function ThemeToggle() {
         aria-label={label}
         className="shrink-0 rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-neon-pink"
       >
-        {isDark ? <SunIcon /> : <MoonIcon />}
+        {isDark ? <MoonIcon /> : <SunIcon />}
       </button>
     </Tooltip>
   );
 }
 
-// Sun glyph — shown in dark mode (click to go light).
+// Sun glyph — shown in light mode (the current theme).
 function SunIcon() {
   return (
     <svg
@@ -41,7 +41,7 @@ function SunIcon() {
   );
 }
 
-// Moon glyph — shown in light mode (click to go dark).
+// Moon glyph — shown in dark mode (the current theme).
 function MoonIcon() {
   return (
     <svg
