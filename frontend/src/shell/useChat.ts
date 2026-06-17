@@ -227,8 +227,15 @@ export function useChat({
       // shows a terser stand-in. Every prior message uses its stored text; only the
       // just-added user turn swaps in the real `text`, plus displayText so the
       // backend persists the stand-in (not the verbose prompt) for reload.
-      const wireMessages = next.map((m, i) =>
-        i === next.length - 1 && displayText
+      //
+      // Skip any prior messages persisted with empty content (e.g. an assistant
+      // row from a turn that errored before streaming). They add nothing for the
+      // model and would fail the backend's non-empty-content validation, breaking
+      // otherwise-valid saved conversations. The just-added user turn is always
+      // last and never empty, so the displayText swap below stays aligned.
+      const sendable = next.filter((m) => m.text.trim().length > 0);
+      const wireMessages = sendable.map((m, i) =>
+        i === sendable.length - 1 && displayText
           ? { role: m.role, content: text, displayText }
           : { role: m.role, content: m.text }
       );

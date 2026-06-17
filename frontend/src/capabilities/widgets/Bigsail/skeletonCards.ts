@@ -112,6 +112,28 @@ export function padSkeletons(
   return padded;
 }
 
+// A small fixed set of TRAILING shimmer skeletons, shown while a turn is still in
+// flight but every planned/padded skeleton has already been superseded by its real
+// card. Without this the canvas drops to ZERO skeletons the instant the real cards
+// cover the (often thin) plan — even though more panels are still streaming. The
+// loading contract is "skeletons persist until the LAST panel pops in"; this floor
+// keeps a couple shimmering ahead of the real cards until busy flips false, so the
+// FIRST arriving panel can never clear the shimmer — only the end of the turn can.
+//
+// CRITICAL: these ids are FIXED for the whole turn (a high :ordinal namespace that
+// can't collide with plan/pad skeletons), never derived from realCards count or
+// arrival order. GridStack's id-keyed reconcile then adds them once and removes
+// them once at turn end; a count that grew per-arrival would churn ids and flicker
+// the trailing slot on every panel. They are appended AFTER mergeWithSkeletons (not
+// fed through it) so a real card of their capability never instantly covers them —
+// their whole point is "something generic is still coming."
+const FLOOR_ORDINAL = 900;
+export const SKELETON_FLOOR_COUNT = 2;
+export const SKELETON_FLOOR: Card[] = CANVAS_CAPABILITY_ORDER.slice(
+  0,
+  SKELETON_FLOOR_COUNT
+).map((cap) => skeletonFor(cap, FLOOR_ORDINAL));
+
 // Merge real cards with plan skeletons so the canvas shows its final shape while
 // tools are still running. Rule: a real card SUPERSEDES a pending skeleton of the
 // same capability (one-for-one, in arrival order), and any skeleton with no real

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Card, CardCapability } from "./cards";
 import type { CompositionPlan } from "./plan";
-import { mergeWithSkeletons, planToSkeletons } from "./skeletonCards";
+import {
+  mergeWithSkeletons,
+  planToSkeletons,
+  SKELETON_FLOOR,
+  SKELETON_FLOOR_COUNT,
+} from "./skeletonCards";
 
 const plan = (caps: CardCapability[]): CompositionPlan => ({
   intents: caps.map((capability) => ({ capability })),
@@ -78,5 +83,34 @@ describe("mergeWithSkeletons", () => {
     // One real chart covers one skeleton; the second chart skeleton remains.
     expect(merged).toHaveLength(2);
     expect(merged.filter((c) => c.placeholder)).toHaveLength(1);
+  });
+});
+
+describe("SKELETON_FLOOR", () => {
+  // The trailing shimmer floor BigsailWidget appends while a turn is still busy but
+  // the plan is already fully covered, so the first arriving panel can never empty
+  // the shimmer — only the end of the turn can. See the cards useMemo in
+  // BigsailWidget.tsx.
+  it("is a fixed set of placeholder cards of the floor count", () => {
+    expect(SKELETON_FLOOR).toHaveLength(SKELETON_FLOOR_COUNT);
+    expect(SKELETON_FLOOR.every((c) => c.placeholder)).toBe(true);
+  });
+
+  it("uses a high ordinal so its ids never collide with plan/pad skeletons", () => {
+    // A plan can never reach a :900 ordinal in practice, so the floor ids stay
+    // distinct from any real plan skeleton (no double-cover, no GridStack id clash).
+    const planIds = new Set(
+      planToSkeletons(plan(["table", "chart", "knowledge-graph"])).map((s) => s.id)
+    );
+    expect(SKELETON_FLOOR.every((c) => !planIds.has(c.id))).toBe(true);
+    expect(SKELETON_FLOOR.every((c) => c.id.endsWith(":900"))).toBe(true);
+  });
+
+  it("is stable across reads (module constant — same ids every render)", () => {
+    // Id stability is what keeps GridStack from churning the trailing slot: the
+    // reconcile is keyed on card.id, so identical ids each render are left in place.
+    expect(SKELETON_FLOOR.map((c) => c.id)).toEqual(
+      SKELETON_FLOOR.map((c) => c.id)
+    );
   });
 });

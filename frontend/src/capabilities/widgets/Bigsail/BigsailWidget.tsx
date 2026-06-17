@@ -19,6 +19,8 @@ import {
   mergeWithSkeletons,
   padSkeletons,
   planToSkeletons,
+  SKELETON_FLOOR,
+  SKELETON_FLOOR_COUNT,
 } from "./skeletonCards";
 import { TilesCanvas } from "./TilesCanvas";
 import {
@@ -220,9 +222,21 @@ export function BigsailWidget(_props: { widget: Widget }) {
     // no merge) until the sequence releases — then the real cards take over below.
     if (restoreLoading) return FALLBACK_SKELETONS;
     if (!busy) return realCards;
-    // Phase 2: once the first panel lands, show the full planned set (real cards
-    // supersede their skeletons in place; the rest keep shimmering).
-    if (firstPanelArrived) return mergeWithSkeletons(realCards, skeletons);
+    // Phase 2: once the first panel lands, show the full planned set — real cards
+    // supersede their skeletons in place; the rest keep shimmering. But the merge
+    // covers skeletons one-for-one per capability, so a thin/accurate plan can be
+    // fully covered while the turn is STILL streaming more panels — which would
+    // empty the shimmer the instant the first panel arrived. Keep a small fixed-id
+    // floor of trailing skeletons whenever the merge runs short, so the shimmer
+    // only clears when the LAST panel lands (busy → false, handled above), never on
+    // the first. The floor is appended after the merge (not fed through it) so a
+    // real card never instantly covers it.
+    if (firstPanelArrived) {
+      const merged = mergeWithSkeletons(realCards, skeletons);
+      const pending = merged.length - realCards.length; // skeletons still shimmering
+      if (pending >= SKELETON_FLOOR_COUNT) return merged;
+      return [...merged, ...SKELETON_FLOOR.slice(0, SKELETON_FLOOR_COUNT - pending)];
+    }
     // Phase 1: reveal only the dripped-in slice of the skeletons.
     return skeletons.slice(0, dripCount);
   }, [

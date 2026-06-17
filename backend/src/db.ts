@@ -262,6 +262,15 @@ export async function saveMessage(
   role: "user" | "assistant",
   content: string
 ): Promise<string> {
+  // Never persist an empty message. An empty-content row loads back as a blank
+  // bubble and, once re-sent in a later turn's payload, fails the /api/chat
+  // non-empty-content validator — silently breaking the whole conversation.
+  // Callers are responsible for supplying real content (the assistant path has
+  // a fallback line); reaching here empty is a bug, so fail loudly.
+  if (!content.trim()) {
+    throw new Error(`saveMessage: refusing to persist empty ${role} message`);
+  }
+
   // Return the inserted row id so the client can swap its placeholder id for
   // the real DB id (the `persisted` SSE event), making a same-session delete
   // target the right row without a reload.
