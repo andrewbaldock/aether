@@ -203,6 +203,7 @@ function SessionItem({
       {renaming ? (
         <input
           ref={inputRef}
+          aria-label="Rename conversation"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commitRename}

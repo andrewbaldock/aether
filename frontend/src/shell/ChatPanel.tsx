@@ -757,22 +757,32 @@ export function ChatPanel() {
         className={
           started
             ? // On mobile the form sits at the bottom edge; clear the iOS home
-              // indicator with a safe-area bottom inset (no-op on desktop/no inset).
-              "p-4 max-md:px-5 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-600 ease-in-out"
+              // indicator with a safe-area bottom inset (no-op on desktop/no
+              // inset). The left/right insets clear the notch/Dynamic Island,
+              // which sits on a SIDE edge in landscape.
+              "p-4 max-md:pl-[max(1.25rem,env(safe-area-inset-left))] max-md:pr-[max(1.25rem,env(safe-area-inset-right))] max-md:pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-600 ease-in-out"
             : // Empty state: the form becomes the flex-1 column for the whole hero.
               // Hero (near the top), starter pills, and the input are three stacked
               // blocks that share the vertical space — nothing floats over anything,
               // and the input is not pinned to the bottom. They sit as one group
               // around the upper-middle with breathing room between each.
-              "flex flex-1 flex-col items-center px-6 pt-20 pb-6 max-md:px-5 max-md:pt-10 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] transition-all duration-600 ease-in-out"
+              // overflow-y-auto + min-h-0: on a short viewport (landscape phone) the
+              // stacked hero+pills+input is taller than the column, so it must scroll
+              // rather than push the composer off the bottom of the screen.
+              "flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-6 pt-20 pb-6 max-md:pl-[max(1.25rem,env(safe-area-inset-left))] max-md:pr-[max(1.25rem,env(safe-area-inset-right))] max-md:pt-10 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] short:pt-4 short:pb-4 transition-all duration-600 ease-in-out"
         }
       >
         {!started && (
           <>
             {/* Hero — kept near the top, where it was before starter pills existed. */}
-            <div className="flex w-full max-w-md flex-col items-center gap-4 text-center max-md:gap-3">
-              <Wordmark height={72} />
-              <p className="text-sm text-content-muted max-md:px-2">
+            <div className="flex w-full max-w-md flex-col items-center gap-4 text-center max-md:gap-3 short:gap-2">
+              {/* On a short (landscape phone) viewport, shrink the hero wordmark
+                  so the whole hero+composer cluster fits. A CSS height (not a
+                  transform) so the layout box shrinks too — no dead gap. */}
+              <Wordmark height={72} className="short:h-9 short:w-auto" />
+              {/* Hide the blurb on a short (landscape phone) viewport — the
+                  vertical room is needed to keep the composer above the fold. */}
+              <p className="text-sm text-content-muted max-md:px-2 short:hidden">
                 Ask me anything. I'll answer in whatever form fits best — text, a
                 chart, a table, a graph — rendered live beside us.
               </p>
@@ -781,11 +791,13 @@ export function ChatPanel() {
                 weighted so the cluster sits in the UPPER-middle: a small fixed gap
                 under the hero, pills, a small fixed gap, then the input — and a big
                 flex-1 spacer below pushes all of it up off the bottom. */}
-            <div className="h-12 shrink-0 max-md:h-8" />
-            <div className="w-full max-w-xl">
+            <div className="h-12 shrink-0 max-md:h-8 short:h-3" />
+            {/* Starter pills are the tallest block; drop them on a short
+                (landscape phone) viewport so the composer stays above the fold. */}
+            <div className="w-full max-w-xl short:hidden">
               <StarterPrompts onPick={sendMessage} disabled={isLoading} />
             </div>
-            <div className="h-12 shrink-0 max-md:h-8" />
+            <div className="h-12 shrink-0 max-md:h-8 short:hidden" />
           </>
         )}
         <div className="mx-auto w-full max-w-2xl">
@@ -857,7 +869,7 @@ export function ChatPanel() {
               // text-base (16px) on mobile: iOS Safari auto-zooms the page when a
               // focused input has font-size < 16px, and with autoFocus that fires
               // on load — leaving the whole UI zoomed in. 16px disables that zoom.
-              className={`w-full resize-none bg-transparent px-4 pt-3 pb-10 text-sm max-md:text-base text-content placeholder:text-content-subtle focus:outline-none transition-opacity${isLoading ? " opacity-50" : ""}${started ? "" : " min-h-24"}`}
+              className={`w-full resize-none bg-transparent px-4 pt-3 pb-10 text-sm max-md:text-base text-content placeholder:text-content-subtle focus:outline-none transition-opacity short:min-h-0${isLoading ? " opacity-50" : ""}${started ? "" : " min-h-24"}`}
             />
             {/* Attach (+) button — bottom-left. Opens the hidden file picker;
                 images can also be pasted or dropped anywhere in the box. */}

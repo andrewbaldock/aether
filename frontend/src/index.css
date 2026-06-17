@@ -6,6 +6,12 @@
    utility ordering. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* `short:` targets viewports too short to fit the stacked empty-state hero —
+   chiefly a phone in landscape (≤ ~430px tall). Used to compress the hero's top
+   padding and spacers so the composer stays inside the fold there, without
+   touching the roomy portrait/desktop layout. */
+@custom-variant short (@media (max-height: 430px));
+
 /* Semantic design tokens, registered as Tailwind utilities (bg-surface,
    text-content, border-border, …). Each --color-* points at an intermediate var
    so the utility class is stable and only the underlying value flips between

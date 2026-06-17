@@ -20,11 +20,16 @@ export function Wordmark({
   title = "Aether",
   compact = false,
   decorative = false,
+  className,
 }: {
   height?: number;
   title?: string;
   compact?: boolean;
   decorative?: boolean;
+  // Extra classes on the <svg>. A CSS height here (e.g. `short:h-9`) overrides
+  // the height attribute AND shrinks the layout box — unlike a transform, which
+  // would leave a full-size gap. width:auto keeps the aspect ratio.
+  className?: string;
 }) {
   const uid = useId().replace(/:/g, "");
   const grad = `grad-${uid}`;
@@ -57,6 +62,7 @@ export function Wordmark({
       width={width}
       height={height}
       viewBox={viewBox}
+      className={className}
       role={decorative ? "presentation" : "img"}
       aria-label={decorative ? undefined : title}
       aria-hidden={decorative || undefined}

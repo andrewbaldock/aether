@@ -45,7 +45,7 @@ test("rename a session from the sidebar drawer", async ({ page, mockApi }) => {
   // Open the kebab → Rename, type a new title, commit with Enter.
   await page.getByRole("button", { name: "Session options" }).first().click();
   await page.getByRole("menuitem", { name: "Rename" }).click();
-  const input = page.locator("input").first();
+  const input = page.getByRole("textbox", { name: "Rename conversation" });
   await input.fill("Renamed conversation");
   await input.press("Enter");
 

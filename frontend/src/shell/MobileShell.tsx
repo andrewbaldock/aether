@@ -63,7 +63,7 @@ export function MobileShell() {
       {/* Top bar: hamburger + wordmark. Kept slim so the chat dominates.
           dvh root (above) tracks the iOS URL bar/keyboard; the safe-area top
           padding clears the notch. */}
-      <div className="relative flex shrink-0 items-center gap-2 border-b border-border bg-surface-raised px-2 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+      <div className="relative flex shrink-0 items-center gap-2 border-b border-border bg-surface-raised pb-2 pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))]">
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
@@ -123,7 +123,7 @@ export function MobileShell() {
           hides it (the column state survives) and "Canvas" brings it back. */}
       {showOverlay && (
         <div className="absolute inset-0 z-40 flex flex-col bg-surface">
-          <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface-raised px-2 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+          <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface-raised pb-2 pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))]">
             <button
               type="button"
               onClick={() => setShowOverlay(false)}
