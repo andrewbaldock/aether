@@ -3,6 +3,11 @@ import { beforeAll, describe, expect, it, mock } from "bun:test";
 // re-export it unchanged — Bun's mock.module is process-global and would
 // otherwise leak a fake mergeWidgetSnapshot into widgetMerge.test.ts.
 import { mergeWidgetSnapshot as realMergeWidgetSnapshot } from "./db";
+// The REAL ./llm module. We only need to stub createClient/generateTitle for these
+// route tests, but mock.module is process-global, so we spread the real module to
+// preserve its OTHER exports (e.g. the test-only SDK factory setters llm.test.ts
+// imports) — otherwise a full-suite run drops them and llm.test.ts fails to resolve.
+import * as realLlm from "./llm";
 
 // Route-level authorization tests for the session-mutation endpoints (finding #1:
 // every write must be scoped to the caller's user_id; reads stay open so shared
@@ -58,7 +63,9 @@ mock.module("./db", () => ({
   updateSessionWidgetData: mock(
     async (_id: string, _w: unknown, owner: string) => ownerGuarded(owner)
   ),
-  deleteSession: mock(async (_id: string, owner: string) => ownerGuarded(owner)),
+  deleteSession: mock(async (_id: string, owner: string) =>
+    ownerGuarded(owner)
+  ),
   deleteMessages: mock(async (_id: string, _ids: string[], owner: string) =>
     ownerGuarded(owner)
   ),
@@ -91,6 +98,7 @@ mock.module("./health", () => ({
   checkProviders: mock(async () => ({})),
 }));
 mock.module("./llm", () => ({
+  ...realLlm,
   createClient: mock(() => ({ stream: mock(async () => {}) })),
   generateTitle: mock(async () => null),
 }));
@@ -107,60 +115,64 @@ function req(
   path: string,
   opts: { caller?: string; body?: unknown } = {}
 ): Promise<Response> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
   if (opts.caller) headers["X-User-Id"] = opts.caller;
   return Promise.resolve(
     server.fetch(
       new Request(`http://localhost${path}`, {
         method,
         headers,
-        ...(opts.body !== undefined
-          ? { body: JSON.stringify(opts.body) }
-          : {}),
+        ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
       })
     )
   );
 }
 
 // Every mutating route, exercised the same three ways.
-const mutations: { name: string; method: string; path: string; body?: unknown }[] =
-  [
-    {
-      name: "PATCH session (rename)",
-      method: "PATCH",
-      path: `/api/sessions/${SESSION_ID}`,
-      body: { title: "new title" },
-    },
-    {
-      name: "DELETE session",
-      method: "DELETE",
-      path: `/api/sessions/${SESSION_ID}`,
-    },
-    {
-      name: "DELETE messages",
-      method: "DELETE",
-      path: `/api/sessions/${SESSION_ID}/messages`,
-      body: { ids: ["a"] },
-    },
-    {
-      name: "PUT graph",
-      method: "PUT",
-      path: `/api/sessions/${SESSION_ID}/graph`,
-      body: { nodes: [], links: [] },
-    },
-    {
-      name: "PUT widgets",
-      method: "PUT",
-      path: `/api/sessions/${SESSION_ID}/widgets`,
-      body: { table: null, chart: null, timeline: null },
-    },
-    {
-      name: "POST repair-prompts",
-      method: "POST",
-      path: `/api/sessions/${SESSION_ID}/repair-prompts`,
-      body: {},
-    },
-  ];
+const mutations: {
+  name: string;
+  method: string;
+  path: string;
+  body?: unknown;
+}[] = [
+  {
+    name: "PATCH session (rename)",
+    method: "PATCH",
+    path: `/api/sessions/${SESSION_ID}`,
+    body: { title: "new title" },
+  },
+  {
+    name: "DELETE session",
+    method: "DELETE",
+    path: `/api/sessions/${SESSION_ID}`,
+  },
+  {
+    name: "DELETE messages",
+    method: "DELETE",
+    path: `/api/sessions/${SESSION_ID}/messages`,
+    body: { ids: ["a"] },
+  },
+  {
+    name: "PUT graph",
+    method: "PUT",
+    path: `/api/sessions/${SESSION_ID}/graph`,
+    body: { nodes: [], links: [] },
+  },
+  {
+    name: "PUT widgets",
+    method: "PUT",
+    path: `/api/sessions/${SESSION_ID}/widgets`,
+    body: { table: null, chart: null, timeline: null },
+  },
+  {
+    name: "POST repair-prompts",
+    method: "POST",
+    path: `/api/sessions/${SESSION_ID}/repair-prompts`,
+    body: {},
+  },
+];
 
 describe("session writes require ownership", () => {
   for (const m of mutations) {
@@ -171,7 +183,10 @@ describe("session writes require ownership", () => {
     });
 
     it(`${m.name}: foreign caller → 403`, async () => {
-      const res = await req(m.method, m.path, { caller: FOREIGN, body: m.body });
+      const res = await req(m.method, m.path, {
+        caller: FOREIGN,
+        body: m.body,
+      });
       expect(res.status).toBe(403);
     });
 

@@ -27,6 +27,36 @@ import {
 // ping-ponging on a genuinely empty answer. Env-overridable like the other caps.
 const MAX_CORRECTIONS = Number(process.env.LLM_MAX_CORRECTIONS) || 1;
 
+// ── Test-only SDK injection seam ────────────────────────────────────────────
+// The two clients construct their SDK lazily (see each getClient()). In tests we
+// inject fakes here instead of mocking the SDK modules, because Bun's `mock.module`
+// is process-GLOBAL and order-dependent (ownership.test.ts documents the same
+// hazard) — module mocks collide across files in a full-suite run. A plain function
+// hook is immune to import ordering: it's read at getClient() call time. Undefined
+// in production, so the real SDKs are used. Set via the exported setters below.
+let testAnthropicFactory: ((apiKey: string) => Anthropic) | undefined;
+let testOpenAIFactory:
+  | ((opts: { apiKey: string; baseURL: string }) => OpenAI)
+  | undefined;
+
+/** Test-only: inject a fake Anthropic client factory (or pass undefined to reset). */
+export function __setAnthropicFactoryForTests(
+  f: ((apiKey: string) => Anthropic) | undefined
+): void {
+  testAnthropicFactory = f;
+}
+/** Test-only: inject a fake OpenAI-compat client factory (or pass undefined to reset). */
+export function __setOpenAIFactoryForTests(
+  f: ((opts: { apiKey: string; baseURL: string }) => OpenAI) | undefined
+): void {
+  testOpenAIFactory = f;
+}
+// Test-only alias to the real createClient. llm.test.ts calls THIS rather than
+// `createClient` because ownership.test.ts mock.module-overrides the `createClient`
+// export (process-global) with a no-op route stub; this differently-named export
+// survives ownership's `...realLlm` spread, so the loop tests reach the real factory
+// regardless of suite order. (Defined at the bottom of the file, after createClient.)
+
 // The LLM connector — a Platform seam. The route calls `createClient().complete()`
 // and never names a provider. The factory picks the client from the chosen model's
 // provider (see ./models): Claude → the Anthropic SDK; Google / DeepSeek / Mistral
@@ -333,7 +363,9 @@ function createClaudeClient(
           "ANTHROPIC_API_KEY is not set (add it to backend/.env)"
         );
       }
-      anthropic = new Anthropic({ apiKey });
+      anthropic = testAnthropicFactory
+        ? testAnthropicFactory(apiKey)
+        : new Anthropic({ apiKey });
     }
     return anthropic;
   }
@@ -775,7 +807,9 @@ function createOpenAICompatClient(
           `${cfg.apiKeyEnv} is not set (add it to backend/.env to use ${cfg.label} models)`
         );
       }
-      openai = new OpenAI({ apiKey, baseURL: cfg.baseURL });
+      openai = testOpenAIFactory
+        ? testOpenAIFactory({ apiKey, baseURL: cfg.baseURL })
+        : new OpenAI({ apiKey, baseURL: cfg.baseURL });
     }
     return openai;
   }
@@ -1109,6 +1143,11 @@ export function createClient(opts: {
       );
   }
 }
+
+// Test-only alias (see note by the factory setters above). Same function as
+// `createClient`; a distinct export name so it survives a sibling test's
+// process-global `mock.module("./llm")` override of `createClient`.
+export const __createClientForTests = createClient;
 
 // A dirt-cheap micro-agent that names a conversation in a few words from its first
 // message. One-shot Haiku — no tools, no streaming, no agent loop — so it's the

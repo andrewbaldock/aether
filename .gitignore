@@ -19,3 +19,4 @@ frontend/public/screenshots-out/
 
 # macOS
 .DS_Store
+.vercel
