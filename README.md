@@ -4,10 +4,32 @@
 
 > Ask questions. Get answers as 3D scenes, graphs, and charts.
 
+[![Frontend: React 19](https://img.shields.io/badge/frontend-React%2019-149eca?logo=react&logoColor=white)](https://react.dev)
+[![Backend: Bun + Hono](https://img.shields.io/badge/backend-Bun%20%2B%20Hono-black?logo=bun&logoColor=white)](https://bun.sh)
+[![TypeScript: strict](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![AI: Anthropic SDK](https://img.shields.io/badge/AI-Anthropic%20SDK-d97757)](https://docs.claude.com)
+[![Deploy: Vercel + Fly.io](https://img.shields.io/badge/deploy-Vercel%20%2B%20Fly.io-7b3fe4)](https://aether.andrewbaldock.com)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+
 A conversational explorer. The chat is the interface; answers are rendered in whatever form fits
 best — table, chart, relationship graph, or 3D scene.
 
 **The principle:** every view is a question answered in its best form.
+
+🔗 **Live:** [aether.andrewbaldock.com](https://aether.andrewbaldock.com)
+
+---
+
+## Screenshots
+
+Mobile-first, responsive across phone, tablet, and desktop. The chat drives a switchable result
+panel — table, chart, relationship graph, 3D scene — selectable from the toolbar.
+
+| Desktop | Tablet | Mobile |
+|---|---|---|
+| ![Aether on desktop — chat with a result table](docs/screenshots/aether-desktop.png) | ![Aether on tablet — responsive layout](docs/screenshots/aether-tablet.png) | ![Aether on mobile — responsive result view](docs/screenshots/aether-mobile.png) |
+
+<!-- TODO: GIF — ask a question → watch the answer render as a graph / 3D scene (the core "best form" moment). -->
 
 ---
 
