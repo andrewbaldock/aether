@@ -18,14 +18,29 @@ seams that frayed as the code grew.
 | 002 | Typed SSE emitter helper (backend chat route) | P2 | S | 001 | TODO |
 | 003 | Tool registry — fold dispatch + metadata into one map | P2 | S | — (uses 001 names if landed) | TODO |
 | 004 | `stream()` callbacks as a struct, not 9 positional args | P2 | S | — | TODO |
-| 005 | Agent-loop characterization tests (`llm.test.ts`) | P1 | M | — | TODO |
-| 006 | Unify the duplicated agent loop behind a wire-adapter | P1 | M | **005** | TODO |
+| 005 | Agent-loop characterization tests (`llm.test.ts`) | P1 | M | — | DONE (2026-06-18; committed) |
+| 006 | Unify the duplicated agent loop behind a wire-adapter | P1 | M | **005** | DONE (2026-06-18; 005 tests green unchanged) |
 | 007 | One-command repo verify (root `package.json`) | P2 | S | — | TODO |
 | 008 | Split `ChatPanel.tsx` god-component | P3 | L | — | TODO |
 | 009 | Decouple the shell from widget internals | P2 | M | — | TODO |
 | 010 | Widget state-provider factory | P2 | M | — | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
+
+## What landed (2026-06-18)
+
+- **005 + 006 are DONE.** 005 added `backend/src/llm.test.ts` (characterization tests for both the
+  Claude and OpenAI-compat clients) plus a test-only SDK injection seam in `llm.ts`
+  (`__set{Anthropic,OpenAI}FactoryForTests` + `__createClientForTests`) — chosen over `mock.module`
+  because Bun's module mocking is process-global and collided with `ownership.test.ts` in a
+  full-suite run. 006 then extracted `runAgentLoop()` + two `WireAdapter`s exactly per 006's
+  "Design decisions" section; the 005 tests passed **unchanged**, proving behavior was preserved.
+  Full backend suite: 105 pass / 0 fail. `docs/ARCHITECTURE.md` updated; the architecture diagram was
+  regenerated (the loop unification is below the diagram's route/tool/provider altitude, so only
+  minor edits resulted). Frontend untouched.
+- **004 note for whoever does it:** `llm.test.ts`'s `runStream()` helper still calls `stream()` with
+  the 9 positional callbacks. When 004 (callbacks-as-struct) lands, update that one helper to the
+  struct form (there's a `NOTE` comment in the file marking it).
 
 ## Dependency notes
 

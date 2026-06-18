@@ -177,8 +177,8 @@
         </mxCell>
 
         <!-- SSE stream label note -->
-        <mxCell id="ov-sse-note" value="POST /api/chat → SSE stream&#xa;(text · tool_start · tool_partial · tool_result · plan · clarify · persisted · [DONE] …)" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=10;" vertex="1" parent="1">
-          <mxGeometry x="600" y="600" width="200" height="80" as="geometry"/>
+        <mxCell id="ov-sse-note" value="POST /api/chat → SSE stream&#xa;(text · tool_start · tool_partial · tool_result · tool_use · loop_start · plan · clarify · persisted · status · warning · error · [DONE])" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="600" y="600" width="200" height="90" as="geometry"/>
         </mxCell>
 
         <!-- Aspirational 3D note -->
@@ -371,8 +371,8 @@
         </mxCell>
 
         <!-- SSE event legend -->
-        <mxCell id="ct-legend" value="SSE Event Legend&#xa;— text: assistant prose chunks&#xa;— tool_start: tool invocation begins&#xa;— tool_partial: progressive render spec chunk&#xa;— tool_result: final tool_result JSON&#xa;— tool_use: LLM requested a tool&#xa;— loop_start: new agent iteration&#xa;— plan / clarify: planning events&#xa;— persisted: DB write confirmed&#xa;— warning / error / status: meta&#xa;— [DONE]: stream complete" style="text;html=1;strokeColor=#9673a6;fillColor=#f3e8ff;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=10;" vertex="1" parent="1">
-          <mxGeometry x="1160" y="360" width="240" height="220" as="geometry"/>
+        <mxCell id="ct-legend" value="SSE Event Legend&#xa;— text: assistant prose chunks&#xa;— tool_start: tool invocation begins&#xa;— tool_partial: progressive render spec chunk&#xa;— tool_result: final tool_result JSON&#xa;— tool_use: LLM requested a tool&#xa;— loop_start: new agent iteration&#xa;— plan / clarify: planning events&#xa;— status: progress meta&#xa;— warning / error: error meta&#xa;— persisted: DB write confirmed&#xa;— [DONE]: stream complete" style="text;html=1;strokeColor=#9673a6;fillColor=#f3e8ff;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1160" y="360" width="240" height="240" as="geometry"/>
         </mxCell>
 
       </root>
@@ -431,7 +431,7 @@
 
         <!-- ── CAPABILITY REGISTRY ── -->
         <mxCell id="fe-zone-capability" value="Capability Registry &amp; Tile Catalog" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=12;rounded=1;" vertex="1" parent="1">
-          <mxGeometry x="420" y="60" width="280" height="280" as="geometry"/>
+          <mxGeometry x="420" y="60" width="280" height="300" as="geometry"/>
         </mxCell>
 
         <mxCell id="fe-cap-tiles" value="'Tiles' chip → Bigsail Canvas&#xa;(home base)" style="rounded=1;fillColor=#ffffff;strokeColor=#6c8ebf;whiteSpace=wrap;fontStyle=1;" vertex="1" parent="fe-zone-capability">
@@ -455,7 +455,7 @@
 
         <!-- ── WIDGETS ZONE ── -->
         <mxCell id="fe-zone-widgets" value="Widgets" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=12;rounded=1;" vertex="1" parent="1">
-          <mxGeometry x="740" y="60" width="520" height="580" as="geometry"/>
+          <mxGeometry x="740" y="60" width="520" height="620" as="geometry"/>
         </mxCell>
 
         <mxCell id="fe-w-bigsail" value="Bigsail  (gridstack canvas — home base, 'Tiles' chip)" style="rounded=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="fe-zone-widgets">
@@ -490,6 +490,11 @@
         </mxCell>
         <mxCell id="fe-w-screenshots" value="Screenshots Widget  [dev only]" style="rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;" vertex="1" parent="fe-zone-widgets">
           <mxGeometry x="270" y="495" width="220" height="40" as="geometry"/>
+        </mxCell>
+
+        <!-- Aspirational 3D widget note inside widgets zone -->
+        <mxCell id="fe-w-3d-aspirational" value="🚀 3D Rendering Widget&#xa;(ASPIRATIONAL — not yet built)" style="rounded=1;fillColor=#fff2cc;strokeColor=#d79b00;dashed=1;whiteSpace=wrap;fontSize=10;" vertex="1" parent="fe-zone-widgets">
+          <mxGeometry x="30" y="550" width="460" height="40" as="geometry"/>
         </mxCell>
 
         <!-- ── HOOKS ZONE ── -->
@@ -539,7 +544,7 @@
 
         <!-- ── DATA LAYER ZONE ── -->
         <mxCell id="fe-zone-data" value="Data Layer" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=12;rounded=1;" vertex="1" parent="1">
-          <mxGeometry x="420" y="380" width="280" height="440" as="geometry"/>
+          <mxGeometry x="420" y="400" width="280" height="460" as="geometry"/>
         </mxCell>
 
         <mxCell id="fe-tq" value="TanStack Query v5&#xa;(cache + mutations + devtools)" style="rounded=1;fillColor=#ffffff;strokeColor=#6c8ebf;whiteSpace=wrap;fontStyle=1;" vertex="1" parent="fe-zone-data">
@@ -559,7 +564,7 @@
         </mxCell>
 
         <mxCell id="fe-other-libs" value="react-markdown · remark-gfm&#xa;react-resizable-panels · sonner&#xa;lucide-react · tailwindcss 4" style="rounded=1;fillColor=#ffffff;strokeColor=#6c8ebf;whiteSpace=wrap;fontSize=10;" vertex="1" parent="fe-zone-data">
-          <mxGeometry x="30" y="370" width="220" height="50" as="geometry"/>
+          <mxGeometry x="30" y="370" width="220" height="55" as="geometry"/>
         </mxCell>
 
         <!-- ── INTER-ZONE EDGES ── -->
@@ -599,7 +604,7 @@
 
         <!-- ── ROUTES ZONE ── -->
         <mxCell id="be-zone-routes" value="Hono Routes" style="swimlane;startSize=30;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=12;rounded=1;" vertex="1" parent="1">
-          <mxGeometry x="40" y="60" width="360" height="680" as="geometry"/>
+          <mxGeometry x="40" y="60" width="360" height="720" as="geometry"/>
         </mxCell>
 
         <mxCell id="be-r-health" value="GET /api/health" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="be-zone-routes">
@@ -617,10 +622,10 @@
         <mxCell id="be-r-sessions-get" value="GET /api/sessions" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="be-zone-routes">
           <mxGeometry x="20" y="218" width="320" height="32" as="geometry"/>
         </mxCell>
-        <mxCell id="be-r-session-id" value="GET | PATCH | DELETE /api/sessions/:id" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="be-zone-routes">
+        <mxCell id="be-r-sessions-fork" value="POST /api/sessions/:id/fork" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="be-zone-routes">
           <mxGeometry x="20" y="260" width="320" height="32" as="geometry"/>
         </mxCell>
-        <mxCell id="be-r-session-fork" value="POST /api/sessions/:id/fork" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="be-zone-routes">
+        <mxCell id="be-r-session-id" value="GET | PATCH | DELETE /api/sessions/:id" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="be-zone-routes">
           <mxGeometry x="20" y="302" width="320" height="32" as="geometry"/>
         </mxCell>
         <mxCell id="be-r-messages" value="GET | DELETE /api/sessions/:id/messages" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="be-zone-routes">
@@ -640,6 +645,11 @@
         </mxCell>
         <mxCell id="be-r-screenshots" value="POST /api/screenshots/run  [dev only]" style="rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;fontSize=11;" vertex="1" parent="be-zone-routes">
           <mxGeometry x="20" y="575" width="320" height="32" as="geometry"/>
+        </mxCell>
+
+        <!-- Route note: fork is now separate row -->
+        <mxCell id="be-r-routes-note" value="All routes require auth via Supabase JWT" style="text;html=1;align=center;fontSize=10;fontStyle=2;" vertex="1" parent="be-zone-routes">
+          <mxGeometry x="20" y="660" width="320" height="25" as="geometry"/>
         </mxCell>
 
         <!-- ── AGENT LOOP ZONE ── -->
@@ -677,29 +687,33 @@
 
         <!-- ── LLM CONNECTOR ZONE ── -->
         <mxCell id="be-zone-llm" value="LLM Connector Seam" style="swimlane;startSize=30;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=12;rounded=1;" vertex="1" parent="1">
-          <mxGeometry x="900" y="60" width="380" height="380" as="geometry"/>
+          <mxGeometry x="900" y="60" width="380" height="400" as="geometry"/>
         </mxCell>
 
         <mxCell id="be-llm-claude-client" value="Anthropic SDK (@anthropic-ai/sdk)&#xa;Models: claude-sonnet-4-6 (default)&#xa;         claude-opus-4-8&#xa;         claude-haiku-4-5-20251001&#xa;&#xa;Includes: web_search (claude-side, Anthropic infra)" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;whiteSpace=wrap;align=left;fontSize=10;" vertex="1" parent="be-zone-llm">
-          <mxGeometry x="20" y="50" width="340" height="100" as="geometry"/>
+          <mxGeometry x="20" y="50" width="340" height="110" as="geometry"/>
         </mxCell>
 
         <mxCell id="be-llm-compat-client" value="OpenAI-compat client (openai npm)  ← ONE shared client&#xa;Google: gemini-3.5-flash · gemini-3.1-flash-lite&#xa;DeepSeek: deepseek-v4-flash&#xa;Mistral: mistral-small-latest" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;whiteSpace=wrap;align=left;fontSize=10;" vertex="1" parent="be-zone-llm">
-          <mxGeometry x="20" y="175" width="340" height="90" as="geometry"/>
+          <mxGeometry x="20" y="185" width="340" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="be-llm-note-https" value="All 4 providers reached via HTTPS from backend only" style="text;html=1;align=center;fontSize=10;fontStyle=2;strokeColor=#d79b00;fillColor=#fff2cc;rounded=1;" vertex="1" parent="be-zone-llm">
+          <mxGeometry x="20" y="300" width="340" height="35" as="geometry"/>
         </mxCell>
 
         <mxCell id="be-llm-default" value="Default model: claude-sonnet-4-6" style="text;html=1;align=center;fontSize=10;fontStyle=2;" vertex="1" parent="be-zone-llm">
-          <mxGeometry x="20" y="295" width="340" height="30" as="geometry"/>
+          <mxGeometry x="20" y="350" width="340" height="30" as="geometry"/>
         </mxCell>
 
         <!-- ── TOOLS ZONE ── -->
         <mxCell id="be-zone-tools" value="Tools" style="swimlane;startSize=30;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=12;rounded=1;" vertex="1" parent="1">
-          <mxGeometry x="450" y="580" width="830" height="400" as="geometry"/>
+          <mxGeometry x="450" y="580" width="830" height="420" as="geometry"/>
         </mxCell>
 
         <!-- Data tools -->
-        <mxCell id="be-zone-data-tools" value="Data Tools" style="swimlane;startSize=25;fillColor=#e8f5e9;strokeColor=#82b366;fontSize=11;rounded=1;" vertex="1" parent="be-zone-tools">
-          <mxGeometry x="20" y="40" width="380" height="330" as="geometry"/>
+        <mxCell id="be-zone-data-tools" value="Data Tools  (backend calls external HTTPS)" style="swimlane;startSize=25;fillColor=#e8f5e9;strokeColor=#82b366;fontSize=11;rounded=1;" vertex="1" parent="be-zone-tools">
+          <mxGeometry x="20" y="40" width="380" height="350" as="geometry"/>
         </mxCell>
 
         <mxCell id="be-t-datetime" value="get_current_datetime" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=10;" vertex="1" parent="be-zone-data-tools">
@@ -726,7 +740,7 @@
 
         <!-- Render tools -->
         <mxCell id="be-zone-render-tools" value="Render Tools (streamable → tool_partial)" style="swimlane;startSize=25;fillColor=#e8f5e9;strokeColor=#82b366;fontSize=11;rounded=1;" vertex="1" parent="be-zone-tools">
-          <mxGeometry x="420" y="40" width="250" height="260" as="geometry"/>
+          <mxGeometry x="420" y="40" width="250" height="280" as="geometry"/>
         </mxCell>
 
         <mxCell id="be-t-kg" value="build_knowledge_graph" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=10;" vertex="1" parent="be-zone-render-tools">
@@ -746,17 +760,17 @@
         </mxCell>
 
         <!-- Claude-side tool -->
-        <mxCell id="be-zone-claude-tools" value="Claude-Side Tool&#xa;(runs on Anthropic infra&#xa;→ rides LLM lane)" style="swimlane;startSize=50;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;rounded=1;whiteSpace=wrap;" vertex="1" parent="be-zone-tools">
-          <mxGeometry x="690" y="40" width="120" height="130" as="geometry"/>
+        <mxCell id="be-zone-claude-tools" value="Claude-Side Tool&#xa;(runs on Anthropic infra&#xa;→ rides LLM lane,&#xa;NOT the data lane)" style="swimlane;startSize=55;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;rounded=1;whiteSpace=wrap;" vertex="1" parent="be-zone-tools">
+          <mxGeometry x="690" y="40" width="120" height="150" as="geometry"/>
         </mxCell>
 
         <mxCell id="be-t-websearch" value="web_search" style="rounded=1;fillColor=#ffffff;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="be-zone-claude-tools">
-          <mxGeometry x="10" y="55" width="100" height="32" as="geometry"/>
+          <mxGeometry x="10" y="60" width="100" height="32" as="geometry"/>
         </mxCell>
 
         <!-- ── SUPABASE ZONE (backend) ── -->
         <mxCell id="be-zone-supa" value="Supabase Adapter" style="swimlane;startSize=30;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=12;rounded=1;" vertex="1" parent="1">
-          <mxGeometry x="900" y="480" width="380" height="200" as="geometry"/>
+          <mxGeometry x="900" y="490" width="380" height="200" as="geometry"/>
         </mxCell>
 
         <mxCell id="be-supa-sessions" value="sessions table" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=10;" vertex="1" parent="be-zone-supa">
@@ -771,8 +785,8 @@
         <mxCell id="be-supa-graph" value="graph table" style="rounded=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=10;" vertex="1" parent="be-zone-supa">
           <mxGeometry x="200" y="100" width="160" height="32" as="geometry"/>
         </mxCell>
-        <mxCell id="be-supa-note" value="@supabase/supabase-js" style="text;html=1;align=center;fontSize=10;fontStyle=2;" vertex="1" parent="be-zone-supa">
-          <mxGeometry x="90" y="155" width="200" height="25" as="geometry"/>
+        <mxCell id="be-supa-note" value="@supabase/supabase-js  (HTTPS from backend only)" style="text;html=1;align=center;fontSize=10;fontStyle=2;" vertex="1" parent="be-zone-supa">
+          <mxGeometry x="40" y="155" width="300" height="25" as="geometry"/>
         </mxCell>
 
         <!-- ── INTER-ZONE EDGES ── -->
@@ -798,7 +812,7 @@
 
         <!-- dev note -->
         <mxCell id="be-dev-note" value="[dev only] items shown with dashed yellow border&#xa;screenshots route — Playwright integration" style="text;html=1;strokeColor=#d6b656;fillColor=#fff2cc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=10;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="40" y="780" width="360" height="50" as="geometry"/>
+          <mxGeometry x="40" y="820" width="360" height="50" as="geometry"/>
         </mxCell>
 
       </root>

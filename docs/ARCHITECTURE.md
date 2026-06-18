@@ -226,6 +226,19 @@ change. The system prompt (`backend/src/prompt.ts`) is sent as a cached content 
 server (and `/api/health`) start fine without a key, and an unset provider only fails a turn that
 actually uses it.
 
+**One loop, two adapters.** Both clients run the *same* agent loop — `runAgentLoop()` in
+`backend/src/llm.ts`. It owns every wire-format-independent decision (the iteration cap + the
+final "no tools, force a text answer" degrade, token accounting, the inter-iteration text
+separator, the ~120 ms `tool_partial` throttle, the `max_tokens` salvage + degeneracy guard, tool
+execution + self-correction). Each provider supplies a thin **`WireAdapter`** that normalizes its
+SDK's stream into a small `LoopEvent` union (`text` · `tool_start`/`tool_delta`/`tool_meta` ·
+`server_tool_start`/`server_tool_result` · `usage` · `stop`) and builds that provider's history
+shape. The loop never names a provider: Anthropic's event taxonomy, the cache_read/creation split,
+and server-side `web_search` live in the Claude adapter; OpenAI's chunk taxonomy and Gemini's
+quirks (`thought_signature`, the `finish_reason="stop"`-with-a-tool-call bug, `MALFORMED_FUNCTION_CALL`)
+live in the OpenAI-compat adapter. Adding a 5th provider is a new adapter + a `models.ts` entry —
+the loop is reused, not re-implemented.
+
 Tools are defined in `backend/src/tools.ts` (a `TOOLS` array of Anthropic-schema definitions plus
 an `executeTool` dispatcher) and passed to `createClaudeClient` at construction time — the
 `LlmClient` interface stays tool-agnostic. The `stream()` method accepts optional `onToolStart`,

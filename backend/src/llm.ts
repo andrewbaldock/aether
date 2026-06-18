@@ -342,6 +342,259 @@ function toApiMessage(m: ChatMessage): ApiMessage {
   return { role: m.role, content: blocks };
 }
 
+// ── The shared agent loop ───────────────────────────────────────────────────
+// Both providers run the SAME loop; only the wire format differs. The loop consumes
+// a NORMALIZED event stream (LoopEvent) from a per-provider WireAdapter and never
+// sees an Anthropic or OpenAI SDK type — so the subtle, bug-prone pieces (streaming,
+// the 120ms partial throttle, the max_tokens salvage + degeneracy guard, the
+// iteration cap + final-no-tools degrade, self-correction) live in ONE place.
+
+// One normalized event from a provider's stream. A superset union: `server_tool_*`
+// is Claude-only (web_search), the OpenAI adapter simply never emits it. The loop
+// keys on the event KIND, never on the provider — so no `provider === …` branch.
+type LoopEvent =
+  // A text token to stream to the user.
+  | { kind: "text"; text: string }
+  // A client-side tool_use began (loop will run executeTool when it stops).
+  | { kind: "tool_start"; index: number; id: string; name: string }
+  // A fragment of a tool's input JSON (accumulated; throttled to the client if streamable).
+  | { kind: "tool_delta"; index: number; json: string }
+  // A provider-specific opaque token to carry on the assistant message for THIS tool
+  // (Gemini's thought_signature; undefined for everyone else).
+  | { kind: "tool_meta"; index: number; thoughtSignature?: string }
+  // A server-side tool (Claude web_search) began — forward to onToolStart, NO executeTool.
+  | { kind: "server_tool_start"; name: string }
+  // A server-side tool result — forward to onToolResult, NO executeTool.
+  | { kind: "server_tool_result"; name: string; content: string }
+  // Per-call usage (input/output token counts + the Anthropic cache split; zeros elsewhere).
+  | {
+      kind: "usage";
+      inputTokens: number;
+      outputTokens: number;
+      cacheRead: number;
+      cacheCreation: number;
+    }
+  // The model call ended; `reason` is normalized across providers.
+  | {
+      kind: "stop";
+      reason: "end" | "tool_use" | "max_tokens" | "malformed_tool";
+    };
+
+// A pending client-side tool call, accumulated across deltas within one iteration.
+interface PendingTool {
+  id: string;
+  name: string;
+  inputChunks: string[];
+  thoughtSignature?: string;
+  streamable: boolean;
+  lastPartialAt: number;
+}
+
+// What the loop needs from a provider. `M` is the provider's message type — opaque to
+// the loop; the adapter owns building/appending it.
+interface WireAdapter<M> {
+  // Stream one model call over the running history. `withTools` is false on the
+  // capped final iteration (force a text answer). Yields normalized LoopEvents.
+  stream(history: M[], opts: { withTools: boolean }): AsyncIterable<LoopEvent>;
+  // Append the assistant turn (its text + the tool_use calls it made) followed by the
+  // tool results, in this provider's message shape, to `history`. `modelResults` is the
+  // possibly-self-corrected result string per tool, in the same order as `tools`.
+  appendToolRound(
+    history: M[],
+    assistantText: string,
+    tools: PendingTool[],
+    modelResults: string[]
+  ): void;
+}
+
+// The provider-agnostic agent loop. Returns when the model stops calling tools, the
+// salvage path fires, or the iteration cap forces a text close. Mirrors exactly what
+// the two clients used to do inline.
+async function runAgentLoop<M>(
+  adapter: WireAdapter<M>,
+  history: M[],
+  sessionId: string | undefined,
+  callbacks: {
+    onToken: (token: string) => Promise<void>;
+    onDone: () => Promise<void>;
+    onToolStart?: (name: string, input: unknown) => Promise<void>;
+    onToolResult?: (name: string, result: string) => Promise<void>;
+    onToolPartial?: (
+      name: string,
+      partialJson: string,
+      isComplete: boolean
+    ) => Promise<void>;
+    onLoopStart?: (iteration: number) => Promise<void>;
+    onStatus?: (message: string) => Promise<void>;
+  }
+): Promise<void> {
+  const {
+    onToken,
+    onDone,
+    onToolStart,
+    onToolResult,
+    onToolPartial,
+    onLoopStart,
+    onStatus,
+  } = callbacks;
+
+  let iteration = 0;
+  let correctionCount = 0;
+  let turnInput = 0;
+  let turnOutput = 0;
+  let turnCacheRead = 0;
+  let turnCacheCreation = 0;
+  // Whether any prior iteration streamed text this turn (for the inter-iteration
+  // paragraph-break separator — see the original inline comment).
+  let turnEmittedText = false;
+
+  while (true) {
+    iteration++;
+    const atCap = iteration >= MAX_ITERATIONS;
+    await emitIterationStatus(iteration, atCap, onLoopStart, onStatus);
+
+    const pendingTools = new Map<number, PendingTool>();
+    let assistantText = "";
+    // First text token of THIS iteration not yet streamed (used once, to insert the
+    // separator before iteration 2+ text that follows earlier iterations' text).
+    let iterationTextStarted = false;
+    let stopReason:
+      | "end"
+      | "tool_use"
+      | "max_tokens"
+      | "malformed_tool"
+      | null = null;
+
+    for await (const ev of adapter.stream(history, { withTools: !atCap })) {
+      if (ev.kind === "text") {
+        // Separate this iteration's text from a previous iteration's: prefix a
+        // paragraph break on the FIRST text token here if earlier text exists and
+        // this one doesn't already start with whitespace.
+        if (!iterationTextStarted && turnEmittedText && !/^\s/.test(ev.text)) {
+          await onToken("\n\n");
+          assistantText += "\n\n";
+        }
+        iterationTextStarted = true;
+        turnEmittedText = true;
+        await onToken(ev.text);
+        assistantText += ev.text;
+      } else if (ev.kind === "tool_start") {
+        pendingTools.set(ev.index, {
+          id: ev.id,
+          name: ev.name,
+          inputChunks: [],
+          streamable: STREAMABLE_RENDER_TOOLS.has(ev.name),
+          lastPartialAt: 0,
+        });
+      } else if (ev.kind === "tool_delta") {
+        const t = pendingTools.get(ev.index);
+        if (t) {
+          t.inputChunks.push(ev.json);
+          if (t.streamable && onToolPartial) {
+            const now = Date.now();
+            const snapshot = t.inputChunks.join("");
+            if (snapshot && now - t.lastPartialAt >= 120) {
+              t.lastPartialAt = now;
+              await onToolPartial(t.name, snapshot, false);
+            }
+          }
+        }
+      } else if (ev.kind === "tool_meta") {
+        const t = pendingTools.get(ev.index);
+        if (t && ev.thoughtSignature) t.thoughtSignature = ev.thoughtSignature;
+      } else if (ev.kind === "server_tool_start") {
+        await onToolStart?.(ev.name, {});
+      } else if (ev.kind === "server_tool_result") {
+        await onToolResult?.(ev.name, ev.content);
+      } else if (ev.kind === "usage") {
+        turnInput += ev.inputTokens;
+        turnOutput += ev.outputTokens;
+        turnCacheRead += ev.cacheRead;
+        turnCacheCreation += ev.cacheCreation;
+        console.log(
+          `[usage] iter=${iteration} input=${ev.inputTokens} output=${ev.outputTokens} cache_read=${ev.cacheRead} cache_creation=${ev.cacheCreation}`
+        );
+      } else if (ev.kind === "stop") {
+        stopReason = ev.reason;
+      }
+    }
+
+    // Final (complete) partial for each streamable tool — the widget gets the full,
+    // now-closed input. (The authoritative onToolResult still fires post-execute.)
+    for (const tool of pendingTools.values()) {
+      if (tool.streamable && onToolPartial) {
+        await onToolPartial(tool.name, tool.inputChunks.join(""), true);
+      }
+    }
+
+    // Gemini surfaces a failed tool call as this stop reason — make it visible.
+    if (stopReason === "malformed_tool") {
+      throw new Error(
+        "The model produced a malformed tool call (finish_reason=MALFORMED_FUNCTION_CALL)."
+      );
+    }
+
+    // Truncated by the output budget. Try to SALVAGE a streamable render tool's
+    // partial input; only throw when nothing salvageable remains.
+    if (stopReason === "max_tokens") {
+      console.warn(
+        `[max_tokens] iter=${iteration} truncated; attempting salvage of ${pendingTools.size} pending tool(s)`
+      );
+      let salvaged = false;
+      for (const [, tool] of pendingTools) {
+        if (!tool.streamable) continue;
+        const closed = closeTruncatedJson(tool.inputChunks.join(""));
+        if (parseBestEffort(closed) === undefined) continue;
+        if (isDegenerate(tool.name, closed)) continue;
+        await onToolPartial?.(tool.name, closed, true);
+        salvaged = true;
+      }
+      if (salvaged) {
+        await onStatus?.("That ran long — showing what came through.");
+        await onDone();
+        return;
+      }
+      throw new Error(
+        "The model hit its output limit before finishing. " +
+          "Raise the token budget or ask for a smaller result."
+      );
+    }
+
+    // No tool calls — the stream is complete. Log the per-turn totals.
+    if (stopReason !== "tool_use" || pendingTools.size === 0) {
+      console.log(
+        `[usage] turn total: iterations=${iteration} input=${turnInput} output=${turnOutput} cache_read=${turnCacheRead} cache_creation=${turnCacheCreation}`
+      );
+      await onDone();
+      return;
+    }
+
+    // Execute each tool in input order (Map preserves insertion order).
+    const tools = [...pendingTools.values()];
+    const executed: { id: string; name: string; result: string }[] = [];
+    for (const tool of tools) {
+      const input = JSON.parse(tool.inputChunks.join("") || "{}") as unknown;
+      await onToolStart?.(tool.name, input);
+      const result = await executeTool(tool.name, input, sessionId);
+      await onToolResult?.(tool.name, result);
+      const countStatus = toolResultStatus(tool.name, result);
+      if (countStatus) await onStatus?.(countStatus);
+      executed.push({ id: tool.id, name: tool.name, result });
+    }
+
+    // One self-correction pass per turn, healing EVERY degenerate result in the batch.
+    const { modelResults, consumedCorrection } = applySelfCorrection(
+      executed,
+      correctionCount,
+      iteration
+    );
+    if (consumedCorrection) correctionCount++;
+
+    adapter.appendToolRound(history, assistantText, tools, modelResults);
+    // Continue the loop — call the model again with the updated history.
+  }
+}
+
 function createClaudeClient(
   tools: ToolDefinition[],
   systemPrompt: string,
@@ -469,8 +722,6 @@ function createClaudeClient(
       onClarify,
       clarified
     ) {
-      // The agent loop: call the API, handle tool_use if the model requests it,
-      // feed results back, and repeat until the model produces a terminal response.
       // toApiMessage folds any attachments on the last user turn into content blocks.
       const history: ApiMessage[] = messages.map(toApiMessage);
 
@@ -487,269 +738,107 @@ function createClaudeClient(
       if (prePass.kind === "preamble")
         history.push({ role: "user", content: prePass.preamble });
 
-      // Counts trips through the loop. Iteration 1 is the initial call; every
-      // increment past that means tool results were fed back and we're calling
-      // the model again.
-      let iteration = 0;
-
-      // In-loop self-correction counter for this turn (see MAX_CORRECTIONS).
-      let correctionCount = 0;
-
-      // Per-turn token totals across every loop iteration. The point of logging
-      // these is to make prompt caching *visible*: on iteration 1 the prefix is
-      // written to cache (cacheCreation > 0); on iterations 2+ the growing prefix
-      // should be read from cache (cacheRead large, cacheCreation ~0). A healthy
-      // read/creation ratio is the proof the cache breakpoints are paying off.
-      let turnInput = 0;
-      let turnOutput = 0;
-      let turnCacheRead = 0;
-      let turnCacheCreation = 0;
-
-      // Whether any prior iteration streamed assistant text this turn. The frontend
-      // appends every text token raw (m.text + content), so when iteration 1 ends
-      // "…all sources at once." and iteration 2 opens "Now let me…", they collide as
-      // "…at once.Now let me…". When a later iteration emits its FIRST text token and
-      // a previous one already did, we prefix a paragraph break so the thoughts read
-      // as separate. Within a single iteration tokens still concatenate untouched.
-      let turnEmittedText = false;
-
-      while (true) {
-        iteration++;
-        // On the final allowed iteration, call without tools so the model must
-        // answer in text — the loop closes cleanly instead of requesting another
-        // tool it can't run. (Equality, not >: the previous iteration's tool
-        // results are already in history, so this call produces the final reply.)
-        const atCap = iteration >= MAX_ITERATIONS;
-        await emitIterationStatus(iteration, atCap, onLoopStart, onStatus);
-
-        // Per-turn accumulators — reset each iteration. `lastPartialAt` throttles
-        // the onToolPartial stream (one SSE frame per ~120ms per tool, not one per
-        // token); `streamable` caches the STREAMABLE_RENDER_TOOLS check per block.
-        const pendingTools = new Map<
-          number,
-          {
-            id: string;
-            name: string;
-            inputChunks: string[];
-            streamable: boolean;
-            lastPartialAt: number;
-          }
-        >();
-        const textBlocks: { type: "text"; text: string }[] = [];
-        let currentText = "";
-        // First text token of THIS iteration not yet streamed. Used once, to insert
-        // a separator before iteration 2+ text that follows earlier iterations' text.
-        let iterationTextStarted = false;
-        let stopReason: string | null = null;
-        // Usage for THIS iteration. message_start carries the input-side counts
-        // (including cache_read/cache_creation); message_delta carries the final
-        // output token count. We read both off the stream rather than discarding
-        // the SDK's usage metadata.
-        let inputTokens = 0;
-        let outputTokens = 0;
-        let cacheReadTokens = 0;
-        let cacheCreationTokens = 0;
-
-        // for await ensures each onToken call is awaited before the next token
-        // arrives — writeSSE errors surface instead of being silently dropped.
-        for await (const event of getClient().messages.stream(
-          apiParams(history, atCap)
-        )) {
-          if (event.type === "message_start") {
-            // Input-side usage is final at message_start: prompt tokens plus the
-            // cache split (read vs. creation). Output is still 0 here — it lands
-            // in message_delta below.
-            const u = event.message.usage;
-            inputTokens = u.input_tokens ?? 0;
-            cacheReadTokens = u.cache_read_input_tokens ?? 0;
-            cacheCreationTokens = u.cache_creation_input_tokens ?? 0;
-          } else if (event.type === "content_block_start") {
-            if (event.content_block.type === "tool_use") {
-              pendingTools.set(event.index, {
-                id: event.content_block.id,
-                name: event.content_block.name,
-                inputChunks: [],
-                streamable: STREAMABLE_RENDER_TOOLS.has(
-                  event.content_block.name
-                ),
-                lastPartialAt: 0,
-              });
-            } else if (event.content_block.type === "server_tool_use") {
-              // Server-side tool starting (e.g. web_search) — fire onToolStart so
-              // the UI shows the activity indicator. No host-side execution needed.
-              await onToolStart?.(event.content_block.name, {});
-            } else if (event.content_block.type === "web_search_tool_result") {
-              // Web search completed — fire onToolResult so the UI clears the
-              // activity indicator. The result is handled server-side by Anthropic.
-              await onToolResult?.(
-                "web_search",
-                JSON.stringify(event.content_block.content)
-              );
-            } else if (event.content_block.type === "text") {
-              currentText = "";
-            }
-          } else if (event.type === "content_block_delta") {
-            if (event.delta.type === "text_delta") {
-              // Separate this iteration's text from a previous iteration's: prefix a
-              // paragraph break on the FIRST text token here if earlier text exists
-              // and this one doesn't already start with whitespace. Streamed to the
-              // client and kept in currentText so history matches what the user saw.
-              if (
-                !iterationTextStarted &&
-                turnEmittedText &&
-                !/^\s/.test(event.delta.text)
-              ) {
-                await onToken("\n\n");
-                currentText += "\n\n";
-              }
-              iterationTextStarted = true;
-              turnEmittedText = true;
-              await onToken(event.delta.text);
-              currentText += event.delta.text;
-            } else if (event.delta.type === "input_json_delta") {
-              // Accumulate partial JSON. For a streamable render tool, also forward
-              // the snapshot-so-far (throttled) so the widget paints as it streams.
-              // We parse only when the block is complete (below / after the loop).
-              const t = pendingTools.get(event.index);
-              if (t) {
-                t.inputChunks.push(event.delta.partial_json);
-                if (t.streamable && onToolPartial) {
-                  const now = Date.now();
-                  const snapshot = t.inputChunks.join("");
-                  // Skip empty snapshots (the very first delta can fire before any
-                  // JSON has accumulated) — nothing to paint from "".
-                  if (snapshot && now - t.lastPartialAt >= 120) {
-                    t.lastPartialAt = now;
-                    await onToolPartial(t.name, snapshot, false);
-                  }
+      // The Anthropic wire adapter: translate the SDK's stream into LoopEvents and
+      // build Anthropic-shaped history. Everything Anthropic-specific (event taxonomy,
+      // the cache_read/creation usage split, server-side web_search, the
+      // ContentBlockParam history shape) lives HERE; the shared loop sees none of it.
+      const adapter: WireAdapter<ApiMessage> = {
+        stream: (hist, { withTools }) =>
+          (async function* (): AsyncIterable<LoopEvent> {
+            for await (const event of getClient().messages.stream(
+              apiParams(hist, !withTools)
+            )) {
+              if (event.type === "message_start") {
+                const u = event.message.usage;
+                yield {
+                  kind: "usage",
+                  inputTokens: u.input_tokens ?? 0,
+                  outputTokens: 0,
+                  cacheRead: u.cache_read_input_tokens ?? 0,
+                  cacheCreation: u.cache_creation_input_tokens ?? 0,
+                };
+              } else if (event.type === "content_block_start") {
+                const b = event.content_block;
+                if (b.type === "tool_use") {
+                  yield {
+                    kind: "tool_start",
+                    index: event.index,
+                    id: b.id,
+                    name: b.name,
+                  };
+                } else if (b.type === "server_tool_use") {
+                  yield { kind: "server_tool_start", name: b.name };
+                } else if (b.type === "web_search_tool_result") {
+                  yield {
+                    kind: "server_tool_result",
+                    name: "web_search",
+                    content: JSON.stringify(b.content),
+                  };
                 }
+              } else if (event.type === "content_block_delta") {
+                if (event.delta.type === "text_delta") {
+                  yield { kind: "text", text: event.delta.text };
+                } else if (event.delta.type === "input_json_delta") {
+                  yield {
+                    kind: "tool_delta",
+                    index: event.index,
+                    json: event.delta.partial_json,
+                  };
+                }
+              } else if (event.type === "message_delta") {
+                // Output token count is cumulative-final on message_delta.
+                yield {
+                  kind: "usage",
+                  inputTokens: 0,
+                  outputTokens: event.usage.output_tokens ?? 0,
+                  cacheRead: 0,
+                  cacheCreation: 0,
+                };
+                const r = event.delta.stop_reason;
+                yield {
+                  kind: "stop",
+                  reason:
+                    r === "tool_use"
+                      ? "tool_use"
+                      : r === "max_tokens"
+                        ? "max_tokens"
+                        : "end",
+                };
               }
             }
-          } else if (event.type === "content_block_stop") {
-            if (currentText) {
-              textBlocks.push({ type: "text", text: currentText });
-              currentText = "";
-            }
-            // Final partial for a streamable tool: the full, now-complete input.
-            // (The authoritative onToolResult still fires post-execute below.)
-            const done = pendingTools.get(event.index);
-            if (done?.streamable && onToolPartial) {
-              await onToolPartial(done.name, done.inputChunks.join(""), true);
-            }
-          } else if (event.type === "message_delta") {
-            stopReason = event.delta.stop_reason ?? null;
-            // Output token count is cumulative-final on message_delta.
-            outputTokens = event.usage.output_tokens ?? 0;
-          }
-        }
+          })(),
+        appendToolRound: (hist, assistantText, toolList, modelResults) => {
+          const assistantContent: Anthropic.Messages.ContentBlockParam[] = [
+            ...(assistantText
+              ? [{ type: "text" as const, text: assistantText }]
+              : []),
+            ...toolList.map((t) => ({
+              type: "tool_use" as const,
+              id: t.id,
+              name: t.name,
+              input: JSON.parse(t.inputChunks.join("") || "{}"),
+            })),
+          ];
+          hist.push({ role: "assistant", content: assistantContent });
+          const toolResults: Anthropic.Messages.ToolResultBlockParam[] =
+            toolList.map((t, i) => ({
+              type: "tool_result",
+              tool_use_id: t.id,
+              content: modelResults[i] as string,
+            }));
+          hist.push({ role: "user", content: toolResults });
+        },
+      };
 
-        // Roll this iteration into the per-turn totals and log it. cacheRead high
-        // with cacheCreation ~0 on iterations 2+ is the cache working across the
-        // agent loop; iteration 1 is where the prefix gets written (creation > 0).
-        turnInput += inputTokens;
-        turnOutput += outputTokens;
-        turnCacheRead += cacheReadTokens;
-        turnCacheCreation += cacheCreationTokens;
-        console.log(
-          `[usage] iter=${iteration} model=${model} input=${inputTokens} output=${outputTokens} cache_read=${cacheReadTokens} cache_creation=${cacheCreationTokens}`
-        );
-
-        // Truncated by the output budget. The pending tool_use JSON is partial.
-        // Rather than throw away the whole turn, try to SALVAGE: if a streamable
-        // render tool's partial input can be best-effort closed and parsed, emit it
-        // as a final tool_partial so the widget keeps what streamed, and finish the
-        // turn with a soft status instead of the hard red error. Only throw when
-        // there's nothing salvageable at all (e.g. truncated plain text, no widget).
-        if (stopReason === "max_tokens") {
-          console.warn(
-            `[max_tokens] iter=${iteration} truncated; attempting salvage of ${pendingTools.size} pending tool(s)`
-          );
-          let salvaged = false;
-          for (const [, tool] of pendingTools) {
-            if (!tool.streamable) continue;
-            const closed = closeTruncatedJson(tool.inputChunks.join(""));
-            if (parseBestEffort(closed) === undefined) continue;
-            // Parsing isn't enough: closeTruncatedJson happily turns `{"rows":[`
-            // into a valid-but-EMPTY `{"rows":[]}`. Emitting that would show a
-            // blank widget under a "showing what came through" status — worse than
-            // the honest error. Only count a salvage that retained real content
-            // (reusing the same degeneracy test the self-correction loop uses).
-            if (isDegenerate(tool.name, closed)) continue;
-            await onToolPartial?.(tool.name, closed, true);
-            salvaged = true;
-          }
-          if (salvaged) {
-            await onStatus?.("That ran long — showing what came through.");
-            await onDone();
-            return;
-          }
-          throw new Error(
-            "The model hit its output limit before finishing (stop_reason=max_tokens). " +
-              "Raise ANTHROPIC_MAX_TOKENS or ask for a smaller result."
-          );
-        }
-
-        // No tool calls — stream is complete. Log the per-turn totals: the
-        // read/creation ratio across all iterations is the cache's bottom line.
-        if (stopReason !== "tool_use" || pendingTools.size === 0) {
-          console.log(
-            `[usage] turn total: iterations=${iteration} input=${turnInput} output=${turnOutput} cache_read=${turnCacheRead} cache_creation=${turnCacheCreation}`
-          );
-          await onDone();
-          return;
-        }
-
-        // Build the assistant message with all content blocks for history.
-        // Must include both text blocks (if any) and tool_use blocks.
-        const assistantContent: Anthropic.Messages.ContentBlockParam[] = [
-          ...textBlocks,
-          ...Array.from(pendingTools.values()).map((t) => ({
-            type: "tool_use" as const,
-            id: t.id,
-            name: t.name,
-            input: JSON.parse(t.inputChunks.join("") || "{}"),
-          })),
-        ];
-        history.push({ role: "assistant", content: assistantContent });
-
-        // Execute each tool and collect results (in input order, preserved by the
-        // Map's insertion order).
-        const executed: { id: string; name: string; result: string }[] = [];
-        for (const [, tool] of pendingTools) {
-          const input = JSON.parse(
-            tool.inputChunks.join("") || "{}"
-          ) as unknown;
-          await onToolStart?.(tool.name, input);
-          const result = await executeTool(tool.name, input, sessionId);
-          await onToolResult?.(tool.name, result);
-          // Honest "got N results…" status, superseding the frontend's scripted
-          // progress with a real count the instant the fetch resolves (data tools
-          // only; null/skipped otherwise).
-          const countStatus = toolResultStatus(tool.name, result);
-          if (countStatus) await onStatus?.(countStatus);
-          executed.push({ id: tool.id, name: tool.name, result });
-        }
-
-        // Self-correction across the whole batch (see applySelfCorrection): one
-        // correction pass per turn, but it heals EVERY degenerate result in the
-        // batch, not just the first by tool order.
-        const { modelResults, consumedCorrection } = applySelfCorrection(
-          executed,
-          correctionCount,
-          iteration
-        );
-        if (consumedCorrection) correctionCount++;
-
-        const toolResults: Anthropic.Messages.ToolResultBlockParam[] =
-          executed.map((t, i) => ({
-            type: "tool_result",
-            tool_use_id: t.id,
-            content: modelResults[i] as string,
-          }));
-
-        history.push({ role: "user", content: toolResults });
-        // Continue the loop — call the API again with updated history.
-      }
+      await runAgentLoop(adapter, history, sessionId, {
+        onToken,
+        onDone,
+        onToolStart,
+        onToolResult,
+        onToolPartial,
+        onLoopStart,
+        onStatus,
+      });
     },
   };
 }
@@ -853,8 +942,6 @@ function createOpenAICompatClient(
       onClarify,
       clarified
     ) {
-      // The agent loop — identical control flow to the Claude client, parsing
-      // OpenAI chunk deltas instead of Anthropic stream events.
       const history: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
         messages.map((m) => ({ role: m.role, content: m.content }));
 
@@ -871,232 +958,135 @@ function createOpenAICompatClient(
       if (prePass.kind === "preamble")
         history.push({ role: "user", content: prePass.preamble });
 
-      let iteration = 0;
-      // In-loop self-correction counter for this turn (see MAX_CORRECTIONS).
-      let correctionCount = 0;
-      // See the Claude client: separates iteration 2+ text from earlier iterations'
-      // text so "…at once." + "Now let me…" don't collide into "…at once.Now let me…".
-      let turnEmittedText = false;
-
-      while (true) {
-        iteration++;
-        // Final allowed iteration: send no tools so the model must answer in text
-        // and the loop closes cleanly (the cap). Mirrors the Claude client.
-        const atCap = iteration >= MAX_ITERATIONS;
-        await emitIterationStatus(iteration, atCap, onLoopStart, onStatus);
-
-        // Per-turn accumulators. Tool calls arrive as deltas keyed by index; we
-        // collect id/name/argument-fragments until the chunk stream ends, then
-        // parse the assembled JSON (partial JSON mid-stream is unparseable). We
-        // also capture Gemini's per-tool-call `thought_signature` (carried in a
-        // non-standard `extra_content.google` field) so it can be echoed back in
-        // the assistant message — Gemini needs it for multi-turn continuity.
-        const pendingTools = new Map<
-          number,
-          {
-            id: string;
-            name: string;
-            argChunks: string[];
-            thoughtSignature?: string;
-            streamable: boolean;
-            lastPartialAt: number;
-          }
-        >();
-        let assistantText = "";
-        let finishReason: string | null = null;
-
-        const stream = await getClient().chat.completions.create({
-          model: selectedModel,
-          max_tokens: maxTokens,
-          stream: true,
-          messages: toApiMessages(history),
-          ...(openaiTools && !atCap ? { tools: openaiTools } : {}),
-        });
-
-        for await (const chunk of stream) {
-          const choice = chunk.choices[0];
-          if (!choice) continue;
-          const delta = choice.delta;
-
-          if (delta?.content) {
-            // First text of this iteration following earlier iterations' text: insert
-            // a paragraph break unless it already opens with whitespace (mirrors the
-            // Claude client). Kept in assistantText so history matches the stream.
-            if (
-              assistantText === "" &&
-              turnEmittedText &&
-              !/^\s/.test(delta.content)
-            ) {
-              await onToken("\n\n");
-              assistantText += "\n\n";
-            }
-            turnEmittedText = true;
-            await onToken(delta.content);
-            assistantText += delta.content;
-          }
-
-          // Tool-call fragments. The first delta for an index carries id + name;
-          // subsequent ones carry argument string fragments to concatenate.
-          for (const tc of delta?.tool_calls ?? []) {
-            const sig = (
-              tc as {
-                extra_content?: { google?: { thought_signature?: string } };
-              }
-            ).extra_content?.google?.thought_signature;
-            const existing = pendingTools.get(tc.index);
-            if (existing) {
-              if (tc.function?.arguments)
-                existing.argChunks.push(tc.function.arguments);
-              if (sig) existing.thoughtSignature = sig;
-            } else {
-              pendingTools.set(tc.index, {
-                // The id ties the assistant `tool_calls[].id` to its `tool`
-                // result's `tool_call_id`. OpenAI/DeepSeek/Mistral always send a
-                // non-empty id, but Gemini's OpenAI-compat endpoint can omit it —
-                // and two calls both defaulting to "" become indistinguishable on
-                // the wire (the provider can't tell which result answers which
-                // call → 400 / mis-bind). Synthesize a unique, stable id from the
-                // call's index when absent; it flows to both the assistant entry
-                // and the result entry below, keeping the pair tied together.
-                id: tc.id || `call_${tc.index}`,
-                name: tc.function?.name ?? "",
-                argChunks: tc.function?.arguments
-                  ? [tc.function.arguments]
-                  : [],
-                thoughtSignature: sig,
-                streamable: STREAMABLE_RENDER_TOOLS.has(
-                  tc.function?.name ?? ""
-                ),
-                lastPartialAt: 0,
+      // The OpenAI-compat wire adapter. Everything OpenAI-shaped (chunk taxonomy, the
+      // function-tool envelope, Gemini's thought_signature + finish_reason quirks, the
+      // N-separate-`tool`-messages history shape) lives HERE; the shared loop sees only
+      // normalized LoopEvents. Streamed `tool_calls` deltas: the first for an index
+      // carries id+name (→ tool_start), the rest carry argument fragments (→ tool_delta).
+      const adapter: WireAdapter<OpenAI.Chat.Completions.ChatCompletionMessageParam> =
+        {
+          stream: (hist, { withTools }) =>
+            (async function* (): AsyncIterable<LoopEvent> {
+              const started = new Set<number>();
+              let sawTool = false;
+              let finishReason: string | null = null;
+              const stream = await getClient().chat.completions.create({
+                model: selectedModel,
+                max_tokens: maxTokens,
+                stream: true,
+                messages: toApiMessages(hist),
+                ...(openaiTools && withTools ? { tools: openaiTools } : {}),
               });
-            }
-            // Forward the growing render-tool spec (throttled) so the widget paints
-            // as it streams — same as the Claude client. OpenAI has no per-tool stop
-            // event, so the final (isComplete) partial is emitted post-loop below.
-            const t = pendingTools.get(tc.index);
-            if (t?.streamable && onToolPartial) {
-              const now = Date.now();
-              if (now - t.lastPartialAt >= 120) {
-                t.lastPartialAt = now;
-                await onToolPartial(t.name, t.argChunks.join(""), false);
-              }
-            }
-          }
-
-          if (choice.finish_reason) finishReason = choice.finish_reason;
-        }
-
-        // Output budget exhausted — mirrors the Claude client's max_tokens guard,
-        // including the salvage path: best-effort close any streamable render tool's
-        // partial input and keep what streamed instead of throwing the whole turn.
-        if (finishReason === "length") {
-          let salvaged = false;
-          for (const [, tool] of pendingTools) {
-            if (!tool.streamable) continue;
-            const closed = closeTruncatedJson(tool.argChunks.join(""));
-            if (parseBestEffort(closed) === undefined) continue;
-            // Parsing isn't enough: closeTruncatedJson happily turns `{"rows":[`
-            // into a valid-but-EMPTY `{"rows":[]}`. Emitting that would show a
-            // blank widget under a "showing what came through" status — worse than
-            // the honest error. Only count a salvage that retained real content
-            // (reusing the same degeneracy test the self-correction loop uses).
-            if (isDegenerate(tool.name, closed)) continue;
-            await onToolPartial?.(tool.name, closed, true);
-            salvaged = true;
-          }
-          if (salvaged) {
-            await onStatus?.("That ran long — showing what came through.");
-            await onDone();
-            return;
-          }
-          throw new Error(
-            "The model hit its output limit before finishing (finish_reason=length). " +
-              "Raise LLM_MAX_TOKENS or ask for a smaller result."
-          );
-        }
-
-        // Gemini surfaces a failed tool call as this finish_reason rather than an
-        // error — make it visible instead of returning a confusing empty turn.
-        if (finishReason === "MALFORMED_FUNCTION_CALL") {
-          throw new Error(
-            "The model produced a malformed tool call (finish_reason=MALFORMED_FUNCTION_CALL)."
-          );
-        }
-
-        // Loop when there are tool calls to run — keyed on the presence of pending
-        // tool calls, NOT on finish_reason. Gemini's OpenAI-compatible endpoint has
-        // a known bug where it reports finish_reason "stop" (not "tool_calls") even
-        // while emitting a tool call in streaming mode; trusting finish_reason would
-        // drop the call and end the turn empty. (OpenAI/DeepSeek/Mistral report
-        // "tool_calls" correctly; checking pendingTools works for all of them.)
-        if (pendingTools.size === 0) {
-          await onDone();
-          return;
-        }
-
-        // Push the assistant message carrying the tool_calls, then one `tool`
-        // message per result (OpenAI uses N separate tool messages, vs Anthropic's
-        // single user message with N tool_result blocks). Re-attach Gemini's
-        // thought_signature on each call so multi-turn continuity is preserved.
-        const sortedTools = [...pendingTools.entries()]
-          .sort(([a], [b]) => a - b)
-          .map(([, t]) => t);
-
-        history.push({
-          role: "assistant",
-          content: assistantText || null,
-          tool_calls: sortedTools.map((t) => ({
-            id: t.id,
-            type: "function",
-            function: { name: t.name, arguments: t.argChunks.join("") || "{}" },
-            ...(t.thoughtSignature
-              ? {
-                  extra_content: {
-                    google: { thought_signature: t.thoughtSignature },
-                  },
+              for await (const chunk of stream) {
+                const choice = chunk.choices[0];
+                if (!choice) continue;
+                const delta = choice.delta;
+                if (delta?.content) yield { kind: "text", text: delta.content };
+                for (const tc of delta?.tool_calls ?? []) {
+                  sawTool = true;
+                  const sig = (
+                    tc as {
+                      extra_content?: {
+                        google?: { thought_signature?: string };
+                      };
+                    }
+                  ).extra_content?.google?.thought_signature;
+                  if (!started.has(tc.index)) {
+                    started.add(tc.index);
+                    // Synthesize a stable id when Gemini omits one (two empty ids
+                    // would be indistinguishable → mis-bound results / 400).
+                    yield {
+                      kind: "tool_start",
+                      index: tc.index,
+                      id: tc.id || `call_${tc.index}`,
+                      name: tc.function?.name ?? "",
+                    };
+                  }
+                  if (tc.function?.arguments)
+                    yield {
+                      kind: "tool_delta",
+                      index: tc.index,
+                      json: tc.function.arguments,
+                    };
+                  if (sig)
+                    yield {
+                      kind: "tool_meta",
+                      index: tc.index,
+                      thoughtSignature: sig,
+                    };
                 }
-              : {}),
-          })),
-        });
+                if (choice.finish_reason) finishReason = choice.finish_reason;
+              }
+              // OpenAI carries no per-call usage on the stream by default; report zeros.
+              yield {
+                kind: "usage",
+                inputTokens: 0,
+                outputTokens: 0,
+                cacheRead: 0,
+                cacheCreation: 0,
+              };
+              // Map finish_reason → normalized stop. CRITICAL: continue on the PRESENCE
+              // of tool calls, not on finish_reason — Gemini reports "stop" even while
+              // emitting a tool call (a known OpenAI-compat bug). So a tool seen ⇒
+              // "tool_use" regardless of finishReason. `length`/malformed map straight.
+              const reason:
+                | "end"
+                | "tool_use"
+                | "max_tokens"
+                | "malformed_tool" =
+                finishReason === "length"
+                  ? "max_tokens"
+                  : finishReason === "MALFORMED_FUNCTION_CALL"
+                    ? "malformed_tool"
+                    : sawTool
+                      ? "tool_use"
+                      : "end";
+              yield { kind: "stop", reason };
+            })(),
+          appendToolRound: (hist, assistantText, toolList, modelResults) => {
+            // Sort by the tool's index is implicit — runAgentLoop preserves Map insertion
+            // order, which is index order as the adapter emitted tool_start. Re-attach
+            // Gemini's thought_signature on each call for multi-turn continuity.
+            hist.push({
+              role: "assistant",
+              content: assistantText || null,
+              tool_calls: toolList.map((t) => ({
+                id: t.id,
+                type: "function",
+                function: {
+                  name: t.name,
+                  arguments: t.inputChunks.join("") || "{}",
+                },
+                ...(t.thoughtSignature
+                  ? {
+                      extra_content: {
+                        google: { thought_signature: t.thoughtSignature },
+                      },
+                    }
+                  : {}),
+              })),
+            });
+            // OpenAI uses N separate `tool` messages (vs Anthropic's one user message
+            // with N tool_result blocks).
+            toolList.forEach((t, i) => {
+              hist.push({
+                role: "tool",
+                tool_call_id: t.id,
+                content: modelResults[i] as string,
+              });
+            });
+          },
+        };
 
-        // Final (complete) partial for each streamable tool — the analogue of the
-        // Claude client's content_block_stop emit. OpenAI gives no per-tool stop, so
-        // we do it here once the full arg stream is assembled.
-        for (const tool of sortedTools) {
-          if (tool.streamable && onToolPartial)
-            await onToolPartial(tool.name, tool.argChunks.join(""), true);
-        }
-
-        const executed: { id: string; name: string; result: string }[] = [];
-        for (const tool of sortedTools) {
-          const input = JSON.parse(tool.argChunks.join("") || "{}") as unknown;
-          await onToolStart?.(tool.name, input);
-          const result = await executeTool(tool.name, input, sessionId);
-          await onToolResult?.(tool.name, result);
-          // Honest count status, same as the Claude client.
-          const countStatus = toolResultStatus(tool.name, result);
-          if (countStatus) await onStatus?.(countStatus);
-          executed.push({ id: tool.id, name: tool.name, result });
-        }
-
-        // Self-correction across the whole batch, same as the Claude client (see
-        // applySelfCorrection for rationale).
-        const { modelResults, consumedCorrection } = applySelfCorrection(
-          executed,
-          correctionCount,
-          iteration
-        );
-        if (consumedCorrection) correctionCount++;
-
-        executed.forEach((t, i) => {
-          history.push({
-            role: "tool",
-            tool_call_id: t.id,
-            content: modelResults[i] as string,
-          });
-        });
-        // Continue the loop — call the API again with the updated history.
-      }
+      await runAgentLoop(adapter, history, sessionId, {
+        onToken,
+        onDone,
+        onToolStart,
+        onToolResult,
+        onToolPartial,
+        onLoopStart,
+        onStatus,
+      });
     },
   };
 }
