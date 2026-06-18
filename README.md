@@ -11,6 +11,20 @@ best — table, chart, relationship graph, or 3D scene.
 
 ---
 
+## Architecture at a glance
+
+![Aether architecture — system overview](docs/diagrams/architecture.drawio.svg)
+
+A detailed, **auto-generated** map of every moving part. The image is page 1 (System Overview); the
+source [`docs/diagrams/architecture.drawio`](docs/diagrams/architecture.drawio) has four pages
+(overview · one chat turn · frontend internals · backend internals) — open it in
+[draw.io](https://draw.io). It's generated from the live source by
+[`tools/architecture-diagram/`](tools/architecture-diagram/README.md) (`bun run diagram`), so it
+can't silently drift from the code. Full write-up in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+---
+
 ## Documentation
 
 - **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)** — clone-to-running, step by step:

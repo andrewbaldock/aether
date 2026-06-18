@@ -3,7 +3,24 @@
 How Aether fits together. **Keep this current:** update it in the same commit that changes how
 the pieces connect.
 
-Last updated: Corrected provider lists to match the code — LLM is now four providers (Anthropic · Google · DeepSeek · Mistral, the last three on one OpenAI-compat client) and the data-lookup sources include Wikidata + OpenAlex. Synced the route list (`GET /api/sessions/:id`, `POST /api/sessions/:id/repair-prompts`) and the `clarify` SSE event.
+Last updated: Synced to code — added the `DELETE /api/sessions/:id/messages` route and the `persisted` / `warning` SSE events to their lists, noted ETag/304 on the conversation-read endpoints and the reused Anthropic client. Added the auto-generated draw.io diagram below.
+
+---
+
+## The diagram (auto-generated)
+
+A detailed, multi-page draw.io diagram of every moving part — system overview, one chat turn,
+frontend internals, backend internals. It's **generated from the live source** by
+[`tools/architecture-diagram/`](../tools/architecture-diagram/README.md) (`bun run diagram`), so it
+stays honest: a deterministic scanner reads the real routes/tools/providers/widgets and Claude
+draws (or incrementally edits) the diagram from that digest.
+
+![Aether architecture — system overview](./diagrams/architecture.drawio.svg)
+
+> The image above is **page 1 (System Overview)**. The source file
+> [`docs/diagrams/architecture.drawio`](./diagrams/architecture.drawio) has four pages — open it in
+> [draw.io](https://draw.io) (or the desktop app) to see *One Chat Turn*, *Frontend Internals*, and
+> *Backend Internals*, and to hand-tweak the layout (your edits survive the next incremental run).
 
 ---
 
@@ -169,6 +186,7 @@ The backend is a Hono server (`backend/src/index.ts`) served by **bun's native s
 - `POST /api/sessions/:id/fork` — fork a session into a new one for the same user.
 - `POST /api/sessions/:id/repair-prompts` — backfill missing recreation prompts on a session's saved widgets.
 - `GET /api/sessions/:id/messages` — load the full message history for a session.
+- `DELETE /api/sessions/:id/messages` — delete one message pair (a user message + its assistant reply) from a session.
 - `GET /api/sessions/:id/graph` / `PUT /api/sessions/:id/graph` — load / save the knowledge graph snapshot.
 - `GET /api/sessions/:id/widgets` / `PUT /api/sessions/:id/widgets` — load / save the last table + chart specs for a session.
 
@@ -269,6 +287,10 @@ the exception — it's SSE, read directly in `useChat.ts`.) The shape:
 - **Self-diagnostics.** The query/mutation caches' `onError` turn a raw `HTTP 502` into a
   plain-English, environment-aware reason (dev vs. prod, where `/api` points). A startup banner
   logs the mode + API target on every reload.
+- **Conditional reads (ETag/304).** The conversation-read endpoints emit an `ETag`; a repeat read
+  with `If-None-Match` gets a `304 Not Modified` (no body), so re-opening an unchanged session is
+  cheap. The backend also reuses one Anthropic client instance across requests rather than
+  constructing one per call.
 
 This replaced a hand-rolled module-level cache + in-flight-promise singleton in the old model
 picker — TanStack's request dedup (`staleTime`) does that job natively.
@@ -481,7 +503,9 @@ data: [DONE]                                       // stream complete
 data: {"type":"error","message":"..."}             // mid-stream error
 ```
 (Other event types the route emits: `status`, `loop_start`, `plan`, `clarify` (the thin-but-
-explodable clarifier question), `warning`. The `tool_partial` stream is render-tools-only — see
+explodable clarifier question), `persisted` (carries the real DB row IDs after the turn is saved,
+so the frontend's placeholder message IDs become the saved ids), and `warning` (a non-fatal notice,
+e.g. persistence failed mid-stream). The `tool_partial` stream is render-tools-only — see
 the progressive-rendering and salvage notes above.)
 
 The agent loop runs entirely on the backend; the frontend sees only SSE events. Tool

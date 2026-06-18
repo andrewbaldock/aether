@@ -1,0 +1,11 @@
+{
+  "name": "aether",
+  "private": true,
+  "license": "MIT",
+  "//": "Root holds repo-level tooling only. frontend/ and backend/ are still installed and run independently (no workspaces here yet).",
+  "scripts": {
+    "diagram": "bun run tools/architecture-diagram/build.ts",
+    "diagram:full": "bun run tools/architecture-diagram/build.ts --full",
+    "diagram:scan": "bun run tools/architecture-diagram/scan.ts"
+  }
+}
