@@ -16,9 +16,17 @@ import {
   type TilesLayoutItem,
 } from "./tilesLayout";
 
-// The Tiles canvas: a GridStack grid that best-fit packs cards (float off →
-// gravity packing, so cards rise to fill gaps), with drag, resize, a fixed gap,
-// and no overlap — all native to GridStack.
+// The Tiles canvas: a GridStack grid that holds cards exactly where they're placed
+// (float ON → no gravity packing), with drag, resize, a fixed gap, and no overlap.
+//
+// PACKING IS THE TEMPLATE'S JOB, NOT GRIDSTACK'S. autoLayout() computes explicit x/y
+// for every auto card during streaming/auto-load — that's the only place a card should
+// be "packed" into a slot. With float:false (gravity), GridStack ALSO packs, but
+// continuously and on every user gesture: resizing a card below its row width or
+// dragging it to its own line frees space that gravity then refills, yanking the card
+// (or its neighbour) to the bottom — fighting the user's manual arrangement. float:true
+// turns gravity off so a manual move/resize sticks; the template still positions
+// auto-load cards explicitly, so streaming stays tidy.
 //
 // GridStack + React ownership split (the standard pattern that avoids the DOM
 // reconciliation war): GridStack OWNS the grid-item DOM and their positions — we
@@ -97,7 +105,7 @@ export function TilesCanvas({
         column: GRID_COLUMNS,
         cellHeight: GRID_CELL_HEIGHT,
         margin: GRID_MARGIN,
-        float: false, // gravity packing → best-fit tiling
+        float: true, // no gravity — cards stay where placed/dropped/resized (template packs, not GridStack)
         resizable: { handles: "se" },
         draggable: { handle: ".bigsail-card-drag" },
       },

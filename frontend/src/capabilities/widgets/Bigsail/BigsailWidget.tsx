@@ -258,12 +258,16 @@ export function BigsailWidget(_props: { widget: Widget }) {
     [cards, isHidden]
   );
 
-  // Merge the saved arrangement with the current card set: saved cards keep their
-  // spot, new cards auto-place. Recompute when cards, the saved layout, or the
-  // grid dimensions change.
+  // Merge the saved arrangement with the current card set. THE LAW: the template only
+  // packs while the SYSTEM is loading (streaming a turn or restoring a saved one). Once
+  // settled and the user is READING, `settled` is true → placeCards honors every saved
+  // position verbatim and the template never reflows their cards (a resize/move sticks,
+  // never jumps to the bottom). Recompute when cards, the saved layout, the grid width,
+  // or the streaming/restoring state changes.
+  const settled = !busy && !restoreLoading;
   const placed = useMemo(
-    () => placeCards(visibleCards, savedLayout, stacked),
-    [visibleCards, savedLayout, stacked]
+    () => placeCards(visibleCards, savedLayout, stacked, settled),
+    [visibleCards, savedLayout, stacked, settled]
   );
 
   // Debounced persistence of the grid arrangement. Keep the latest activeWidget
