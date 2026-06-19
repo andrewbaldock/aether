@@ -96,8 +96,10 @@ jobs:
     needs: [frontend-unit, backend-unit, e2e]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    # The project is linked under frontend/ (Root Directory = frontend); the
-    # Vercel CLI reads frontend/.vercel + frontend/vercel.json from there.
+    # This job runs from frontend/ (working-directory below), so the Vercel CLI
+    # reads frontend/.vercel + frontend/vercel.json from there. The Vercel
+    # project's Root Directory is "./" (repo root) — NOT "frontend" — otherwise
+    # the path is composed twice (frontend/frontend) and deploy fails.
     defaults:
       run:
         working-directory: frontend
