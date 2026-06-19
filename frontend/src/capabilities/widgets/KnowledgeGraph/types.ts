@@ -1,35 +1,17 @@
-// The shape Claude emits via build_knowledge_graph, and the merged graph the
-// widget renders. The node/link types extend d3-force's mutable simulation
-// fields (x/y/vx/vy) so the simulation can write positions in place.
+// Knowledge-graph types. The WIRE PAYLOAD (what Claude emits via build_knowledge_graph,
+// what crosses the tool_result seam) now lives in the shared FE↔BE contract
+// (shared/contract, plan 001) and is re-exported here. The LIVE-SIMULATION render types
+// (GraphNode/GraphLink) are frontend-only — d3-force mutates x/y/vx/vy in place — so they
+// are intentionally NOT part of the contract and stay here.
 
-export type EntityType = "person" | "place" | "concept" | "org" | "event";
+import type { RawEntity } from "@contract/widgets";
 
-// One entity as it arrives in a tool_result payload.
-export interface RawEntity {
-  id: string;
-  label: string;
-  type: EntityType;
-  wikipediaTitle?: string;
-  // Optional lucide-react icon name (PascalCase) the model picked as the best
-  // visual match for this entity. Resolved dynamically at render; falls back to
-  // a per-type icon when missing or unrecognised.
-  icon?: string;
-}
-
-// One relationship as it arrives in a tool_result payload.
-export interface RawRelationship {
-  from: string;
-  to: string;
-  label?: string;
-}
-
-// The full payload of one build_knowledge_graph call.
-export interface GraphPayload {
-  entities: RawEntity[];
-  relationships: RawRelationship[];
-  remove?: string[];
-  merge?: Array<{ from: string; into: string }>;
-}
+export type {
+  EntityType,
+  GraphPayload,
+  RawEntity,
+  RawRelationship,
+} from "@contract/widgets";
 
 // A node in the live simulation. d3-force mutates x/y/vx/vy in place; fx/fy pin a
 // node when dragged (unused in v1 but part of the type d3 expects).

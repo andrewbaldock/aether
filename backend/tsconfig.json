@@ -9,7 +9,8 @@
     "verbatimModuleSyntax": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": { "@contract/*": ["../shared/contract/*"] }
   },
-  "include": ["src"]
+  "include": ["src", "../shared/contract"]
 }

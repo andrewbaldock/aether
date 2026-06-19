@@ -169,6 +169,24 @@ needed in dev — the proxy makes the API look same-origin.
 
 ---
 
+## The shared contract (`shared/contract/`)
+
+The shapes that cross the HTTP/SSE seam — the **SSE event union** (every `data:` event
+`/api/chat` emits), the **render-tool spec types** (`ChartSpec` / `TableSpec` / `TimelineSpec` /
+`ImagesSpec` and the knowledge-graph wire payload), and the **composition plan** (the `plan`
+event) — live **once** in `shared/contract/` and are imported by both packages via the
+`@contract/*` path (a `paths` entry in each `tsconfig` plus a `resolve.alias` in
+`frontend/vite.config.ts`; no bun workspace). Previously each shape was declared twice — once per
+package — and could drift silently because each package typechecks alone; now a rename or new
+field is a **compile error** on whichever side falls behind.
+
+Deliberately **not** shared: the `Session` row type (the frontend and backend versions are two
+*views* of one DB row — the backend round-trips jsonb columns the session-list query doesn't
+fetch), and the frontend's d3-force render types (`GraphNode`/`GraphLink`, with mutable
+`x/y/vx/vy`) — those never cross the wire. See `shared/contract/README.md`.
+
+---
+
 ## The backend (`/api/chat`)
 
 The backend is a Hono server (`backend/src/index.ts`) served by **bun's native server**

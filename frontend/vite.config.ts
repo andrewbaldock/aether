@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
@@ -78,6 +79,14 @@ export default defineConfig({
       },
     }),
   ],
+  resolve: {
+    // `@contract/*` → the shared FE↔BE wire-contract module (see shared/contract/).
+    // Matches the `paths` entry in tsconfig.app.json; covers dev/build/preview/vitest
+    // (all read this config). Backend resolves the same path via its own tsconfig.
+    alias: {
+      "@contract": fileURLToPath(new URL("../shared/contract", import.meta.url)),
+    },
+  },
   server: {
     port: 5174,
     allowedHosts: ["aether-dev"],

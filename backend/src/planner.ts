@@ -14,30 +14,20 @@ import { getAnthropicClient } from "./anthropicClient";
 // (like generateTitle) so it's the cheapest call we make, and it's best-effort:
 // any failure returns null and the turn proceeds exactly as before.
 
-// Keep the capability vocabulary aligned with the render tools / frontend
-// CardCapability. These are the only values a plan intent may carry.
-export type PlanCapability =
-  | "table"
-  | "chart"
-  | "timeline"
-  | "knowledge-graph"
-  | "images";
+// The capability vocabulary + composition-plan shapes now live in the shared FE↔BE
+// contract (shared/contract, plan 001) — they ride the `plan` SSE event, so one
+// definition serves both sides. Re-exported here so existing planner imports are
+// unchanged. `PlanCapability` is kept as a local alias of the contract's `Capability`.
+import type {
+  Capability,
+  CompositionPlan,
+  PlanIntent,
+  PlanRelationship,
+} from "@contract/plan";
 
-export interface PlanIntent {
-  capability: PlanCapability;
-  subject?: string;
-}
-
-export interface PlanRelationship {
-  from: number; // index into intents
-  to: number; // index into intents
-  label?: string;
-}
-
-export interface CompositionPlan {
-  intents: PlanIntent[];
-  relationships: PlanRelationship[];
-}
+export type PlanCapability = Capability;
+// Re-export so existing importers of these from ./planner are unchanged.
+export type { CompositionPlan, PlanIntent, PlanRelationship };
 
 // A clarifying pre-pass result: when a request is THIN but one well-aimed question
 // would massively expand a rich answer ("explode the concept"), the planner asks

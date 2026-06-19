@@ -14,7 +14,7 @@ seams that frayed as the code grew.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001 | Shared FE↔BE contract package (`shared/contract/`) | P1 | M | — | TODO |
+| 001 | Shared FE↔BE contract package (`shared/contract/`) | P1 | M | — | DONE (2026-06-18; scoped to SSE + render specs + plan) |
 | 002 | Typed SSE emitter helper (backend chat route) | P2 | S | 001 | TODO |
 | 003 | Tool registry — fold dispatch + metadata into one map | P2 | S | — (uses 001 names if landed) | TODO |
 | 004 | `stream()` callbacks as a struct, not 9 positional args | P2 | S | — | TODO |
@@ -28,6 +28,17 @@ seams that frayed as the code grew.
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
 ## What landed (2026-06-18)
+
+- **001 is DONE** (the FE↔BE-contract candidate from `/improve-codebase-architecture`). Created
+  `shared/contract/` (`sse.ts` discriminated event union · `widgets.ts` the 5 render-tool specs +
+  the KG **wire payload** only · `plan.ts` the composition plan/capability vocabulary), imported by
+  both packages via the `@contract/*` path (tsconfig `paths` + a vite `resolve.alias`; no
+  workspace). Both sides re-export from `@contract` so no caller churn. **Scoped deliberately** to
+  SSE + render specs + plan: the `Session` "drift" the audit flagged is by-design (two views of one
+  DB row), and the frontend d3 `GraphNode`/`GraphLink` never cross the wire — both excluded, noted
+  in `shared/contract/README.md`. Verified: backend 105/0, frontend build + 224 unit tests +
+  the e2e render-tool round trip (all 7 viewports) green. **Do not re-flag "the FE↔BE contract has
+  no module" — `shared/contract/` IS it.**
 
 - **005 + 006 are DONE.** 005 added `backend/src/llm.test.ts` (characterization tests for both the
   Claude and OpenAI-compat clients) plus a test-only SDK injection seam in `llm.ts`

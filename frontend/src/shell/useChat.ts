@@ -1,5 +1,5 @@
+import type { SseEvent } from "@contract/sse";
 import { useCallback, useRef, useState } from "react";
-import type { CompositionPlan } from "../lib/composition";
 import { useAgentEvents } from "./AgentEventContext";
 import { parseSseChunk } from "./parseSseChunk";
 
@@ -353,26 +353,8 @@ export function useChat({
             break outer;
           }
 
-          type SseEvent = {
-            type: string;
-            content?: string;
-            message?: string;
-            tool?: string;
-            input?: unknown;
-            result?: string;
-            partialJson?: string;
-            isComplete?: boolean;
-            iteration?: number;
-            label?: string;
-            plan?: CompositionPlan;
-            question?: string;
-            options?: string[];
-            // `persisted`: real DB ids for this turn's saved rows, so the
-            // in-memory placeholder ids become the actual row ids (enables a
-            // same-session delete to target the right rows — no reload needed).
-            userId?: string;
-            assistantId?: string;
-          };
+          // SseEvent is the shared FE↔BE contract union (@contract/sse) — see the
+          // import at the top of this file. The reader narrows on `event.type`.
           // One malformed event line must not kill the whole stream. A truncated
           // or non-JSON line (mid-chunk split, proxy hiccup) would otherwise throw
           // out of the read loop and abort the turn — skip it and keep reading.

@@ -12,33 +12,16 @@
 // hooks can type against them WITHOUT reaching into capabilities/widgets/Bigsail/.
 // Bigsail consumes them like any other consumer; it does not own them.
 
-// The capability vocabulary. Keep aligned with the backend render tools and the
-// planner's PlanCapability.
-export type Capability =
-  | "table"
-  | "chart"
-  | "timeline"
-  | "knowledge-graph"
-  | "images";
-
-export interface PlanIntent {
-  capability: Capability;
-  // Optional human-readable subject ("France/Germany/Spain populations"). Used to
-  // order/label cards; never required.
-  subject?: string;
-}
-
-export interface PlanRelationship {
-  // Indices into intents[]. Directed: from → to.
-  from: number;
-  to: number;
-  label?: string;
-}
-
-export interface CompositionPlan {
-  intents: PlanIntent[];
-  relationships: PlanRelationship[];
-}
+// The capability vocabulary + the composition plan now live in the shared FE↔BE
+// contract (shared/contract, plan 001) — they ride the `plan` SSE event, so both sides
+// import one definition. Re-exported here so existing `lib/composition` importers are
+// unchanged. TilesLayoutItem stays below (it's a persisted jsonb shape, not a wire event).
+export type {
+  Capability,
+  CompositionPlan,
+  PlanIntent,
+  PlanRelationship,
+} from "@contract/plan";
 
 // One placed card in grid units. Mirrors the backend UiState.tilesLayout shape and
 // GridStack's serialized node ({id,x,y,w,h}).
