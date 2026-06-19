@@ -798,57 +798,64 @@ export function toolResultStatus(
   return `Got ${n} ${noun}${n === 1 ? "" : "s"} — shaping…`;
 }
 
+// One tool's runtime facts in ONE place: how to run it, and whether its input JSON
+// streams to the client mid-call. Previously these were split across the executeTool
+// switch + a hand-kept STREAMABLE_RENDER_TOOLS set, so adding a tool meant editing both
+// and not forgetting one. Now a tool is a single registry row.
+//
+// `streamable` = the tool's tool_use input IS the widget spec verbatim (execute just
+// echoes it), so we can forward the partial input_json_delta to the frontend AS IT
+// STREAMS and the widget paints a growing spec. Data tools (wikidata, world_bank, …)
+// are NOT streamable: their result comes from a fetch, not the model's text.
+//
+// `execute`: the render echoes return `JSON.stringify(input)` — that same string is both
+// the tool_result the frontend parses into a widget spec AND the result fed back to the
+// model (a faithful record of what was emitted).
+type ToolEntry = {
+  execute: (input: unknown, sessionId?: string) => Promise<string> | string;
+  streamable?: boolean;
+};
+
+const TOOL_REGISTRY: Record<string, ToolEntry> = {
+  get_current_datetime: { execute: () => new Date().toISOString() },
+  search_images: { execute: (input, sessionId) => searchImages(input, sessionId) },
+  wikidata_search: { execute: (input) => wikidataSearch(input) },
+  wikidata_query: { execute: (input) => wikidataQuery(input) },
+  world_bank: { execute: (input) => worldBank(input) },
+  wikipedia_summary: { execute: (input) => wikipediaSummary(input) },
+  openalex_search: { execute: (input) => openalexSearch(input) },
+  render_images: {
+    streamable: true,
+    // Fire Unsplash photographer-credit pings for the photos actually being rendered
+    // (API-terms compliance), then echo like the other render tools.
+    execute: (input) => {
+      fireUnsplashCreditsForRender(input);
+      return JSON.stringify(input);
+    },
+  },
+  build_knowledge_graph: { streamable: true, execute: (input) => JSON.stringify(input) },
+  render_table: { streamable: true, execute: (input) => JSON.stringify(input) },
+  render_chart: { streamable: true, execute: (input) => JSON.stringify(input) },
+  render_timeline: { streamable: true, execute: (input) => JSON.stringify(input) },
+};
+
 export async function executeTool(
   name: string,
   input: unknown,
   sessionId?: string
 ): Promise<string> {
-  switch (name) {
-    case "get_current_datetime":
-      return new Date().toISOString();
-    case "search_images":
-      return searchImages(input, sessionId);
-    case "wikidata_search":
-      return wikidataSearch(input);
-    case "wikidata_query":
-      return wikidataQuery(input);
-    case "world_bank":
-      return worldBank(input);
-    case "wikipedia_summary":
-      return wikipediaSummary(input);
-    case "openalex_search":
-      return openalexSearch(input);
-    case "render_images":
-      // Fire Unsplash photographer-credit pings for the photos actually being
-      // rendered (API-terms compliance), then echo like the other render tools.
-      fireUnsplashCreditsForRender(input);
-      return JSON.stringify(input);
-    case "build_knowledge_graph":
-    case "render_table":
-    case "render_chart":
-    case "render_timeline":
-      // Echo the structured input straight back. This same string is both the
-      // tool_result the frontend parses into a widget spec AND the result fed back
-      // to the model — fine, since it's a faithful record of what was emitted.
-      return JSON.stringify(input);
-    default:
-      throw new Error(`Unknown tool: "${name}"`);
-  }
+  const entry = TOOL_REGISTRY[name];
+  if (!entry) throw new Error(`Unknown tool: "${name}"`);
+  return entry.execute(input, sessionId);
 }
 
-// The render tools whose tool_use input IS the widget spec verbatim (executeTool
-// just echoes it). Because the result is the streamed input_json_delta and nothing
-// else, we can forward the partial JSON to the frontend AS IT STREAMS and the
-// widget can render a growing spec — no waiting for the whole block. Data tools
-// (wikidata, world_bank, …) are NOT here: their result comes from a fetch, not the
-// model's text, so there's nothing meaningful to stream mid-input.
-export const STREAMABLE_RENDER_TOOLS: ReadonlySet<string> = new Set([
-  "build_knowledge_graph",
-  "render_table",
-  "render_chart",
-  "render_timeline",
-  "render_images",
-]);
+// Derived from the registry — the render tools whose partial input we stream to the
+// client. Single source: add a tool with `streamable: true` and it's covered here.
+export const STREAMABLE_RENDER_TOOLS: ReadonlySet<string> = new Set(
+  Object.entries(TOOL_REGISTRY)
+    .filter(([, entry]) => entry.streamable)
+    .map(([name]) => name)
+);
 
 // --- Self-correction: degenerate-result detection --------------------------
 // Promotes the frontend's empty-panel escalation (useFillFromConversation) into

@@ -89,49 +89,56 @@ export interface ChatMessage {
   attachments?: Attachment[];
 }
 
+// The streaming callbacks, as one struct (named, not 9 positional args). Adding a new
+// callback is a non-breaking optional field here — no positional-slot churn across the
+// interface + both client implementations + the route call site.
+export interface StreamCallbacks {
+  onToken: (token: string) => Promise<void>;
+  onDone: () => Promise<void>;
+  onToolStart?: (name: string, input: unknown) => Promise<void>;
+  onToolResult?: (name: string, result: string) => Promise<void>;
+  // Fired repeatedly while a STREAMABLE render tool's input JSON streams in, then
+  // once more with isComplete=true when the block closes. `partialJson` is the
+  // raw, possibly-incomplete tool input accumulated so far — the same string that
+  // will become the tool_result, just early. Lets the frontend paint a growing
+  // widget spec instead of waiting for the whole block. Render tools only; data
+  // tools never fire this (their result comes from a fetch, not the model text).
+  onToolPartial?: (
+    name: string,
+    partialJson: string,
+    isComplete: boolean
+  ) => Promise<void>;
+  // Fired at the top of the agent loop for the second iteration onward — i.e.
+  // each time tool results are fed back and the model is called again. Lets the
+  // frontend visualise the loop re-entering. Iteration 1 is implied by the
+  // request itself, so it is not signalled here.
+  onLoopStart?: (iteration: number) => Promise<void>;
+  // Display-only status blurb for the activity indicator, fired at points the
+  // loop would otherwise be silent (before the first call, on loop re-entry,
+  // while wrapping up). Cosmetic — it carries no tool semantics and is
+  // superseded the moment a token / tool_start / tool_result arrives.
+  onStatus?: (message: string) => Promise<void>;
+  // Fired once, pre-loop, when the planner produces an abstract composition plan
+  // for this turn (complex turns only). Carries WHICH capabilities + how they
+  // relate — never coordinates. The host forwards it as the `plan` SSE event;
+  // Bigsail consumes it. Absent on simple turns (the planner is gated).
+  onPlan?: (plan: CompositionPlan) => Promise<void>;
+  // Fired once, pre-loop, when the planner decides the turn is thin-but-explodable
+  // and asks ONE clarifying question INSTEAD of composing. When this fires, the
+  // turn ends WITHOUT entering the agent loop: the question streams as the
+  // assistant's text (via onToken) and the host forwards `clarify` as an SSE so
+  // the frontend can render tappable options. Mutually exclusive with onPlan.
+  onClarify?: (clarify: ClarifyResult) => Promise<void>;
+}
+
 export interface LlmClient {
   complete(messages: ChatMessage[]): Promise<string>;
+  // `opts.clarified` is true when this turn is the answer to a prior clarifier —
+  // threaded into the planner so it won't clarify again (no interrogation loops).
   stream(
     messages: ChatMessage[],
-    onToken: (token: string) => Promise<void>,
-    onDone: () => Promise<void>,
-    onToolStart?: (name: string, input: unknown) => Promise<void>,
-    onToolResult?: (name: string, result: string) => Promise<void>,
-    // Fired repeatedly while a STREAMABLE render tool's input JSON streams in, then
-    // once more with isComplete=true when the block closes. `partialJson` is the
-    // raw, possibly-incomplete tool input accumulated so far — the same string that
-    // will become the tool_result, just early. Lets the frontend paint a growing
-    // widget spec instead of waiting for the whole block. Render tools only; data
-    // tools never fire this (their result comes from a fetch, not the model text).
-    onToolPartial?: (
-      name: string,
-      partialJson: string,
-      isComplete: boolean
-    ) => Promise<void>,
-    // Fired at the top of the agent loop for the second iteration onward — i.e.
-    // each time tool results are fed back and the model is called again. Lets the
-    // frontend visualise the loop re-entering. Iteration 1 is implied by the
-    // request itself, so it is not signalled here.
-    onLoopStart?: (iteration: number) => Promise<void>,
-    // Display-only status blurb for the activity indicator, fired at points the
-    // loop would otherwise be silent (before the first call, on loop re-entry,
-    // while wrapping up). Cosmetic — it carries no tool semantics and is
-    // superseded the moment a token / tool_start / tool_result arrives.
-    onStatus?: (message: string) => Promise<void>,
-    // Fired once, pre-loop, when the planner produces an abstract composition plan
-    // for this turn (complex turns only). Carries WHICH capabilities + how they
-    // relate — never coordinates. The host forwards it as the `plan` SSE event;
-    // Bigsail consumes it. Absent on simple turns (the planner is gated).
-    onPlan?: (plan: CompositionPlan) => Promise<void>,
-    // Fired once, pre-loop, when the planner decides the turn is thin-but-explodable
-    // and asks ONE clarifying question INSTEAD of composing. When this fires, the
-    // turn ends WITHOUT entering the agent loop: the question streams as the
-    // assistant's text (via onToken) and the host forwards `clarify` as an SSE so
-    // the frontend can render tappable options. Mutually exclusive with onPlan.
-    onClarify?: (clarify: ClarifyResult) => Promise<void>,
-    // True when this turn is the answer to a prior clarifier — threaded into the
-    // planner so it won't clarify again (no interrogation loops).
-    clarified?: boolean
+    callbacks: StreamCallbacks,
+    opts?: { clarified?: boolean }
   ): Promise<void>;
 }
 
@@ -709,19 +716,19 @@ function createClaudeClient(
       return text;
     },
 
-    async stream(
-      messages,
-      onToken,
-      onDone,
-      onToolStart,
-      onToolResult,
-      onToolPartial,
-      onLoopStart,
-      onStatus,
-      onPlan,
-      onClarify,
-      clarified
-    ) {
+    async stream(messages, callbacks, opts) {
+      const {
+        onToken,
+        onDone,
+        onToolStart,
+        onToolResult,
+        onToolPartial,
+        onLoopStart,
+        onStatus,
+        onPlan,
+        onClarify,
+      } = callbacks;
+      const clarified = opts?.clarified;
       // toApiMessage folds any attachments on the last user turn into content blocks.
       const history: ApiMessage[] = messages.map(toApiMessage);
 
@@ -929,19 +936,19 @@ function createOpenAICompatClient(
       return text;
     },
 
-    async stream(
-      messages,
-      onToken,
-      onDone,
-      onToolStart,
-      onToolResult,
-      onToolPartial,
-      onLoopStart,
-      onStatus,
-      onPlan,
-      onClarify,
-      clarified
-    ) {
+    async stream(messages, callbacks, opts) {
+      const {
+        onToken,
+        onDone,
+        onToolStart,
+        onToolResult,
+        onToolPartial,
+        onLoopStart,
+        onStatus,
+        onPlan,
+        onClarify,
+      } = callbacks;
+      const clarified = opts?.clarified;
       const history: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
         messages.map((m) => ({ role: m.role, content: m.content }));
 

@@ -6,6 +6,10 @@
   "scripts": {
     "diagram": "bun run tools/architecture-diagram/build.ts",
     "diagram:full": "bun run tools/architecture-diagram/build.ts --full",
-    "diagram:scan": "bun run tools/architecture-diagram/scan.ts"
+    "diagram:scan": "bun run tools/architecture-diagram/scan.ts",
+    "verify:backend": "(cd backend && bun run verify)",
+    "verify:frontend": "(cd frontend && bun run build)",
+    "verify": "bun run verify:backend && bun run verify:frontend",
+    "check": "(cd backend && bun run check) && (cd frontend && bun run check)"
   }
 }

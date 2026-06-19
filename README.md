@@ -123,22 +123,25 @@ Then open **http://localhost:5174**. The frontend proxies `/api` requests to the
 
 ## Checks
 
-Run inside **either** `backend/` or `frontend/`:
+**Before pushing**, run the whole repo in one command from the **root**:
+
+```bash
+bun run verify   # backend (typecheck + tests) + frontend (build + tests)
+bun run check    # Biome lint + format check, both packages
+```
+
+`verify` runs the backend's `verify` and the frontend's **`build`** (not just `typecheck`) —
+because `typecheck` and `build` resolve different TypeScript configs in the frontend, so a
+project-references typecheck can false-green; `build` is the real gate.
+
+Or run inside **either** `backend/` or `frontend/` individually:
 
 ```bash
 bun run check        # Biome lint + format check
 bun run check:fix    # Biome — apply fixes
 bun run typecheck    # TypeScript type check
+bun run build        # (frontend) type-check (tsc -b) + production build
 ```
-
-Frontend only:
-
-```bash
-bun run build        # type-check (tsc -b) + production build
-```
-
-> `typecheck` and `build` resolve different TypeScript configs in the frontend — run `build`
-> before deploying, not just `typecheck`.
 
 ---
 

@@ -34,6 +34,7 @@ import {
 } from "./llm";
 import { backfillSnapshotPrompts } from "./recreationPrompt";
 import { MODELS, type Provider, resolveModel } from "./models";
+import { createSseEmitter } from "./sse";
 import { toolStatusLabel } from "./tools";
 
 const app = new Hono();
@@ -507,159 +508,124 @@ app.post("/api/chat", async (c) => {
     .find((m) => m.role === "user");
 
   return streamSSE(c, async (stream) => {
+    const sse = createSseEmitter(stream);
     let assistantText = "";
 
     try {
       await llm.stream(
         messages,
-        async (token) => {
-          assistantText += token;
-          await stream.writeSSE({
-            data: JSON.stringify({ type: "text", content: token }),
-          });
-        },
-        async () => {
-          // The conversation pane must never come back empty. The model is told
-          // to lead with real prose, but it sometimes skips straight to tool
-          // calls (notably on a familiar/repeat prompt where it figures the
-          // panels say it all). If nothing streamed, emit a short fallback line
-          // so the chat thread always has a reply, then persist that — not "".
-          if (!assistantText.trim()) {
-            const fallback =
-              "Here's what I found — take a look at the panels alongside for the details.";
-            assistantText = fallback;
-            await stream.writeSSE({
-              data: JSON.stringify({ type: "text", content: fallback }),
-            });
-          }
-
-          // Persist before [DONE] so the `persisted` id round-trip (below) is
-          // consumed by the client, whose read loop breaks on [DONE].
-          if (persistSession && lastUserMessage) {
-            // Message persistence is the critical path. If it fails, warn the
-            // client so the turn isn't silently lost on reload.
-            try {
-              // Persist the transcript stand-in when the client sent one, so a
-              // verbose fill instruction never reappears on reload — the model
-              // already received the full `content` for this turn.
-              const userId = await saveMessage(
-                persistSession,
-                "user",
-                lastUserMessage.displayText ?? lastUserMessage.content
-              );
-              const assistantId = await saveMessage(
-                persistSession,
-                "assistant",
-                assistantText
-              );
-              // Hand the client the real DB ids so its placeholder ids become
-              // the actual row ids — lets a same-session delete hit the right
-              // rows without a reload. Only sent once both saves succeeded.
-              await stream.writeSSE({
-                data: JSON.stringify({ type: "persisted", userId, assistantId }),
-              });
-            } catch (err) {
-              console.error("Failed to persist chat turn:", err);
-              await stream.writeSSE({
-                data: JSON.stringify({
-                  type: "warning",
-                  message:
-                    "This message could not be saved and may be lost on reload.",
-                }),
-              });
+        {
+          onToken: async (token) => {
+            assistantText += token;
+            await sse.text(token);
+          },
+          onDone: async () => {
+            // The conversation pane must never come back empty. The model is told
+            // to lead with real prose, but it sometimes skips straight to tool
+            // calls (notably on a familiar/repeat prompt where it figures the
+            // panels say it all). If nothing streamed, emit a short fallback line
+            // so the chat thread always has a reply, then persist that — not "".
+            if (!assistantText.trim()) {
+              const fallback =
+                "Here's what I found — take a look at the panels alongside for the details.";
+              assistantText = fallback;
+              await sse.text(fallback);
             }
-          }
 
-          // Terminal signal now — after persistence + the `persisted` round-trip
-          // (so the client's read loop, which breaks on [DONE], consumes them),
-          // but BEFORE auto-titling so the turn finishes immediately and doesn't
-          // wait on the title micro-agent's network call.
-          await stream.writeSSE({ data: "[DONE]" });
-
-          // Auto-title the session from the first user message. A one-shot Haiku
-          // micro-agent names it in a few words; if that fails (bad key, rate
-          // limit) it returns null and we fall back to the truncated message. The
-          // conditional UPDATE is a no-op once a title exists, and a failure here
-          // must never affect message persistence — so it's decoupled, and runs
-          // after [DONE] since the client doesn't block on it.
-          if (persistSession && lastUserMessage && lastUserMessage.content) {
-            try {
-              const generated = await generateTitle(lastUserMessage.content);
-              const title =
-                generated?.title ?? lastUserMessage.content.slice(0, 60);
-              await updateSessionTitleIfEmpty(
-                persistSession,
-                title,
-                generated?.icon ?? null
-              );
-            } catch (err) {
-              console.error("Failed to auto-title session:", err);
+            // Persist before [DONE] so the `persisted` id round-trip (below) is
+            // consumed by the client, whose read loop breaks on [DONE].
+            if (persistSession && lastUserMessage) {
+              // Message persistence is the critical path. If it fails, warn the
+              // client so the turn isn't silently lost on reload.
+              try {
+                // Persist the transcript stand-in when the client sent one, so a
+                // verbose fill instruction never reappears on reload — the model
+                // already received the full `content` for this turn.
+                const userId = await saveMessage(
+                  persistSession,
+                  "user",
+                  lastUserMessage.displayText ?? lastUserMessage.content
+                );
+                const assistantId = await saveMessage(
+                  persistSession,
+                  "assistant",
+                  assistantText
+                );
+                // Hand the client the real DB ids so its placeholder ids become
+                // the actual row ids — lets a same-session delete hit the right
+                // rows without a reload. Only sent once both saves succeeded.
+                await sse.persisted(userId, assistantId);
+              } catch (err) {
+                console.error("Failed to persist chat turn:", err);
+                await sse.warning(
+                  "This message could not be saved and may be lost on reload."
+                );
+              }
             }
-          }
+
+            // Terminal signal now — after persistence + the `persisted` round-trip
+            // (so the client's read loop, which breaks on [DONE], consumes them),
+            // but BEFORE auto-titling so the turn finishes immediately and doesn't
+            // wait on the title micro-agent's network call.
+            await sse.done();
+
+            // Auto-title the session from the first user message. A one-shot Haiku
+            // micro-agent names it in a few words; if that fails (bad key, rate
+            // limit) it returns null and we fall back to the truncated message. The
+            // conditional UPDATE is a no-op once a title exists, and a failure here
+            // must never affect message persistence — so it's decoupled, and runs
+            // after [DONE] since the client doesn't block on it.
+            if (persistSession && lastUserMessage && lastUserMessage.content) {
+              try {
+                const generated = await generateTitle(lastUserMessage.content);
+                const title =
+                  generated?.title ?? lastUserMessage.content.slice(0, 60);
+                await updateSessionTitleIfEmpty(
+                  persistSession,
+                  title,
+                  generated?.icon ?? null
+                );
+              } catch (err) {
+                console.error("Failed to auto-title session:", err);
+              }
+            }
+          },
+          onToolStart: async (tool, input) => {
+            // Carry a human-readable, input-aware label alongside the raw tool so
+            // the UI can show "Searching the web for "…"" instead of the bare name.
+            // The frontend falls back to "Using {tool}…" if label is ever absent.
+            await sse.toolStart(tool, input, toolStatusLabel(tool, input));
+          },
+          onToolResult: async (tool, result) => {
+            await sse.toolResult(tool, result);
+          },
+          onToolPartial: async (tool, partialJson, isComplete) => {
+            // Streamed render-tool spec as it arrives — the frontend re-parses and
+            // re-renders the widget from this growing JSON. tool_result (above) is
+            // still the authoritative final; tool_partial is purely additive.
+            await sse.toolPartial(tool, partialJson, isComplete);
+          },
+          onLoopStart: async (iteration) => {
+            await sse.loopStart(iteration);
+          },
+          onStatus: async (message) => {
+            await sse.status(message);
+          },
+          onPlan: async (plan) => {
+            // The planner's abstract composition plan for this turn (capabilities +
+            // relationships, never coordinates). Bigsail consumes it to order cards
+            // and draw flowchart edges; a future superskill can too.
+            await sse.plan(plan);
+          },
+          onClarify: async (clarify) => {
+            // Thin-but-explodable turn: the planner asked ONE expanding question
+            // instead of composing. The question already streamed as assistant text
+            // (via onToken); this carries the tappable options so the frontend can
+            // render chips. The turn ends here — no agent loop, no widgets.
+            await sse.clarify(clarify.question, clarify.options);
+          },
         },
-        async (tool, input) => {
-          // Carry a human-readable, input-aware label alongside the raw tool so
-          // the UI can show "Searching the web for "…"" instead of the bare name.
-          // The frontend falls back to "Using {tool}…" if label is ever absent.
-          await stream.writeSSE({
-            data: JSON.stringify({
-              type: "tool_start",
-              tool,
-              input,
-              label: toolStatusLabel(tool, input),
-            }),
-          });
-        },
-        async (tool, result) => {
-          await stream.writeSSE({
-            data: JSON.stringify({ type: "tool_result", tool, result }),
-          });
-        },
-        async (tool, partialJson, isComplete) => {
-          // Streamed render-tool spec as it arrives — the frontend re-parses and
-          // re-renders the widget from this growing JSON. tool_result (above) is
-          // still the authoritative final; tool_partial is purely additive.
-          await stream.writeSSE({
-            data: JSON.stringify({
-              type: "tool_partial",
-              tool,
-              partialJson,
-              isComplete,
-            }),
-          });
-        },
-        async (iteration) => {
-          await stream.writeSSE({
-            data: JSON.stringify({ type: "loop_start", iteration }),
-          });
-        },
-        async (message) => {
-          await stream.writeSSE({
-            data: JSON.stringify({ type: "status", message }),
-          });
-        },
-        async (plan) => {
-          // The planner's abstract composition plan for this turn (capabilities +
-          // relationships, never coordinates). Bigsail consumes it to order cards
-          // and draw flowchart edges; a future superskill can too.
-          await stream.writeSSE({
-            data: JSON.stringify({ type: "plan", plan }),
-          });
-        },
-        async (clarify) => {
-          // Thin-but-explodable turn: the planner asked ONE expanding question
-          // instead of composing. The question already streamed as assistant text
-          // (via onToken); this carries the tappable options so the frontend can
-          // render chips. The turn ends here — no agent loop, no widgets.
-          await stream.writeSSE({
-            data: JSON.stringify({
-              type: "clarify",
-              question: clarify.question,
-              options: clarify.options,
-            }),
-          });
-        },
-        clarified === true
+        { clarified: clarified === true }
       );
     } catch (err) {
       console.error("POST /api/chat stream failed:", err);
@@ -667,9 +633,7 @@ app.post("/api/chat", async (c) => {
         err instanceof Error
           ? err.message
           : "Failed to get a reply from the model";
-      await stream.writeSSE({
-        data: JSON.stringify({ type: "error", message }),
-      });
+      await sse.error(message);
     }
   });
 });

@@ -15,12 +15,12 @@ seams that frayed as the code grew.
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | 001 | Shared FE↔BE contract package (`shared/contract/`) | P1 | M | — | DONE (2026-06-18; scoped to SSE + render specs + plan) |
-| 002 | Typed SSE emitter helper (backend chat route) | P2 | S | 001 | TODO |
-| 003 | Tool registry — fold dispatch + metadata into one map | P2 | S | — (uses 001 names if landed) | TODO |
-| 004 | `stream()` callbacks as a struct, not 9 positional args | P2 | S | — | TODO |
+| 002 | Typed SSE emitter helper (backend chat route) | P2 | S | 001 | DONE (2026-06-18) |
+| 003 | Tool registry — fold dispatch + metadata into one map | P2 | S | — | DONE (2026-06-18) |
+| 004 | `stream()` callbacks as a struct, not 9 positional args | P2 | S | — | DONE (2026-06-18) |
 | 005 | Agent-loop characterization tests (`llm.test.ts`) | P1 | M | — | DONE (2026-06-18; committed) |
 | 006 | Unify the duplicated agent loop behind a wire-adapter | P1 | M | **005** | DONE (2026-06-18; 005 tests green unchanged) |
-| 007 | One-command repo verify (root `package.json`) | P2 | S | — | TODO |
+| 007 | One-command repo verify (root `package.json`) | P2 | S | — | DONE (2026-06-18) |
 | 008 | Split `ChatPanel.tsx` god-component | P3 | L | — | TODO |
 | 009 | Decouple the shell from widget internals | P2 | M | — | TODO |
 | 010 | Widget state-provider factory | P2 | M | — | TODO |
@@ -28,6 +28,18 @@ seams that frayed as the code grew.
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 
 ## What landed (2026-06-18)
+
+- **002 / 003 / 004 / 007 are DONE** (the quick wins). 004 (StreamCallbacks struct) replaced
+  `stream()`'s 9 positional callbacks across the `LlmClient` interface, both clients, the `index.ts`
+  call site, and `llm.test.ts`'s shim. 002 (`backend/src/sse.ts` `createSseEmitter`, typed against
+  the `@contract` `SseEvent` union from 001) replaced the 12 hand-rolled `writeSSE` writes in the
+  chat route. 003 collapsed the `executeTool` switch + the hand-kept `STREAMABLE_RENDER_TOOLS` set
+  into one `TOOL_REGISTRY` (the set is now derived). 007 added root `bun run verify` (backend verify
+  + frontend **build**) and `bun run check`, documented in the README. Verified: backend 105/0,
+  frontend build green, root `verify` works. NOTE: root `bun run check` surfaces ~6 **pre-existing**
+  biome findings (legacy non-null assertions / optional-chain / import-type in untouched code —
+  `check` was never a CI gate); none introduced by these plans. Cleaning that lint debt is its own
+  task, intentionally not bundled here.
 
 - **001 is DONE** (the FE↔BE-contract candidate from `/improve-codebase-architecture`). Created
   `shared/contract/` (`sse.ts` discriminated event union · `widgets.ts` the 5 render-tool specs +

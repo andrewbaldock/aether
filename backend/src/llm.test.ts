@@ -188,8 +188,8 @@ beforeEach(() => {
   setOpenAIChunks([]);
 });
 
-// Helper: invoke a client's stream with the current positional callback signature.
-// NOTE: if plans/004 (callbacks-as-struct) lands, update these calls to the struct form.
+// Helper: invoke a client's stream with the StreamCallbacks struct signature (plan 004).
+// `callbacks()` already returns the struct shape, so it passes straight through.
 function runStream(
   // biome-ignore lint/suspicious/noExplicitAny: thin shim over the LlmClient surface
   client: any,
@@ -197,19 +197,7 @@ function runStream(
   messages: any,
   cb: ReturnType<typeof callbacks>
 ) {
-  return client.stream(
-    messages,
-    cb.onToken,
-    cb.onDone,
-    cb.onToolStart,
-    cb.onToolResult,
-    cb.onToolPartial,
-    cb.onLoopStart,
-    cb.onStatus,
-    cb.onPlan,
-    cb.onClarify,
-    false
-  );
+  return client.stream(messages, cb, { clarified: false });
 }
 
 const claude = () =>
