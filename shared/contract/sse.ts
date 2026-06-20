@@ -23,6 +23,7 @@ export const SSE_EVENT_TYPES = [
   "plan",
   "clarify",
   "persisted",
+  "titled",
   "warning",
   "error",
 ] as const;
@@ -59,6 +60,10 @@ export type SseEvent =
   // The turn was saved; carries the real DB row ids so the client swaps its placeholder
   // ids (enables a same-session delete to target the right rows without a reload).
   | { type: "persisted"; userId: string; assistantId: string }
+  // First-turn auto-title landed. Carries the session it names so the client can
+  // patch that row's title/icon into its cache directly (no refetch). `icon` is the
+  // lucide name or null when Haiku returned/validated none.
+  | { type: "titled"; sessionId: string; title: string; icon: string | null }
   // A non-fatal notice (e.g. persistence failed mid-stream).
   | { type: "warning"; message: string }
   // A mid-stream fatal error for this turn.

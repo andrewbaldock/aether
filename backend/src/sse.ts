@@ -25,6 +25,8 @@ export function createSseEmitter(stream: SSEStreamingApi) {
       send({ type: "clarify", question, options }),
     persisted: (userId: string, assistantId: string) =>
       send({ type: "persisted", userId, assistantId }),
+    titled: (sessionId: string, title: string, icon: string | null) =>
+      send({ type: "titled", sessionId, title, icon }),
     warning: (message: string) => send({ type: "warning", message }),
     error: (message: string) => send({ type: "error", message }),
     done: () => stream.writeSSE({ data: "[DONE]" }),

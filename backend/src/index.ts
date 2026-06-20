@@ -102,10 +102,10 @@ async function greenProviders(): Promise<Set<Provider>> {
   if (
     providerHealthCache &&
     Date.now() - providerHealthCache.at < PROVIDER_HEALTH_TTL_MS
-  ) {
-    return providerHealthCache.green;
-  }
-  const providers = await checkProviders();
+) {
+  return providerHealthCache.green;
+}
+const providers = await checkProviders();
   const green = new Set<Provider>(
     (Object.keys(providers) as Provider[]).filter((p) => providers[p].ok)
   );
@@ -563,18 +563,17 @@ app.post("/api/chat", async (c) => {
               }
             }
 
-            // Terminal signal now — after persistence + the `persisted` round-trip
-            // (so the client's read loop, which breaks on [DONE], consumes them),
-            // but BEFORE auto-titling so the turn finishes immediately and doesn't
-            // wait on the title micro-agent's network call.
-            await sse.done();
-
-            // Auto-title the session from the first user message. A one-shot Haiku
-            // micro-agent names it in a few words; if that fails (bad key, rate
-            // limit) it returns null and we fall back to the truncated message. The
-            // conditional UPDATE is a no-op once a title exists, and a failure here
-            // must never affect message persistence — so it's decoupled, and runs
-            // after [DONE] since the client doesn't block on it.
+            // Auto-title the session from the first user message, BEFORE [DONE], so
+            // we can push the title to the client over this same stream (the `titled`
+            // event below) instead of racing a post-[DONE] refetch — the old order
+            // titled after [DONE], but the client's only title refresh fired ON
+            // [DONE], so it always read a still-null title and the raw prompt stuck.
+            // A one-shot Haiku micro-agent names it in a few words; if that fails
+            // (bad key, rate limit) it returns null and we fall back to the truncated
+            // message. The conditional UPDATE is a no-op once a title exists, and a
+            // failure here must never affect message persistence — so it's decoupled
+            // in its own try/catch. The user already has the full streamed answer on
+            // screen by now, so the slight delay to [DONE] isn't perceived.
             if (persistSession && lastUserMessage && lastUserMessage.content) {
               try {
                 const generated = await generateTitle(lastUserMessage.content);
@@ -585,10 +584,17 @@ app.post("/api/chat", async (c) => {
                   title,
                   generated?.icon ?? null
                 );
+                // Hand the freshly-assigned title to the client so it patches its
+                // session cache directly — no refetch, no race.
+                await sse.titled(persistSession, title, generated?.icon ?? null);
               } catch (err) {
                 console.error("Failed to auto-title session:", err);
               }
             }
+
+            // Terminal signal — the client's read loop breaks on [DONE], so it must
+            // come after every event (persisted, titled) we want consumed this turn.
+            await sse.done();
           },
           onToolStart: async (tool, input) => {
             // Carry a human-readable, input-aware label alongside the raw tool so

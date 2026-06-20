@@ -1,5 +1,7 @@
 import type { SseEvent } from "@contract/sse";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
+import { type Session, sessionsKey } from "../hooks/useSessionList";
 import { useAgentEvents } from "./AgentEventContext";
 import { parseSseChunk } from "./parseSseChunk";
 
@@ -85,6 +87,7 @@ export function useChat({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bus = useAgentEvents();
+  const queryClient = useQueryClient();
 
   // Keep a ref to the latest messages so SSE callbacks can read the current
   // list without stale-closure issues — we mutate the ref each render.
@@ -346,10 +349,9 @@ export function useChat({
             bus.emit({ type: "done" });
             // Clear any lingering status blurb now the turn is complete.
             updateAssistant((m) => ({ ...m, toolActivity: undefined }));
-            // Only refresh on the first turn — that's when a title is assigned;
-            // later turns don't change the sidebar, so skip the 50-row refetch.
-            // Guard against a superseded stream firing a stale refresh.
-            if (isFirstTurn && epoch === epochRef.current) refreshSessions();
+            // No refresh here: the first-turn title now arrives as a `titled` SSE
+            // event (handled below) and is patched straight into the session cache,
+            // so there's nothing left to refetch on [DONE].
             break outer;
           }
 
@@ -448,6 +450,19 @@ export function useChat({
               );
               messagesRef.current = updated;
               onMessagesChange(updated);
+            }
+          } else if (event.type === "titled" && event.sessionId && event.title) {
+            // The first-turn auto-title landed. Patch the named row's title/icon
+            // straight into the session-list cache — no refetch, and no race with
+            // the title write (it's already persisted backend-side by now). Drop if
+            // this stream has been superseded.
+            if (epoch === epochRef.current) {
+              const { sessionId: titledId, title, icon } = event;
+              queryClient.setQueryData<Session[]>(sessionsKey(userId), (rows) =>
+                rows?.map((r) =>
+                  r.id === titledId ? { ...r, title, topic_icon: icon } : r
+                )
+              );
             }
           } else if (event.type === "warning") {
             // The turn streamed fine but couldn't be persisted. Surface it
