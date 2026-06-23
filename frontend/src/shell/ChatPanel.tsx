@@ -1033,13 +1033,13 @@ function ConversationTitle({
       >
         {TopicIcon ? (
           <TopicIcon
-            className="h-4 w-4 shrink-0 text-content-subtle group-hover:text-content transition-colors"
+            className="h-4 w-4 shrink-0 text-pink-400/80 group-hover:text-pink-400 transition-colors"
             aria-hidden
           />
         ) : (
           <span
             aria-hidden
-            className="shrink-0 text-xl leading-none text-content-subtle group-hover:text-content transition-colors"
+            className="shrink-0 text-xl leading-none text-pink-400/80 group-hover:text-pink-400 transition-colors"
           >
             𑁍
           </span>

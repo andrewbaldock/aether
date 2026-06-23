@@ -1159,35 +1159,59 @@ export async function generateTitle(
   const client = getAnthropicClient();
   if (!client) return null;
   try {
+    // Forced tool_use: making `icon` a required, enum-constrained field is the only
+    // reliable way to stop Haiku silently omitting it — a free-text JSON prompt left
+    // it optional in practice, so ~85% of sessions came back icon-less (and there's
+    // no icon fallback, unlike the title). tool_choice pins this single tool, so the
+    // reply is always a structured tool_use block — no JSON.parse / fence-stripping.
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 64,
-      system:
-        "You name conversations. Given the user's first message, reply with ONLY " +
-        'a JSON object: {"title": <concise title, at most 5 words, capturing the ' +
-        'topic, no end punctuation>, "icon": <the single best-matching icon for the ' +
-        "topic, chosen ONLY from this list: " +
-        ICON_VOCABULARY.join(", ") +
-        ">}. Pick the closest fit from that list — do not invent names outside it. " +
-        "No preamble, no code fences — just the JSON.",
+      max_tokens: 128,
+      tools: [
+        {
+          name: "name_conversation",
+          description:
+            "Record a concise title and the best-matching topic icon for a conversation.",
+          input_schema: {
+            type: "object",
+            properties: {
+              title: {
+                type: "string",
+                description:
+                  "Concise title, at most 5 words, capturing the topic. No end punctuation.",
+              },
+              icon: {
+                type: "string",
+                enum: [...ICON_VOCABULARY],
+                description:
+                  "The single best-matching icon for the topic. Always pick the closest fit from the list — never omit.",
+              },
+            },
+            required: ["title", "icon"],
+          },
+        },
+      ],
+      tool_choice: { type: "tool", name: "name_conversation" },
       messages: [{ role: "user", content: firstMessage }],
     });
-    const text = response.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("")
-      .trim();
-    // Parse the JSON object; strip any stray code fences first. Best-effort —
-    // a malformed reply falls through to the caller's truncated-message fallback.
-    const jsonText = text.replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
-    const parsed = JSON.parse(jsonText) as { title?: unknown; icon?: unknown };
-    const rawTitle = typeof parsed.title === "string" ? parsed.title : "";
-    const cleaned = rawTitle.replace(/^["']|["']$/g, "").trim();
+    const call = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+    );
+    const input = (call?.input ?? {}) as { title?: unknown; icon?: unknown };
+    const cleaned =
+      typeof input.title === "string"
+        ? input.title.replace(/^["']|["']$/g, "").trim()
+        : "";
     if (cleaned.length === 0) return null;
-    const icon =
-      typeof parsed.icon === "string" && parsed.icon.trim().length > 0
-        ? parsed.icon.trim().slice(0, 40)
-        : null;
+    // The schema `enum` is guidance, NOT enforcement — Haiku can still return a
+    // name outside ICON_VOCABULARY (it has handed back "Cat", "Tv", "Balloon"...).
+    // The frontend renders only vocabulary names, so anything off-list is dead on
+    // arrival — drop it to null here and let the caller's lotus fallback show,
+    // rather than persist an icon string that silently never renders.
+    const raw = typeof input.icon === "string" ? input.icon.trim() : "";
+    const icon = (ICON_VOCABULARY as readonly string[]).includes(raw)
+      ? raw
+      : null;
     return { title: cleaned.slice(0, 60), icon };
   } catch (err) {
     console.error("generateTitle failed:", err);
