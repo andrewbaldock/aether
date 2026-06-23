@@ -33,6 +33,7 @@ const ALL_IDLE: Record<NodeId, NodeStatus> = {
   token_append: "idle",
   stop_reason: "idle",
   tool_exec: "idle",
+  external_data: "idle",
   feed_results: "idle",
   done: "idle",
 };
@@ -47,6 +48,7 @@ const FADE_ORDER: NodeId[] = [
   "token_append",
   "stop_reason",
   "tool_exec",
+  "external_data",
   "feed_results",
   "done",
 ];
@@ -253,6 +255,7 @@ export function useAgentDiagramState(): DiagramState {
                 build_history: "complete",
                 stop_reason: "active",
                 tool_exec: "active",
+                external_data: "active",
               }
             ),
           }));
@@ -361,6 +364,9 @@ export function useAgentDiagramState(): DiagramState {
                   token_append: "complete",
                   stop_reason: "active",
                   tool_exec: "active",
+                  // ponytail: external_data tracks tool_exec, not per-tool —
+                  // refine if the UI ever distinguishes local vs external tools.
+                  external_data: "active",
                 }),
               },
               `stop_reason = tool_use → executeTool(${tool})`
@@ -378,6 +384,7 @@ export function useAgentDiagramState(): DiagramState {
                 nodeStatuses: applyStatuses(s.nodeStatuses, {
                   stop_reason: "complete",
                   tool_exec: "complete",
+                  external_data: "complete",
                   feed_results: "active",
                 }),
               },

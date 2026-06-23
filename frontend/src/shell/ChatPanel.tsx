@@ -938,7 +938,11 @@ export function ChatPanel() {
                           touch (no hover, so the stop square shows instead). */}
                       <span
                         aria-hidden="true"
-                        className="animate-spin text-2xl leading-none group-hover:hidden max-md:hidden"
+                        // Fixed px size + square flex box: stays big and immune to
+                        // the app text-size setting (text-2xl is rem and would
+                        // scale), and the square box centers the glyph so the spin
+                        // rotates around its true center.
+                        className="flex h-[24px] w-[24px] animate-spin items-center justify-center text-[24px] leading-none group-hover:hidden max-md:hidden"
                       >
                         𑁍
                       </span>

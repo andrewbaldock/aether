@@ -6,7 +6,8 @@ import { ROLE_COLOR, type Role } from "./nodes";
 const ITEMS: { role: Role; label: string }[] = [
   { role: "frontend", label: "Frontend" },
   { role: "backend", label: "Backend" },
-  { role: "claude", label: "Claude API" },
+  { role: "claude", label: "Chosen LLM" },
+  { role: "external", label: "External data" },
   { role: "tool", label: "Tool" },
   { role: "done", label: "Done" },
 ];

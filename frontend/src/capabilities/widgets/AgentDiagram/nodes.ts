@@ -12,12 +12,20 @@ export type NodeId =
   | "token_append"
   | "stop_reason"
   | "tool_exec"
+  | "external_data"
   | "feed_results"
   | "done";
 
-// Which side of the runtime divide a node lives on. Drives its active colour and
-// teaches the architecture: blue = browser, green/purple/amber = server.
-export type Role = "frontend" | "backend" | "claude" | "tool" | "done";
+// Which of the three runtime zones a node lives on. Drives its active colour and
+// teaches the architecture: blue = browser (frontend), green/amber = our server
+// (backend), purple/orange = systems we call out to (external).
+export type Role =
+  | "frontend"
+  | "backend"
+  | "claude"
+  | "tool"
+  | "done"
+  | "external";
 
 export type NodeShape = "rect" | "round" | "diamond";
 
@@ -34,19 +42,24 @@ export interface DiagramNode {
 }
 
 // ── Canvas ────────────────────────────────────────────────────────────────
-export const VIEW_W = 560;
-// Vertical room reserved at the top for the two-line FRONTEND/BACKEND headers.
+// Three equal 280-wide zones: FRONTEND | BACKEND | EXTERNAL.
+export const VIEW_W = 840;
+// Vertical room reserved at the top for the two-line zone headers.
 export const HEADER_H = 64;
-export const VIEW_H = 720 + HEADER_H;
-export const DIVIDER_X = 280;
+// Content bottoms out at the agent-loop box (~730); a small margin past it.
+export const VIEW_H = 680 + HEADER_H;
+// The two dashed dividers between the three zones.
+export const DIVIDER_X1 = 280;
+export const DIVIDER_X2 = 560;
 
 const NW = 156; // standard node width
 const NH = 46; // standard node height
 
 // Column centre lines. Exported so the zone headers (in DiagramSvg) sit over
-// the real columns rather than the midpoint of each half.
-export const FE = 150; // frontend column centre x
-export const BE = 410; // backend column centre x
+// the real columns rather than the midpoint of each zone.
+export const FE = 140; // frontend column centre x
+export const BE = 420; // backend column centre x
+export const EX = 700; // external column centre x
 
 // Helper: a node centred on column `cx` at vertical `y`. Every node is pushed
 // down by HEADER_H so the larger wrapped headers have clear space above.
@@ -82,7 +95,7 @@ export const NODES: DiagramNode[] = [
   n("build_history", "Build history", "backend", BE, 110, {
     sub: "messages → API",
   }),
-  n("claude_api", "Claude API", "claude", BE, 210, {
+  n("claude_api", "Chosen LLM", "claude", EX, 210, {
     sub: "messages.stream()",
   }),
   n("stream_tokens", "Stream tokens", "backend", BE, 300, {
@@ -97,6 +110,9 @@ export const NODES: DiagramNode[] = [
     h: 84,
   }),
   n("tool_exec", "executeTool()", "tool", BE, 522, { sub: "run the tool" }),
+  n("external_data", "External data", "external", EX, 522, {
+    sub: "Wikidata · World Bank · …",
+  }),
   n("feed_results", "Feed results", "backend", BE, 600, {
     sub: "history.push()",
   }),
@@ -149,21 +165,21 @@ export const EDGES: DiagramEdge[] = [
     activeWhen: "build_history",
     d: `M ${right("http_post")} ${midY("http_post")} L ${left("build_history")} ${midY("build_history")}`,
   },
-  // Build history → Claude API (down, backend)
+  // Build history → Claude API (reaches OUT of backend into the external column)
   {
     id: "build-claude",
     from: "build_history",
     to: "claude_api",
     activeWhen: "claude_api",
-    d: `M ${cx("build_history")} ${bottom("build_history")} L ${cx("claude_api")} ${top("claude_api")}`,
+    d: `M ${right("build_history")} ${midY("build_history")} L ${left("claude_api")} ${midY("claude_api")}`,
   },
-  // Claude API → Stream tokens (down, backend)
+  // Claude API → Stream tokens (model streams back INTO the backend)
   {
     id: "claude-stream",
     from: "claude_api",
     to: "stream_tokens",
     activeWhen: "stream_tokens",
-    d: `M ${cx("claude_api")} ${bottom("claude_api")} L ${cx("stream_tokens")} ${top("stream_tokens")}`,
+    d: `M ${left("claude_api")} ${midY("claude_api")} L ${right("stream_tokens")} ${midY("stream_tokens")}`,
   },
   // Stream tokens → Append token (crosses divide back to frontend, token flow)
   {
@@ -199,6 +215,15 @@ export const EDGES: DiagramEdge[] = [
     label: "end_turn",
     // Out the left of the diamond, down, and across into the done node.
     d: `M ${left("stop_reason")} ${midY("stop_reason")} L ${left("stop_reason") - 40} ${midY("stop_reason")} L ${left("stop_reason") - 40} ${midY("done")} L ${right("done")} ${midY("done")}`,
+  },
+  // tool_exec → external_data (the tool reaches OUT to data providers; the result
+  // comes back and continues down via tool-feed)
+  {
+    id: "tool-external",
+    from: "tool_exec",
+    to: "external_data",
+    activeWhen: "tool_exec",
+    d: `M ${right("tool_exec")} ${midY("tool_exec")} L ${left("external_data")} ${midY("external_data")}`,
   },
   // tool_exec → feed_results (down)
   {
@@ -258,7 +283,8 @@ export const LOOP_BOXES: LoopBox[] = [
 export const ROLE_COLOR: Record<Role, string> = {
   frontend: "#16c2ff", // neon cyan (app token) — the browser side
   backend: "#00f0a8", // acid green — server / loop
-  claude: "#c026ff", // synthwave purple — the model
+  claude: "#c026ff", // synthwave purple — the model (external)
   tool: "#ffd400", // electric yellow — tool execution
   done: "#ff2e9a", // neon pink (app token) — terminal / done
+  external: "#ff7849", // synthwave orange — external data providers
 };

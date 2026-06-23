@@ -41,7 +41,7 @@ export function WelcomeWidget(_props: { widget: Widget }) {
           icon={<Wrench className="h-4 w-4" aria-hidden />}
           title="Tools"
           body="Each capability is a tool the agent can call. The knowledge
-            graph is the first; the same seam renders charts, tables, and more."
+            graph is the first; charts, tables, and more are next."
         />
       </div>
 
@@ -50,10 +50,10 @@ export function WelcomeWidget(_props: { widget: Widget }) {
         <div className="border-b border-border bg-surface-raised px-3 py-2 text-xs font-medium uppercase tracking-wide text-content">
           The agent loop
         </div>
-        {/* The diagram is portrait (≈560×784); give the container that
-              aspect ratio so it fills the width instead of floating small in a
-              letterbox. No legend here — the explainer copy already frames it. */}
-        <div className="aspect-[560/784] w-full">
+        {/* Match the diagram's viewBox (≈840×744, three columns) so it fills the
+              frame instead of letterboxing in vertical whitespace. No legend here
+              — the explainer copy already frames it. */}
+        <div className="aspect-[840/744] w-full">
           <AgentDiagramWidget
             widget={_props.widget}
             showLegend={false}

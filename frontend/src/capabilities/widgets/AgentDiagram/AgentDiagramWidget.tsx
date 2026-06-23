@@ -1,15 +1,9 @@
-import { useModelLabel } from "../../../shell/ModelPicker";
-import { useSessionContext } from "../../../shell/SessionContext";
 import type { Widget } from "../../registry";
 import { DiagramSvg } from "./DiagramSvg";
 import { Legend } from "./Legend";
 import { NODES, type Role } from "./nodes";
 import { StepConsole } from "./StepConsole";
 import { useAgentDiagramState } from "./useAgentDiagramState";
-
-// Mirrors ChatPanel's seed for a new conversation's model: the last model the
-// user picked, before a session row exists to hold it.
-const LAST_MODEL_KEY = "aether-last-model";
 
 // "Aether in Action" — a live, animated diagram of the agent loop. It subscribes
 // to the AgentEventBus (the same events useChat reads off the SSE stream) and
@@ -29,17 +23,6 @@ export function AgentDiagramWidget({
   const { nodeStatuses, loopCount, activeToolName, log } =
     useAgentDiagramState();
 
-  // Label the model node with whatever model the agent would actually call.
-  // Same source of truth as the chat footer's picker: the active session's
-  // saved model, falling back to the last-used model before a session exists.
-  // useModelLabel resolves a null/unknown id to the default model's label.
-  const { sessionId, sessions } = useSessionContext();
-  const modelLabel = useModelLabel();
-  const sessionModel =
-    sessions.find((s) => s.id === sessionId)?.model ??
-    localStorage.getItem(LAST_MODEL_KEY);
-  const claudeLabel = modelLabel(sessionModel) ?? undefined;
-
   // A role is "active" when any node of that role is currently lit. The legend
   // highlights these with a glow.
   const activeRoles = new Set<Role>();
@@ -56,7 +39,6 @@ export function AgentDiagramWidget({
           nodeStatuses={nodeStatuses}
           loopCount={loopCount}
           activeToolName={activeToolName}
-          claudeLabel={claudeLabel}
         />
       </div>
       {showConsole && <StepConsole log={log} />}

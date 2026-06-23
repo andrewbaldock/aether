@@ -1,9 +1,11 @@
 import {
   BE,
-  DIVIDER_X,
+  DIVIDER_X1,
+  DIVIDER_X2,
   type DiagramEdge,
   type DiagramNode,
   EDGES,
+  EX,
   FE,
   LOOP_BOXES,
   NODE_BY_ID,
@@ -22,11 +24,6 @@ export interface DiagramSvgProps {
   nodeStatuses: Record<NodeId, NodeStatus>;
   loopCount: number;
   activeToolName: string | null;
-  // Label for the model node. The diagram's topology calls the LLM step
-  // "Claude API" by default, but the agent actually calls whichever model the
-  // conversation has selected — so the caller passes that model's short label
-  // (e.g. "Sonnet 4.6", "Gemini 2.5 Pro") to keep the picture honest.
-  claudeLabel?: string;
 }
 
 // Structural colours track the theme via the semantic CSS vars (see index.css);
@@ -114,11 +111,9 @@ function NodeLabel({
   const cx = node.x + node.w / 2;
   const cy = node.y + node.h / 2;
   const hasSub = Boolean(node.sub);
-  // The model node's label is dynamic (a chosen model's name) and can run
-  // longer than the authored titles, so step the font size down when it would
-  // overflow the chip. ~7.2px/char at size 13 estimates rendered width; the
-  // 16px padding keeps it off the rounded corners. Authored labels are short
-  // and stay at the full size.
+  // Step the font size down for any label that would overflow the chip. ~7.2px/
+  // char at size 13 estimates rendered width; the 16px padding keeps it off the
+  // rounded corners. The authored labels are all short and stay at full size.
   const fitSize = Math.min(
     13,
     ((node.w - 16) / (node.label.length * 7.2)) * 13
@@ -232,7 +227,6 @@ export function DiagramSvg({
   nodeStatuses,
   loopCount,
   activeToolName,
-  claudeLabel,
 }: DiagramSvgProps) {
   const agentBox = LOOP_BOXES.find((b) => b.id === "agent_loop");
   const toolNode = NODE_BY_ID.tool_exec;
@@ -272,16 +266,19 @@ export function DiagramSvg({
         </marker>
       </defs>
 
-      {/* Frontend / Backend divider + headers */}
-      <line
-        x1={DIVIDER_X}
-        y1={8}
-        x2={DIVIDER_X}
-        y2={VIEW_H - 8}
-        stroke="var(--border)"
-        strokeWidth={1}
-        strokeDasharray="2 6"
-      />
+      {/* Frontend / Backend / External dividers + headers */}
+      {[DIVIDER_X1, DIVIDER_X2].map((dx) => (
+        <line
+          key={dx}
+          x1={dx}
+          y1={8}
+          x2={dx}
+          y2={VIEW_H - 8}
+          stroke="var(--border)"
+          strokeWidth={1}
+          strokeDasharray="2 6"
+        />
+      ))}
       <text
         x={FE}
         y={26}
@@ -312,6 +309,22 @@ export function DiagramSvg({
         </tspan>
         <tspan x={BE} dy="22">
           server
+        </tspan>
+      </text>
+      <text
+        x={EX}
+        y={26}
+        textAnchor="middle"
+        fontSize={15}
+        fontWeight={700}
+        letterSpacing={1}
+        fill={captionFill}
+      >
+        <tspan x={EX} dy="0">
+          EXTERNAL
+        </tspan>
+        <tspan x={EX} dy="22">
+          model API
         </tspan>
       </text>
 
@@ -390,12 +403,6 @@ export function DiagramSvg({
       {NODES.map((node) => {
         const status = nodeStatuses[node.id];
         const c = nodeColors(node, status);
-        // The model node shows the selected model's label when one is known,
-        // falling back to its authored "Claude API" title otherwise.
-        const display =
-          node.id === "claude_api" && claudeLabel
-            ? { ...node, label: claudeLabel }
-            : node;
         return (
           <g
             key={node.id}
@@ -404,7 +411,7 @@ export function DiagramSvg({
             style={{ "--node-color": c.glow } as React.CSSProperties}
           >
             <NodeShapeEl node={node} status={status} />
-            <NodeLabel node={display} status={status} />
+            <NodeLabel node={node} status={status} />
           </g>
         );
       })}
