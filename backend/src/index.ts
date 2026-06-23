@@ -26,14 +26,15 @@ import {
   updateSessionWidgetData,
 } from "./db";
 import { checkHealth, checkProviders } from "./health";
+import { tryConsumeChat } from "./ipRateLimit";
 import {
   type Attachment,
   type ChatMessage,
   createClient,
   generateTitle,
 } from "./llm";
-import { backfillSnapshotPrompts } from "./recreationPrompt";
 import { MODELS, type Provider, resolveModel } from "./models";
+import { backfillSnapshotPrompts } from "./recreationPrompt";
 import { createSseEmitter } from "./sse";
 import { toolStatusLabel } from "./tools";
 
@@ -77,7 +78,9 @@ for (const path of READ_PATHS) {
 // write (see frontend apiFetch). When Google sign-in lands this becomes the
 // verified Google sub — extracted from a bearer token HERE instead — and every
 // owner-checked db call keeps working unchanged. Returns null when absent.
-function callerId(c: { req: { header: (name: string) => string | undefined } }) {
+function callerId(c: {
+  req: { header: (name: string) => string | undefined };
+}) {
   const id = c.req.header("X-User-Id");
   return typeof id === "string" && id.length > 0 ? id : null;
 }
@@ -102,10 +105,10 @@ async function greenProviders(): Promise<Set<Provider>> {
   if (
     providerHealthCache &&
     Date.now() - providerHealthCache.at < PROVIDER_HEALTH_TTL_MS
-) {
-  return providerHealthCache.green;
-}
-const providers = await checkProviders();
+  ) {
+    return providerHealthCache.green;
+  }
+  const providers = await checkProviders();
   const green = new Set<Provider>(
     (Object.keys(providers) as Provider[]).filter((p) => providers[p].ok)
   );
@@ -257,7 +260,8 @@ app.patch("/api/sessions/:id", async (c) => {
     if (hasUiState) await updateSessionUiState(id, uiState as UiState, owner);
     return c.json({ ok: true });
   } catch (err) {
-    if (err instanceof NotOwnerError) return c.json({ error: "Forbidden" }, 403);
+    if (err instanceof NotOwnerError)
+      return c.json({ error: "Forbidden" }, 403);
     console.error("PATCH /api/sessions/:id failed:", err);
     return c.json({ error: "Failed to update session" }, 500);
   }
@@ -271,7 +275,8 @@ app.delete("/api/sessions/:id", async (c) => {
     await deleteSession(id, owner);
     return c.json({ ok: true });
   } catch (err) {
-    if (err instanceof NotOwnerError) return c.json({ error: "Forbidden" }, 403);
+    if (err instanceof NotOwnerError)
+      return c.json({ error: "Forbidden" }, 403);
     console.error("DELETE /api/sessions/:id failed:", err);
     return c.json({ error: "Failed to delete session" }, 500);
   }
@@ -300,7 +305,8 @@ app.delete("/api/sessions/:id/messages", async (c) => {
     await deleteMessages(id, ids, owner);
     return c.json({ ok: true });
   } catch (err) {
-    if (err instanceof NotOwnerError) return c.json({ error: "Forbidden" }, 403);
+    if (err instanceof NotOwnerError)
+      return c.json({ error: "Forbidden" }, 403);
     console.error("DELETE /api/sessions/:id/messages failed:", err);
     return c.json({ error: "Failed to delete messages" }, 500);
   }
@@ -353,7 +359,8 @@ app.put("/api/sessions/:id/graph", async (c) => {
     await updateSessionGraphData(id, snapshot, owner);
     return c.json({ ok: true });
   } catch (err) {
-    if (err instanceof NotOwnerError) return c.json({ error: "Forbidden" }, 403);
+    if (err instanceof NotOwnerError)
+      return c.json({ error: "Forbidden" }, 403);
     console.error("PUT /api/sessions/:id/graph failed:", err);
     return c.json({ error: "Failed to save graph" }, 500);
   }
@@ -409,7 +416,8 @@ app.put("/api/sessions/:id/widgets", async (c) => {
     await updateSessionWidgetData(id, snapshot, owner);
     return c.json({ ok: true });
   } catch (err) {
-    if (err instanceof NotOwnerError) return c.json({ error: "Forbidden" }, 403);
+    if (err instanceof NotOwnerError)
+      return c.json({ error: "Forbidden" }, 403);
     console.error("PUT /api/sessions/:id/widgets failed:", err);
     return c.json({ error: "Failed to save widgets" }, 500);
   }
@@ -439,7 +447,8 @@ app.post("/api/sessions/:id/repair-prompts", async (c) => {
     if (filled > 0) await updateSessionWidgetData(id, existing, owner);
     return c.json({ filled, widgets: existing });
   } catch (err) {
-    if (err instanceof NotOwnerError) return c.json({ error: "Forbidden" }, 403);
+    if (err instanceof NotOwnerError)
+      return c.json({ error: "Forbidden" }, 403);
     console.error("POST /api/sessions/:id/repair-prompts failed:", err);
     return c.json({ error: "Failed to repair prompts" }, 500);
   }
@@ -471,6 +480,20 @@ app.post("/api/chat", async (c) => {
     return c.json({ error: "Expected { messages: { role, content }[] }" }, 400);
   }
 
+  // Per-IP spend backstop: the chat proxy is open + unauthenticated, so cap each
+  // caller before any model work. fly-client-ip is the real client IP behind the
+  // Fly proxy; x-forwarded-for covers local/non-Fly runs.
+  const clientIp =
+    c.req.header("fly-client-ip") ||
+    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "unknown";
+  if (!(await tryConsumeChat(clientIp))) {
+    return c.json(
+      { error: "Rate limit exceeded. Please wait and try again." },
+      429
+    );
+  }
+
   // Validate the requested model against the allowlist; an unknown/absent value
   // resolves to undefined, which lets the client fall back to the env/default.
   const selectedModel = resolveModel(model);
@@ -489,7 +512,10 @@ app.post("/api/chat", async (c) => {
   // hard-fail (the user may be viewing a shared conversation before forking it);
   // we just stream the answer without writing. Their own copy persists normally
   // once they fork. Skipped when there's nothing to persist into.
-  if (persistSession && !(await isSessionOwner(persistSession, userId as string)))
+  if (
+    persistSession &&
+    !(await isSessionOwner(persistSession, userId as string))
+  )
     persistSession = null;
 
   // Build the client per request so the tool surface (and graph-mode prompt)
@@ -586,7 +612,11 @@ app.post("/api/chat", async (c) => {
                 );
                 // Hand the freshly-assigned title to the client so it patches its
                 // session cache directly — no refetch, no race.
-                await sse.titled(persistSession, title, generated?.icon ?? null);
+                await sse.titled(
+                  persistSession,
+                  title,
+                  generated?.icon ?? null
+                );
               } catch (err) {
                 console.error("Failed to auto-title session:", err);
               }
@@ -634,12 +664,12 @@ app.post("/api/chat", async (c) => {
         { clarified: clarified === true }
       );
     } catch (err) {
+      // Keep the real error in the server log; never stream it to the client —
+      // err.message can carry provider/key/internal detail (info disclosure).
       console.error("POST /api/chat stream failed:", err);
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Failed to get a reply from the model";
-      await sse.error(message);
+      await sse.error(
+        "Failed to get a reply from the model. Please try again."
+      );
     }
   });
 });
