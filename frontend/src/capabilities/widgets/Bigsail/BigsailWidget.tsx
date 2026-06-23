@@ -73,10 +73,19 @@ export function BigsailWidget(_props: { widget: Widget }) {
   );
   // Always render the user's saved arrangement best-effort, whatever version it
   // was stamped against — never wipe their layout over a version number. The
-  // layout is positioning-only and placeCards clamps each item to the grid, so a
-  // slightly-older shape just re-flows rather than breaking. A stale stamp heals
-  // itself on the next persist (persistLayout writes the current version).
-  const savedLayout = currentSession?.ui_state?.tilesLayout;
+  // layout is positioning-only and placeCards clamps each item to the grid. But a
+  // stale/missing version stamp means the geometry was saved against an OLD grid
+  // (early layouts used a narrower column count, so full-width was w:8 not w:24) —
+  // honored verbatim by System 2 that renders as ~⅓-width cards squished at x:0.
+  // clamp() only stops x+w overflow; it can't rescale to today's GRID_COLUMNS. So a
+  // mismatched stamp is discarded (treated as no saved layout) → System 1 rebuilds
+  // the canvas fresh, exactly like Reset (no content lost, only the arrangement),
+  // and the rebuild persists the current stamp so it self-heals. Current-stamp
+  // layouts pass through untouched.
+  const savedLayout =
+    currentSession?.ui_state?.tilesLayoutVersion === SCHEMA_VERSIONS.tilesLayout
+      ? currentSession?.ui_state?.tilesLayout
+      : undefined;
 
   // Measure the panel only to decide the skinny breakpoint. The grid is always
   // 24 columns; below the breakpoint cards collapse to full-width stacked, above
@@ -235,7 +244,10 @@ export function BigsailWidget(_props: { widget: Widget }) {
       const merged = mergeWithSkeletons(realCards, skeletons);
       const pending = merged.length - realCards.length; // skeletons still shimmering
       if (pending >= SKELETON_FLOOR_COUNT) return merged;
-      return [...merged, ...SKELETON_FLOOR.slice(0, SKELETON_FLOOR_COUNT - pending)];
+      return [
+        ...merged,
+        ...SKELETON_FLOOR.slice(0, SKELETON_FLOOR_COUNT - pending),
+      ];
     }
     // Phase 1: reveal only the dripped-in slice of the skeletons.
     return skeletons.slice(0, dripCount);
@@ -258,16 +270,15 @@ export function BigsailWidget(_props: { widget: Widget }) {
     [cards, isHidden]
   );
 
-  // Merge the saved arrangement with the current card set. THE LAW: the template only
-  // packs while the SYSTEM is loading (streaming a turn or restoring a saved one). Once
-  // settled and the user is READING, `settled` is true → placeCards honors every saved
-  // position verbatim and the template never reflows their cards (a resize/move sticks,
-  // never jumps to the bottom). Recompute when cards, the saved layout, the grid width,
-  // or the streaming/restoring state changes.
-  const settled = !busy && !restoreLoading;
+  // Merge the saved arrangement with the current card set (plan 011, two systems). If
+  // this conversation has no saved layout yet, placeCards runs System 1 (the template)
+  // to build the canvas once; otherwise System 2 honors every saved slot verbatim and
+  // just appends any new card at the bottom (GridStack float:false floats it up). No
+  // streaming/reading mode flag is needed anymore — the saved layout itself is the
+  // signal. Recompute when cards, the saved layout, or the grid width changes.
   const placed = useMemo(
-    () => placeCards(visibleCards, savedLayout, stacked, settled),
-    [visibleCards, savedLayout, stacked, settled]
+    () => placeCards(visibleCards, savedLayout, stacked),
+    [visibleCards, savedLayout, stacked]
   );
 
   // Debounced persistence of the grid arrangement. Keep the latest activeWidget

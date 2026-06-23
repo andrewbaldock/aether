@@ -16,17 +16,24 @@ import {
   type TilesLayoutItem,
 } from "./tilesLayout";
 
-// The Tiles canvas: a GridStack grid that holds cards exactly where they're placed
-// (float ON → no gravity packing), with drag, resize, a fixed gap, and no overlap.
+// The Tiles canvas: a GridStack grid that holds cards on a fixed 24-col grid, with
+// drag, resize, a fixed gap, and no overlap.
 //
-// PACKING IS THE TEMPLATE'S JOB, NOT GRIDSTACK'S. autoLayout() computes explicit x/y
-// for every auto card during streaming/auto-load — that's the only place a card should
-// be "packed" into a slot. With float:false (gravity), GridStack ALSO packs, but
-// continuously and on every user gesture: resizing a card below its row width or
-// dragging it to its own line frees space that gravity then refills, yanking the card
-// (or its neighbour) to the bottom — fighting the user's manual arrangement. float:true
-// turns gravity off so a manual move/resize sticks; the template still positions
-// auto-load cards explicitly, so streaming stays tidy.
+// TWO SYSTEMS, ONE HARD HANDOFF (see plan 011). Layout placement is split into two
+// entirely separate regimes so there's nothing to fight:
+//   • SYSTEM 1 — Streaming Packing (in tilesLayout.autoLayout): the scripted role-based
+//     template. Runs ONLY for the very first build of a conversation's canvas (no saved
+//     tilesLayout yet), computes explicit x/y/w/h for every card, persists once, then
+//     goes dormant for the life of the conversation.
+//   • SYSTEM 2 — Vanilla Grid (this file, float:false): plain GridStack with UPWARD
+//     gravity compaction. Owns everything after the initial build. Saved positions are
+//     honored verbatim; a new card appended at the bottom floats up into the first free
+//     space; hiding a card pulls the rows below it up to close the gap. The template
+//     NEVER runs here.
+// float:false is what gives System 2 its gap-closing: removing/hiding a card auto-
+// compacts the cards below upward, and a dropped card settles into the nearest gap. The
+// old float:true existed to stop the TEMPLATE re-running on every gesture and yanking
+// cards around; with the template no longer running in user mode, float:false is correct.
 //
 // GridStack + React ownership split (the standard pattern that avoids the DOM
 // reconciliation war): GridStack OWNS the grid-item DOM and their positions — we
@@ -46,27 +53,20 @@ interface TilesCanvasProps {
   onDuplicate: (cardId: string) => void;
 }
 
-function serialize(
-  grid: GridStack,
-  userMovedIds: Set<string>
-): TilesLayoutItem[] {
+function serialize(grid: GridStack): TilesLayoutItem[] {
   const nodes = grid.save(false) as GridStackNode[];
   return nodes
     .filter((n) => typeof n.id === "string")
-    .map((n) => {
-      const id = n.id as string;
-      return {
-        id,
-        x: n.x ?? 0,
-        y: n.y ?? 0,
-        w: n.w ?? 1,
-        h: n.h ?? 1,
-        // Carry the user-moved flag so placeCards pins this card on reload instead
-        // of re-templating it. Set only by a genuine drag/resize (see dragstop /
-        // resizestop below), never by a programmatic add/reflow.
-        ...(userMovedIds.has(id) ? { userMoved: true } : {}),
-      };
-    });
+    .map((n) => ({
+      id: n.id as string,
+      x: n.x ?? 0,
+      y: n.y ?? 0,
+      w: n.w ?? 1,
+      h: n.h ?? 1,
+    }));
+  // No `userMoved` stamp: System 2 honors every saved position verbatim and gravity
+  // (float:false) closes gaps, so there's no template to protect cards from — the
+  // distinction the flag drew (pinned vs auto) no longer exists.
 }
 
 export function TilesCanvas({
@@ -86,15 +86,6 @@ export function TilesCanvas({
   const onChangeRef = useRef(onLayoutChange);
   onChangeRef.current = onLayoutChange;
 
-  // Ids the user has dragged/resized this session. Seeded from the pinned cards in
-  // `placed` (autoPlace === false → they came from a userMoved saved entry), then
-  // grown by dragstop/resizestop. serialize() reads it to re-stamp userMoved so the
-  // pin survives reload. A ref (not state) so updating it never re-runs effects.
-  const userMovedRef = useRef<Set<string>>(new Set());
-  for (const p of placed) {
-    if (!p.autoPlace) userMovedRef.current.add(p.card.id);
-  }
-
   // Init GridStack once. The grid is always GRID_COLUMNS wide — responsiveness is
   // the column WIDTH (the grid spans 100% of the panel), not a changing count.
   useEffect(() => {
@@ -105,30 +96,19 @@ export function TilesCanvas({
         column: GRID_COLUMNS,
         cellHeight: GRID_CELL_HEIGHT,
         margin: GRID_MARGIN,
-        float: true, // no gravity — cards stay where placed/dropped/resized (template packs, not GridStack)
+        float: false, // System 2: upward gravity — gaps close, dropped cards settle up
         resizable: { handles: "se" },
         draggable: { handle: ".bigsail-card-drag" },
       },
       el
     );
     gridRef.current = grid;
-    // A genuine user drag/resize pins the card: record it so it's re-stamped
-    // userMoved on save and never auto-rejiggered again. These fire ONLY on user
-    // interaction (not on our programmatic addWidget/reflow), which is exactly the
-    // signal we want — `change` alone can't tell a user move from a reflow.
-    const markMoved = (_e: Event, el: unknown) => {
-      const node = (el as { gridstackNode?: GridStackNode })?.gridstackNode;
-      if (typeof node?.id === "string") userMovedRef.current.add(node.id);
-    };
-    grid.on("dragstop", markMoved);
-    grid.on("resizestop", markMoved);
-    grid.on("change", () =>
-      onChangeRef.current(serialize(grid, userMovedRef.current))
-    );
+    // Every layout change (drag, resize, or gravity compaction) serializes the grid
+    // back to the saved layout. System 2 treats every position as canonical, so there's
+    // no need to distinguish a user move from a reflow anymore.
+    grid.on("change", () => onChangeRef.current(serialize(grid)));
     return () => {
       grid.off("change");
-      grid.off("dragstop");
-      grid.off("resizestop");
       grid.destroy(false);
       gridRef.current = null;
     };
@@ -170,14 +150,15 @@ export function TilesCanvas({
           ".grid-stack-item-content"
         );
         if (content) nextPortals.set(p.card.id, content);
-        // Reflow an AUTO card to its freshly-computed template slot. This is what
-        // makes the layout re-evaluate as cards hydrate: when the KG lands and the
-        // template re-pairs it with the timeline (half/half top row), the timeline's
-        // existing item moves from full-width to its new half slot. Pinned cards
-        // (userMoved) are left exactly where the user put them. Skip no-op updates
-        // so we don't thrash GridStack with identical geometry.
+        // Sync an existing item to its placed geometry. For known cards in System 2,
+        // `placed` IS the saved position (honored verbatim), so this is a no-op for a
+        // card already sitting where it belongs and a correction for one whose saved
+        // slot changed. The no-op guard avoids thrashing GridStack with identical
+        // geometry (which would also fire spurious `change` events). A move/resize the
+        // user just made already lives in the saved layout that produced `placed`, so
+        // this never fights the user. Skip when x/y are undefined (a brand-new card
+        // with no slot — handled by addWidget's autoPosition below).
         if (
-          !userMovedRef.current.has(p.card.id) &&
           p.x !== undefined &&
           p.y !== undefined &&
           (existing.x !== p.x ||
@@ -189,11 +170,11 @@ export function TilesCanvas({
         }
         continue;
       }
-      // New card: let GridStack create the item DOM, then portal React in. We
-      // always have explicit x/y now — the auto-layout (full-width, bottom-squared)
-      // computes them for fresh cards, and saved cards carry the user's. Only a
-      // genuinely-new card added onto an existing user arrangement lacks x/y, in
-      // which case autoPosition lets GridStack find a gap.
+      // New card: let GridStack create the item DOM, then portal React in. System 1
+      // gives every card an explicit x/y on the initial build; System 2 gives known
+      // cards their saved x/y and appends a new card below everything with an explicit
+      // y, so gravity (float:false) then floats it up into the first free space. If
+      // x/y are somehow absent, autoPosition lets GridStack find a gap itself.
       const hasPos = p.x !== undefined && p.y !== undefined;
       const node = grid.addWidget({
         id: p.card.id,
@@ -209,9 +190,8 @@ export function TilesCanvas({
     }
 
     grid.batchUpdate(false);
-    // No compact() here: the auto-layout already fills the width and squares the
-    // bottom, and compacting would collapse those full-width rows back to intrinsic
-    // widths (re-introducing the ragged right edge).
+    // No explicit compact() needed: float:false makes GridStack compact upward on its
+    // own as widgets are added/removed, which is exactly System 2's gap-closing.
     setPortals(nextPortals);
   }, [placed]);
 
@@ -425,7 +405,10 @@ function CardChromeButton({
   children: React.ReactNode;
 }) {
   return (
-    <Tooltip label={label} className={`shrink-0${className ? ` ${className}` : ""}`}>
+    <Tooltip
+      label={label}
+      className={`shrink-0${className ? ` ${className}` : ""}`}
+    >
       <button
         type="button"
         aria-label={label}

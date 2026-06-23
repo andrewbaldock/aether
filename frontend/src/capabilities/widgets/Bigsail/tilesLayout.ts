@@ -2,11 +2,16 @@
 // grid (column + row units, never pixels) so the arrangement is resolution-
 // independent and serializes cleanly to the conversation's ui_state. Responsiveness
 // is the column WIDTH (panelWidth / 24), not the column COUNT — everything grows and
-// shrinks with the panel/window. The default arrangement is a fixed ROLE-BASED
-// TEMPLATE (KG on top, Timeline + stacked Charts, then Table, then Images); the user
-// can drag/resize freely from there and that arrangement persists. This module is the
-// pure glue: the grid config, the template, and the merge that preserves the user's
-// saved arrangement while auto-placing new cards.
+// shrinks with the panel/window.
+//
+// TWO SYSTEMS (plan 011). Placement is split into two entirely separate regimes with a
+// one-time handoff:
+//   • SYSTEM 1 — autoLayout(): the fixed ROLE-BASED TEMPLATE (KG | Timeline top row,
+//     then Table, Charts, Images). Runs ONLY on the initial build of a conversation's
+//     canvas (and on Reset), scripts an explicit x/y/w/h for every card, persists once.
+//   • SYSTEM 2 — placeCards() once a saved layout exists: honor each saved slot verbatim;
+//     append a new card below everything (GridStack float:false then floats it up). The
+//     template NEVER runs here. placeCards is the handoff: empty saved → System 1, else 2.
 
 import type { TilesLayoutItem } from "../../../lib/composition";
 import type { Card, CardCapability } from "./cards";
@@ -96,7 +101,9 @@ function stackFullWidth(
   return y;
 }
 
-// Place cards into the FIXED TEMPLATE.
+// Place cards into the FIXED TEMPLATE — SYSTEM 1 (Streaming Packing). Runs only for
+// the initial build of a conversation's canvas (and on Reset); System 2 owns the canvas
+// forever after, so this never has to coexist with user-arranged ("pinned") cards.
 //   • stacked → skinny viewport: every card is full-width, stacked top to bottom.
 //     The saved arrangement is NOT consulted here (it's preserved in the DB and
 //     reappears when the panel widens).
@@ -106,29 +113,13 @@ function stackFullWidth(
 //     charts ALL stack full-width; any EXTRA cards of the other types stack
 //     full-width below the whole template. A missing capability's slot simply
 //     collapses (no gap). Deterministic → identical every render and device.
-//     Drag/resize still apply afterwards (GridStack); this is just the default the
-//     user starts from and "Reset layout" returns to.
-//
-// `pinned` is the user-moved cards already placed at their saved geometry. It matters
-// for the KG↔Timeline top row: that row's lone-survivor promotion (half→full when its
-// partner is absent) must NOT fire when the partner is merely PINNED rather than truly
-// absent — otherwise dragging one onto the other to swap them makes the survivor
-// balloon to full width and dumps the pin below. A pinned partner is counted as
-// occupying the row (so the auto card stays half-width), and the auto card takes the
-// slot the pin ISN'T in, at the pin's y, so the two land side by side — i.e. swapped.
-export function autoLayout(
-  cards: Card[],
-  stacked: boolean,
-  pinned: readonly PlacedCard[] = []
-): PlacedCard[] {
+export function autoLayout(cards: Card[], stacked: boolean): PlacedCard[] {
   const out: PlacedCard[] = [];
 
   if (stacked) {
     stackFullWidth(cards, 0, out);
     return out;
   }
-
-  const pinnedByCap = new Map(pinned.map((p) => [p.card.capabilityType, p]));
 
   // Bucket cards by capability, preserving arrival order within each type.
   const by = (cap: CardCapability) =>
@@ -151,59 +142,17 @@ export function autoLayout(
   //    If NEITHER exists the row collapses (no gap).
   const kgCard = kg[0];
   const timelineCard = timelines[0];
-  const pinnedKg = pinnedByCap.get("knowledge-graph");
-  const pinnedTimeline = pinnedByCap.get("timeline");
-  // The top row is "paired" — each slot half-width — when BOTH slots are filled,
-  // counting a PINNED occupant of the other capability as filled. So a lone auto
-  // card whose partner the user pinned (e.g. dragged to swap) stays half-width
-  // rather than ballooning to full width.
-  // A pinned partner only counts as the top-row mate when it's STILL IN THE TOP ROW
-  // (y === 0). The pairing logic (half-width slots, dodge to the open slot, share the
-  // pin's y) is the SWAP affordance: drag KG onto Timeline within the top row → they
-  // trade slots. But if the user drags a half-width card to ITS OWN LINE (a different
-  // row, y > 0), that's NOT a swap — the auto partner must keep its own top-row slot,
-  // not get yanked down to the pin's row (and not balloon to full width). So the
-  // "present" / pairing checks consider a pinned partner only while it remains at y:0.
-  const pinnedKgInTopRow = pinnedKg !== undefined && (pinnedKg.y ?? 0) === 0;
-  const pinnedTimelineInTopRow =
-    pinnedTimeline !== undefined && (pinnedTimeline.y ?? 0) === 0;
-  const kgPresent = Boolean(kgCard) || pinnedKgInTopRow;
-  const timelinePresent = Boolean(timelineCard) || pinnedTimelineInTopRow;
-  const topRowPaired = kgPresent && timelinePresent;
-  // Lone-survivor promotion (half → full when the partner is absent) is a STREAMING
-  // convenience: while a turn is loading, a solo KG/Timeline fills the row rather than
-  // leaving a dead half-gap. But once the user has started arranging (any pin exists),
-  // promotion must NOT fire — otherwise dragging one half-width card to its own line
-  // balloons the partner left behind to full width (the bug). With pins present, a lone
-  // top-row card keeps its natural HALF width. (No pins = pure template = promote.)
-  const userArranging = pinned.length > 0;
-  const topRowW = topRowPaired || userArranging ? HALF_W : FULL_W;
-  // When the partner is pinned IN THE TOP ROW, the auto card takes the slot the pin
-  // ISN'T in (so they sit side by side rather than overlapping) at the pin's y.
-  // Default slots (no top-row pinned partner): KG left, Timeline right, at y:0.
+  const topRowPaired = Boolean(kgCard) && Boolean(timelineCard);
+  const topRowW = topRowPaired ? HALF_W : FULL_W;
   if (kgCard) {
-    // Left slot by default; dodge to the right only if a pinned timeline holds the
-    // left half OF THE TOP ROW.
-    const partnerLeft =
-      pinnedTimelineInTopRow && (pinnedTimeline!.x ?? 0) < HALF_W;
-    out.push({
-      card: kgCard,
-      x: topRowPaired && partnerLeft ? HALF_W : 0,
-      y: pinnedTimelineInTopRow ? pinnedTimeline!.y : y,
-      w: topRowW,
-      h: SLOT_H,
-      autoPlace: true,
-    });
+    out.push({ card: kgCard, x: 0, y, w: topRowW, h: SLOT_H, autoPlace: true });
   }
   if (timelineCard) {
-    // Right slot by default; dodge to the left only if a pinned KG holds the right
-    // half OF THE TOP ROW (e.g. the user dragged the KG into the timeline's slot to
-    // swap them).
-    const partnerRight = pinnedKgInTopRow && (pinnedKg!.x ?? 0) >= HALF_W;
+    // Right half when paired with the KG; otherwise it anchors the full top row.
     out.push({
       card: timelineCard,
-      x: topRowPaired && !partnerRight ? HALF_W : 0,
-      y: pinnedKgInTopRow ? pinnedKg!.y : y,
+      x: topRowPaired ? HALF_W : 0,
+      y,
       w: topRowW,
       h: SLOT_H,
       autoPlace: true,
@@ -252,22 +201,16 @@ export function autoLayout(
   return out;
 }
 
-// Merge the saved layout with the current card set.
+// THE HANDOFF (plan 011). Placement is two entirely separate systems with one signal
+// deciding which runs: does the saved layout already hold a real (non-skeleton) entry?
 //
-// THE LAW (Andrew): packing/templating is for the SYSTEM while STREAMING. The user is
-// KING while READING — during and after any drag/drop/resize, the system bends to them
-// and NEVER reflows their cards. So placement has two distinct modes:
-//
-//   • settled === false  → STREAMING / RESTORING. The template runs: auto cards get
-//     their role-based slots, re-evaluated as cards hydrate (the KG loads via a separate
-//     async fetch and lands a beat late — the template must re-pair it with the timeline
-//     when it arrives). USER-MOVED cards are still pinned verbatim. This is the ONLY time
-//     autoLayout repositions anything.
-//   • settled === true   → READING. The template does NOT run. Every card with a saved
-//     position is honored VERBATIM (clamped to the grid), userMoved or not — because a
-//     resize/move the user just made is the source of truth and must never be reflowed
-//     or jumped to the bottom. A card with no saved entry at all (e.g. unhidden or
-//     duplicated while reading) is the only thing template-placed, so it gets a sane slot.
+//   • NO real saved entry → SYSTEM 1 (Streaming Packing). This conversation's canvas has
+//     never been built. Run the role-based template (autoLayout) over the whole card set
+//     to script an explicit x/y/w/h for every card; it's persisted once and then dormant.
+//   • YES → SYSTEM 2 (Vanilla Grid). The canvas is already built/arranged. Honor each
+//     known card's saved slot VERBATIM (clamped to the grid). A card with NO saved slot
+//     (a new turn's card, an unhide, a duplicate) is appended below everything; GridStack
+//     float:false then floats it up into the first free space. The template NEVER runs.
 //
 // stacked (skinny) → ignore saved positions and stack full-width regardless; the saved
 // "true" layout stays in the DB and reflows back when the panel widens.
@@ -276,42 +219,57 @@ export function autoLayout(
 export function placeCards(
   cards: Card[],
   saved: TilesLayoutItem[] | undefined,
-  stacked: boolean,
-  settled = false
+  stacked: boolean
 ): PlacedCard[] {
   if (stacked) return autoLayout(cards, true);
 
-  const savedById = new Map((saved ?? []).map((s) => [s.id, s]));
+  // Only real (non-skeleton) entries count as "this conversation has been built".
+  // Transient skeleton:* positions are never persisted, but guard anyway so a stray
+  // one can't flip us into System 2 on a fresh build.
+  const savedById = new Map(
+    (saved ?? [])
+      .filter((s) => !s.id.startsWith("skeleton:"))
+      .map((s) => [s.id, s])
+  );
 
-  // Partition: pin a card when the user explicitly moved it OR (when settled/reading)
-  // whenever it has ANY saved position — because while reading, the saved layout is
-  // canonical and the template must not touch it. Auto-arrange only what has no saved
-  // slot to honor.
-  const pinned: PlacedCard[] = [];
-  const autoCards: Card[] = [];
+  // SYSTEM 1: fresh build — no saved layout yet. Script the whole canvas with the
+  // template, once. (This is also the Reset path: resetLayout clears tilesLayout.)
+  if (savedById.size === 0) return autoLayout(cards, false);
+
+  // SYSTEM 2: already built. Honor saved slots verbatim; append new cards at the bottom
+  // so gravity (float:false) floats them up. The template must NOT run here.
+  let appendY = 0;
+  const placed: PlacedCard[] = [];
+  const news: Card[] = [];
   for (const card of cards) {
     const s = savedById.get(card.id);
-    if (s && (s.userMoved || settled)) {
-      // Clamp a pinned card to the grid so a restored card never overflows: width
-      // first, then x into [0, GRID_COLUMNS - w] so x + w can't exceed the grid
-      // (a stale/corrupt saved x like {x:20,w:12} would otherwise run off-grid).
+    if (s) {
+      // Clamp a saved card to the grid so a restored/stale entry never overflows:
+      // width first, then x into [0, GRID_COLUMNS - w] so x + w can't exceed the grid
+      // (a corrupt saved x like {x:20,w:12} would otherwise run off-grid).
       const w = clamp(s.w, 1, GRID_COLUMNS);
       const x = clamp(s.x, 0, GRID_COLUMNS - w);
-      pinned.push({ card, x, y: s.y, w, h: s.h, autoPlace: false });
+      placed.push({ card, x, y: s.y, w, h: s.h, autoPlace: false });
+      appendY = Math.max(appendY, s.y + s.h);
     } else {
-      autoCards.push(card);
+      news.push(card);
     }
   }
 
-  // No pins → the whole canvas is the clean template (the common case: fresh or
-  // restored-but-never-dragged). This is what re-pairs KG+Timeline on every load.
-  if (pinned.length === 0) return autoLayout(autoCards, false);
+  // New cards: stack them full-width below everything saved. GridStack's float:false
+  // then compacts each one upward into the first gap that fits. autoPlace stays true so
+  // the reconcile effect treats their x/y as a starting hint, not a user-fixed pin.
+  for (const card of news) {
+    placed.push({
+      card,
+      x: 0,
+      y: appendY,
+      w: FULL_W,
+      h: SLOT_H,
+      autoPlace: true,
+    });
+    appendY += SLOT_H;
+  }
 
-  // Some pins: keep them verbatim, and template-arrange the rest. autoLayout places
-  // the auto cards at explicit slots and is passed the pins so the KG↔Timeline top row
-  // (a) doesn't promote a lone auto card to full width while the user is arranging, and
-  // (b) gives the auto card the slot the pin isn't in (the swap case). GridStack runs
-  // with float:true (no gravity), so these positions are honored as-is — nothing gets
-  // packed on top of the user's pins.
-  return [...pinned, ...autoLayout(autoCards, false, pinned)];
+  return placed;
 }

@@ -24,6 +24,7 @@ seams that frayed as the code grew.
 | 008 | Split `ChatPanel.tsx` god-component | P3 | L | — | TODO |
 | 009 | Decouple the shell from widget internals | P2 | M | — | TODO |
 | 010 | Widget state-provider factory | P2 | M | — | TODO |
+| 011 | Split Bigsail layout into two systems (Streaming Packing + Vanilla Grid `float:false`) | P1 | M | — | DONE pending live check (2026-06-19; build + 219 unit tests green; Step 6 live + E2E still to run) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale)
 

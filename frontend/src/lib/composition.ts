@@ -31,9 +31,9 @@ export interface TilesLayoutItem {
   y: number;
   w: number;
   h: number;
-  // True once the USER has dragged/resized this card. User-moved cards are pinned
-  // (restored verbatim, never auto-rejiggered); everything else is re-packed by the
-  // template on each card-set change, so e.g. a late-hydrating KG re-pairs with the
-  // timeline instead of being dumped in a gap. Absent/false → auto-arranged.
+  // DEPRECATED (plan 011): no longer read or written. Kept optional for backward-compat
+  // so old saved rows that still carry it load fine. Under the two-system model every
+  // saved position is honored verbatim by System 2, so the pinned-vs-auto distinction
+  // this flag drew no longer exists.
   userMoved?: boolean;
 }

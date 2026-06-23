@@ -15,7 +15,9 @@ const HALF = GRID_COLUMNS / 2;
 const find = (placed: ReturnType<typeof autoLayout>, id: string) =>
   placed.find((p) => p.card.id === id)!;
 
-describe("autoLayout — fixed role-based template", () => {
+// ── SYSTEM 1: the fixed role-based template (autoLayout). Runs only on the initial
+//    build of a conversation's canvas. ────────────────────────────────────────────
+describe("autoLayout — fixed role-based template (System 1)", () => {
   it("returns nothing for no cards", () => {
     expect(autoLayout([], false)).toEqual([]);
   });
@@ -172,214 +174,117 @@ describe("autoLayout — stacked (skinny viewport)", () => {
   });
 });
 
-describe("placeCards", () => {
-  it("uses the template when nothing is saved", () => {
+// ── placeCards: the HANDOFF between the two systems. The single signal is "does the
+//    saved layout hold a real (non-skeleton) entry?" — empty → System 1 (build),
+//    non-empty → System 2 (honor + append). ───────────────────────────────────────
+describe("placeCards — System 1 (no saved layout: build it)", () => {
+  it("runs the template when nothing is saved (undefined)", () => {
     const cards = [card("kg", "knowledge-graph"), card("c", "chart")];
     const placed = placeCards(cards, undefined, false);
+    // Every card gets explicit template geometry (autoPlace).
     expect(placed.every((p) => p.autoPlace && p.x !== undefined)).toBe(true);
+    // KG promoted to full width (lone), chart full-width below it.
+    expect(find(placed, "kg").w).toBe(GRID_COLUMNS);
+    expect(find(placed, "c").w).toBe(GRID_COLUMNS);
   });
 
-  it("pins user-moved cards and templates the rest", () => {
-    const saved = [{ id: "chart:a", x: 2, y: 3, w: 12, h: 5, userMoved: true }];
-    const cards = [card("a"), card("b")];
-    cards[0]!.id = "chart:a";
-    cards[1]!.id = "chart:b";
+  it("runs the template when the saved layout is empty", () => {
+    const cards = [card("kg", "knowledge-graph"), card("t", "timeline")];
+    const placed = placeCards(cards, [], false);
+    // Fresh build → KG+Timeline pair to the half/half top row.
+    expect(find(placed, "kg").w).toBe(HALF);
+    expect(find(placed, "t").w).toBe(HALF);
+    expect(find(placed, "t").x).toBe(HALF);
+  });
+
+  it("treats a saved layout of ONLY skeleton entries as a fresh build", () => {
+    // Skeletons are never persisted, but guard anyway: a stray skeleton:* slot must
+    // not flip the canvas into System 2 and strand the real cards untemplated.
+    const cards = [card("c", "chart")];
+    const saved = [{ id: "skeleton:0", x: 0, y: 0, w: 24, h: 10 }];
     const placed = placeCards(cards, saved, false);
-    const a = placed.find((p) => p.card.id === "chart:a")!;
-    const b = placed.find((p) => p.card.id === "chart:b")!;
-    // The user-moved card is pinned to its saved spot…
-    expect(a.autoPlace).toBe(false);
-    expect(a.x).toBe(2);
-    // …everything else is template-arranged (auto), so it re-packs on each change.
-    expect(b.autoPlace).toBe(true);
+    expect(find(placed, "c").autoPlace).toBe(true); // template-placed
+  });
+});
+
+describe("placeCards — System 2 (saved layout present: honor + append)", () => {
+  it("honors a saved card's slot VERBATIM (the template does not run)", () => {
+    // The resize-to-bottom guarantee: a lone saved KG saved at half width stays half
+    // width — System 1's lone-promotion does NOT fire, because the template never runs
+    // once a layout exists.
+    const kg = card("knowledge-graph:g", "knowledge-graph");
+    kg.id = "knowledge-graph:g";
+    const saved = [{ id: "knowledge-graph:g", x: HALF, y: 4, w: HALF, h: 10 }];
+    const placed = placeCards([kg], saved, false);
+    const p = find(placed, "knowledge-graph:g");
+    expect(p.autoPlace).toBe(false); // honored as a fixed position
+    expect(p.x).toBe(HALF);
+    expect(p.y).toBe(4);
+    expect(p.w).toBe(HALF); // NOT promoted to full
   });
 
-  it("re-templates a saved card that was NOT user-moved", () => {
-    // The crux of the KG/timeline fix: a position saved by the auto-layout (no
-    // userMoved flag — e.g. the KG persisted mid async-load) must NOT pin. It's
-    // re-run through the template so a late card re-pairs instead of sticking.
-    const saved = [{ id: "chart:a", x: 2, y: 3, w: 12, h: 5 }];
-    const cards = [card("a")];
-    cards[0]!.id = "chart:a";
-    const placed = placeCards(cards, saved, false);
-    expect(placed[0]!.autoPlace).toBe(true);
-  });
-
-  it("clamps a user-moved saved width to the grid column count", () => {
-    const saved = [{ id: "chart:a", x: 0, y: 0, w: 40, h: 5, userMoved: true }];
-    const cards = [card("a")];
-    cards[0]!.id = "chart:a";
-    const placed = placeCards(cards, saved, false);
-    expect(placed[0]!.w).toBe(GRID_COLUMNS);
-  });
-
-  it("re-pairs KG+Timeline even when a stale saved layout had them apart", () => {
-    // The reported bug: a layout saved while the KG was mid async-load (timeline
-    // full-width, KG dumped below) must NOT survive as a pin. With neither card
-    // user-moved, placeCards re-templates → KG (x:0) + Timeline (x:HALF) top row.
-    const saved = [
-      { id: "timeline:t", x: 0, y: 0, w: GRID_COLUMNS, h: 10 },
-      { id: "knowledge-graph:graph", x: 0, y: 10, w: GRID_COLUMNS, h: 10 },
-    ];
-    const kg = card("k", "knowledge-graph");
-    kg.id = "knowledge-graph:graph";
-    const t = card("t", "timeline");
-    t.id = "timeline:t";
-    const placed = placeCards([kg, t], saved, false);
-    const pk = find(placed, "knowledge-graph:graph");
-    const pt = find(placed, "timeline:t");
-    expect(pk.y).toBe(0);
-    expect(pt.y).toBe(0);
-    expect(pk.x).toBe(0);
-    expect(pt.x).toBe(HALF);
-    expect(pk.w).toBe(HALF);
-    expect(pt.w).toBe(HALF);
-  });
-
-  it("keeps a half-width slot for the auto partner when its top-row mate is pinned", () => {
-    // The swap bug: drag the KG onto the Timeline to swap them. Only the dragged
-    // card (KG) becomes userMoved → pinned; the Timeline stays an auto card. The
-    // auto-layout, run over the auto cards alone, no longer sees a KG — so the lone-
-    // survivor promotion would balloon the Timeline to full width at x:0 and dump
-    // the KG below. With the pinned KG counted as occupying the top row, the auto
-    // Timeline must stay HALF width in the right slot, so the two simply swap.
-    const saved = [
-      { id: "knowledge-graph:graph", x: HALF, y: 0, w: HALF, h: 10, userMoved: true },
-    ];
-    const kg = card("k", "knowledge-graph");
-    kg.id = "knowledge-graph:graph";
-    const t = card("t", "timeline");
-    t.id = "timeline:t";
-    const placed = placeCards([kg, t], saved, false);
-    const pt = find(placed, "timeline:t");
-    const pk = find(placed, "knowledge-graph:graph");
-    // Timeline stays half-width and dodges to the LEFT slot the pinned KG vacated,
-    // sharing the pin's row — i.e. the two swap places rather than stacking.
-    expect(pt.w).toBe(HALF);
-    expect(pt.x).toBe(0);
-    expect(pt.y).toBe(pk.y);
-    // The pinned KG keeps its dropped geometry verbatim (right slot).
-    expect(pk.x).toBe(HALF);
-    expect(pk.w).toBe(HALF);
-  });
-
-  it("dodges the auto KG to the right when a pinned timeline holds the left slot", () => {
-    // The mirror swap: drag the Timeline onto the KG. Timeline pinned left; the
-    // auto KG must take the RIGHT slot (half-width) on the pin's row, not balloon.
-    const saved = [
-      { id: "timeline:t", x: 0, y: 0, w: HALF, h: 10, userMoved: true },
-    ];
-    const t = card("t", "timeline");
-    t.id = "timeline:t";
-    const kg = card("k", "knowledge-graph");
-    kg.id = "knowledge-graph:graph";
-    const placed = placeCards([kg, t], saved, false);
-    const pk = find(placed, "knowledge-graph:graph");
-    expect(pk.w).toBe(HALF);
-    expect(pk.x).toBe(HALF);
-  });
-
-  it("drags a half-width card to its OWN line: the partner stays half-width in the top row", () => {
-    // The bug: drag the Timeline OUT of the top row to its own line (y:5), not onto
-    // the KG to swap. Only the Timeline is userMoved → pinned at y:5. The auto KG must
-    // NOT balloon to full width, and must NOT get yanked down to the pin's row — it
-    // keeps its half-width left slot at y:0. (Pre-fix it ballooned to full + followed
-    // the pin's y, replacing the user's intended single-on-its-own-line arrangement.)
-    const saved = [
-      { id: "timeline:t", x: 0, y: 5, w: HALF, h: 10, userMoved: true },
-    ];
-    const t = card("t", "timeline");
-    t.id = "timeline:t";
-    const kg = card("k", "knowledge-graph");
-    kg.id = "knowledge-graph:graph";
-    const placed = placeCards([kg, t], saved, false);
-    const pk = find(placed, "knowledge-graph:graph");
-    const pt = find(placed, "timeline:t");
-    // The pinned Timeline stays exactly where the user dropped it (its own line).
-    expect(pt.y).toBe(5);
-    expect(pt.x).toBe(0);
-    // The auto KG stays half-width in the top row's left slot — NOT full width, NOT y:5.
-    expect(pk.w).toBe(HALF);
-    expect(pk.x).toBe(0);
-    expect(pk.y).toBe(0);
-  });
-
-  it("dragging the KG to its own line leaves the Timeline half-width in the top row", () => {
-    // Mirror of the above: pin the KG on its own line; the auto Timeline must stay
-    // half-width at y:0 (right slot by default), not balloon to full width.
-    const saved = [
-      { id: "knowledge-graph:graph", x: 0, y: 8, w: HALF, h: 10, userMoved: true },
-    ];
-    const kg = card("k", "knowledge-graph");
-    kg.id = "knowledge-graph:graph";
-    const t = card("t", "timeline");
-    t.id = "timeline:t";
-    const placed = placeCards([kg, t], saved, false);
-    const pt = find(placed, "timeline:t");
-    expect(pt.w).toBe(HALF);
-    expect(pt.y).toBe(0);
-  });
-
-  it("SETTLED (reading): a resized auto card is honored verbatim, never re-templated", () => {
-    // The resize-to-bottom bug. A settled conversation (not streaming): the user resizes
-    // a table from full (24) to 8 cols. Even WITHOUT a userMoved flag, while reading the
-    // saved position is canonical — the template must not run and shove it to the bottom.
-    const t = card("table:x", "table");
-    t.id = "table:x";
-    const saved = [{ id: "table:x", x: 0, y: 0, w: 8, h: 10 }]; // note: no userMoved
-    const placed = placeCards([t], saved, false, true); // settled = true (reading)
-    const p = find(placed, "table:x");
-    expect(p.w).toBe(8); // kept the user's width
-    expect(p.x).toBe(0);
-    expect(p.y).toBe(0); // did NOT drop to the bottom
-    expect(p.autoPlace).toBe(false); // honored as a fixed position, not template-placed
-  });
-
-  it("SETTLED: every saved card is honored verbatim (no KG/Timeline re-pairing while reading)", () => {
-    // While reading, the template's top-row pairing must NOT fire. Two half-width cards
-    // the user arranged stay exactly as saved, even though the template would re-pair them.
+  it("does NOT re-pair KG+Timeline that the user arranged apart", () => {
+    // While in System 2, two cards the user split onto separate rows stay exactly as
+    // saved — the template's top-row pairing must not fire.
     const kg = card("knowledge-graph:g", "knowledge-graph");
     kg.id = "knowledge-graph:g";
     const t = card("timeline:t", "timeline");
     t.id = "timeline:t";
-    // user put the timeline on its own line below the KG
     const saved = [
       { id: "knowledge-graph:g", x: 0, y: 0, w: HALF, h: 10 },
       { id: "timeline:t", x: 0, y: 12, w: HALF, h: 10 },
     ];
-    const placed = placeCards([kg, t], saved, false, true);
+    const placed = placeCards([kg, t], saved, false);
+    expect(find(placed, "knowledge-graph:g").y).toBe(0);
     expect(find(placed, "timeline:t").y).toBe(12); // stays on its own line
     expect(find(placed, "timeline:t").w).toBe(HALF);
-    expect(find(placed, "knowledge-graph:g").y).toBe(0);
   });
 
-  it("a dropped position lives forever: userMoved is pinned on RESTORE (streaming path) too", () => {
-    // "Once a user drops, that's it — it lives there." When the conversation later
-    // reopens, placement runs in the RESTORE path (settled=false, template active for
-    // auto cards). A userMoved card must STILL be pinned verbatim there, not re-templated.
+  it("clamps a saved width/x to the grid so a stale entry never overflows", () => {
     const t = card("table:x", "table");
     t.id = "table:x";
-    const saved = [{ id: "table:x", x: 0, y: 0, w: 8, h: 10, userMoved: true }];
-    const placed = placeCards([t], saved, false, false); // settled=false → restoring
+    const saved = [{ id: "table:x", x: 20, y: 0, w: 40, h: 5 }];
+    const placed = placeCards([t], saved, false);
     const p = find(placed, "table:x");
-    expect(p.w).toBe(8);
-    expect(p.autoPlace).toBe(false); // pinned, not template-placed
+    expect(p.w).toBe(GRID_COLUMNS); // clamped width
+    expect(p.x).toBe(0); // x clamped into [0, GRID_COLUMNS - w]
   });
 
-  it("SETTLED: a card with NO saved entry still gets a template slot (unhide/duplicate while reading)", () => {
-    // The one thing the template still does while reading: place a card that has no saved
-    // position at all (e.g. just unhidden/duplicated), so it isn't left at 0,0 with no geometry.
+  it("appends a NEW card below all saved cards (gravity floats it up live)", () => {
+    // A new turn's card (no saved slot) is appended below the lowest saved card so
+    // GridStack float:false can float it up into the first free space. Its y must be at
+    // least the max saved y+h. The template is NOT invoked on the known card.
     const existing = card("table:x", "table");
     existing.id = "table:x";
     const fresh = card("chart:new", "chart");
     fresh.id = "chart:new";
     const saved = [{ id: "table:x", x: 0, y: 0, w: 24, h: 10 }];
-    const placed = placeCards([existing, fresh], saved, false, true);
+    const placed = placeCards([existing, fresh], saved, false);
     const pNew = find(placed, "chart:new");
-    expect(pNew.autoPlace).toBe(true); // template-placed (it had no saved slot)
-    expect(pNew.w).toBe(GRID_COLUMNS); // charts go full-width in the template
+    const pOld = find(placed, "table:x");
+    expect(pOld.autoPlace).toBe(false); // honored verbatim
+    expect(pNew.autoPlace).toBe(true); // appended (a starting hint, not a pin)
+    expect(pNew.y!).toBeGreaterThanOrEqual(pOld.y! + pOld.h); // below everything saved
+    expect(pNew.x).toBe(0);
+    expect(pNew.w).toBe(GRID_COLUMNS); // appended full-width
   });
 
+  it("appends multiple new cards stacked, each below the last", () => {
+    const existing = card("table:x", "table");
+    existing.id = "table:x";
+    const a = card("chart:a", "chart");
+    a.id = "chart:a";
+    const b = card("chart:b", "chart");
+    b.id = "chart:b";
+    const saved = [{ id: "table:x", x: 0, y: 0, w: 24, h: 10 }];
+    const placed = placeCards([existing, a, b], saved, false);
+    expect(find(placed, "chart:b").y!).toBeGreaterThan(
+      find(placed, "chart:a").y!
+    );
+  });
+});
+
+describe("placeCards — stacked (skinny) short-circuit", () => {
   it("stacks full-width and ignores the saved layout when skinny", () => {
     const saved = [{ id: "chart:a", x: 12, y: 0, w: 12, h: 5 }];
     const cards = [card("a"), card("b")];
