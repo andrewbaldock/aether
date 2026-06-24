@@ -42,24 +42,25 @@ export interface DiagramNode {
 }
 
 // ── Canvas ────────────────────────────────────────────────────────────────
-// Three equal 280-wide zones: FRONTEND | BACKEND | EXTERNAL.
-export const VIEW_W = 840;
+// Three equal 300-wide zones: FRONTEND | BACKEND | EXTERNAL. Wide and short so
+// the whole loop reads landscape and stays above the fold.
+export const VIEW_W = 900;
 // Vertical room reserved at the top for the two-line zone headers.
 export const HEADER_H = 64;
-// Content bottoms out at the agent-loop box (~730); a small margin past it.
-export const VIEW_H = 680 + HEADER_H;
+// Content bottoms out at the agent-loop box (~574); a small margin past it.
+export const VIEW_H = 512 + HEADER_H;
 // The two dashed dividers between the three zones.
-export const DIVIDER_X1 = 280;
-export const DIVIDER_X2 = 560;
+export const DIVIDER_X1 = 300;
+export const DIVIDER_X2 = 600;
 
-const NW = 156; // standard node width
+const NW = 180; // standard node width
 const NH = 46; // standard node height
 
 // Column centre lines. Exported so the zone headers (in DiagramSvg) sit over
 // the real columns rather than the midpoint of each zone.
-export const FE = 140; // frontend column centre x
-export const BE = 420; // backend column centre x
-export const EX = 700; // external column centre x
+export const FE = 150; // frontend column centre x
+export const BE = 450; // backend column centre x
+export const EX = 750; // external column centre x
 
 // Helper: a node centred on column `cx` at vertical `y`. Every node is pushed
 // down by HEADER_H so the larger wrapped headers have clear space above.
@@ -87,36 +88,36 @@ function n(
 }
 
 export const NODES: DiagramNode[] = [
-  n("user", "User", "frontend", FE, 28, {
+  n("user", "User", "frontend", FE, 16, {
     shape: "round",
     sub: "your message",
   }),
-  n("http_post", "POST /api/chat", "frontend", FE, 110, { sub: "fetch()" }),
-  n("build_history", "Build history", "backend", BE, 110, {
+  n("http_post", "POST /api/chat", "frontend", FE, 80, { sub: "fetch()" }),
+  n("build_history", "Build history", "backend", BE, 80, {
     sub: "messages → API",
   }),
-  n("claude_api", "Chosen LLM", "claude", EX, 210, {
+  n("claude_api", "Chosen LLM", "claude", EX, 142, {
     sub: "messages.stream()",
   }),
-  n("stream_tokens", "Stream tokens", "backend", BE, 300, {
+  n("stream_tokens", "Stream tokens", "backend", BE, 204, {
     sub: "text_delta → SSE",
   }),
-  n("token_append", "Append token", "frontend", FE, 300, {
+  n("token_append", "Append token", "frontend", FE, 204, {
     sub: "setMessages()",
   }),
-  n("stop_reason", "stop_reason?", "backend", BE, 408, {
+  n("stop_reason", "stop_reason?", "backend", BE, 280, {
     shape: "diamond",
-    w: 150,
+    w: 160,
     h: 84,
   }),
-  n("tool_exec", "executeTool()", "tool", BE, 522, { sub: "run the tool" }),
-  n("external_data", "External data", "external", EX, 522, {
+  n("tool_exec", "executeTool()", "tool", BE, 384, { sub: "run the tool" }),
+  n("external_data", "External data", "external", EX, 384, {
     sub: "Wikidata · World Bank · …",
   }),
-  n("feed_results", "Feed results", "backend", BE, 600, {
+  n("feed_results", "Feed results", "backend", BE, 456, {
     sub: "history.push()",
   }),
-  n("done", "onDone() · [DONE]", "done", FE, 600, { sub: "stream closes" }),
+  n("done", "onDone() · [DONE]", "done", FE, 456, { sub: "stream closes" }),
 ];
 
 export const NODE_BY_ID: Record<NodeId, DiagramNode> = Object.fromEntries(
@@ -259,17 +260,17 @@ export const LOOP_BOXES: LoopBox[] = [
   {
     id: "agent_loop",
     label: "agent loop · while (true)",
-    x: BE - 110,
-    y: 188 + HEADER_H,
-    w: 220,
-    h: 478,
+    x: BE - 115,
+    y: 138 + HEADER_H,
+    w: 230,
+    h: 372,
   },
   {
     id: "sse_loop",
     label: "SSE read loop · while (read)",
-    x: FE - 100,
-    y: 278 + HEADER_H,
-    w: 200,
+    x: FE - 110,
+    y: 182 + HEADER_H,
+    w: 220,
     h: 88,
   },
 ];

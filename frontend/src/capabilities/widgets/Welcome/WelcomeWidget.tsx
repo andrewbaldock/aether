@@ -50,10 +50,10 @@ export function WelcomeWidget(_props: { widget: Widget }) {
         <div className="border-b border-border bg-surface-raised px-3 py-2 text-xs font-medium uppercase tracking-wide text-content">
           The agent loop
         </div>
-        {/* Match the diagram's viewBox (≈840×744, three columns) so it fills the
+        {/* Match the diagram's viewBox (≈900×576, three columns) so it fills the
               frame instead of letterboxing in vertical whitespace. No legend here
               — the explainer copy already frames it. */}
-        <div className="aspect-[840/744] w-full">
+        <div className="aspect-[900/576] w-full">
           <AgentDiagramWidget
             widget={_props.widget}
             showLegend={false}

@@ -53,6 +53,7 @@ SERVERS=(
   "website|5173|${CODE_DIR}/website|http|"
   "aether-frontend|5174|${CODE_DIR}/aether/frontend|http|"
   "aether-backend|8000|${CODE_DIR}/aether/backend|health|"
+  "aether-trainer|5177|${CODE_DIR}/aether-trainer|http|"
   "orion-web|5176|${CODE_DIR}/orion/web|http|"
   "orion-api|3000|${CODE_DIR}/orion|stats|server/index.js"
 )
@@ -204,6 +205,8 @@ for s in "${SERVERS[@]}"; do
   elif [ "$name" = "aether-backend" ]; then
     rows+="-----\n"
     rows+="-- Deploy aether (fly → supabase) | bash=\"${SELF}\" param0=deploy-aether terminal=false color=#C77D3A\n"
+  elif [ "$name" = "aether-trainer" ]; then
+    rows+="-- Open aether-trainer (localhost:5177) | href=http://localhost:5177 color=#5B8DEF\n"
   elif [ "$name" = "orion-web" ]; then
     rows+="-- Open Orion (${ORION_URL}) | href=${ORION_URL} color=#5B8DEF\n"
     rows+="-- Build Orion web (bun run build) | bash=\"${SELF}\" param0=build-orion-web terminal=false color=#C77D3A\n"

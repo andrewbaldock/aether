@@ -26,8 +26,12 @@ dropdown has:
 | website | 5173 | HTTP 200 on `/` |
 | aether-frontend | 5174 | HTTP 200 on `/` |
 | aether-backend | 8000 | `/api/health` returns `{"ok":true}` |
+| aether-trainer | 5177 | HTTP 200 on `/` |
 | orion-web | 5176 | HTTP 200 on `/` |
 | orion-api | 3000 | `/api/stats` returns JSON with `total` |
+
+The **aether-trainer** row (the standalone interview-trainer Vite app at `~/Code/aether-trainer`)
+also has an **"Open aether-trainer"** link to `localhost:5177`.
 
 ## Install
 
