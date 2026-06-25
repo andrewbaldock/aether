@@ -286,8 +286,16 @@ export function BigsailWidget(_props: { widget: Widget }) {
   // too, but this avoids a flash before the refetch).
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeWidget = currentSession?.ui_state?.activeWidget ?? null;
-  function persistLayout(layout: TilesLayoutItem[]) {
+  function persistLayout(layout: TilesLayoutItem[], fromUser: boolean) {
     if (!sessionId) return;
+    // System 1 until the user touches a card. A programmatic layout change (streaming
+    // packing, gravity reflow, reconcile sync) must NOT persist — auto-saving the first
+    // streamed panel mid-build is what used to flip the canvas into System 2 too early
+    // and dump later panels at the bottom (the empty-top-left bug). Only a real user
+    // drag/resize (fromUser) commits the arrangement and hands off to System 2;
+    // thereafter (savedLayout non-empty) reflows persist normally.
+    const inSystem2 = (savedLayout?.length ?? 0) > 0;
+    if (!fromUser && !inSystem2) return;
     // Never persist transient skeleton positions — they vanish when the turn
     // settles, so a saved `skeleton:*` entry would just be dead weight on reload.
     const real = layout.filter((item) => !item.id.startsWith("skeleton:"));

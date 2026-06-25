@@ -19,17 +19,21 @@ import {
 // The Tiles canvas: a GridStack grid that holds cards on a fixed 24-col grid, with
 // drag, resize, a fixed gap, and no overlap.
 //
-// TWO SYSTEMS, ONE HARD HANDOFF (see plan 011). Layout placement is split into two
-// entirely separate regimes so there's nothing to fight:
+// TWO SYSTEMS, ONE HARD HANDOFF (see plan 011, amended). Layout placement is split into
+// two entirely separate regimes so there's nothing to fight:
 //   • SYSTEM 1 — Streaming Packing (in tilesLayout.autoLayout): the scripted role-based
-//     template. Runs ONLY for the very first build of a conversation's canvas (no saved
-//     tilesLayout yet), computes explicit x/y/w/h for every card, persists once, then
-//     goes dormant for the life of the conversation.
+//     template. Governs the canvas until the user FIRST moves or resizes a card (no saved
+//     tilesLayout yet) — across the initial build, after the turn settles, on reload, and
+//     on later turns. It re-packs the whole set deterministically, so an untouched canvas
+//     is always tidy.
 //   • SYSTEM 2 — Vanilla Grid (this file, float:false): plain GridStack with UPWARD
-//     gravity compaction. Owns everything after the initial build. Saved positions are
-//     honored verbatim; a new card appended at the bottom floats up into the first free
-//     space; hiding a card pulls the rows below it up to close the gap. The template
-//     NEVER runs here.
+//     gravity compaction. Owns the canvas the moment the user drags/resizes a card (which
+//     persists a layout). Saved positions are honored verbatim; a new card appended at the
+//     bottom floats up into the first free space; hiding a card pulls the rows below it up
+//     to close the gap. The template NEVER runs here.
+// HANDOFF SIGNAL: a real user gesture (dragstop/resizestop), NOT merely "a layout got
+// saved" — auto-saving the first streamed panel used to flip the canvas to System 2
+// mid-build and dump later panels at the bottom. See persistLayout in BigsailWidget.
 // float:false is what gives System 2 its gap-closing: removing/hiding a card auto-
 // compacts the cards below upward, and a dropped card settles into the nearest gap. The
 // old float:true existed to stop the TEMPLATE re-running on every gesture and yanking
@@ -44,7 +48,10 @@ import {
 
 interface TilesCanvasProps {
   placed: PlacedCard[];
-  onLayoutChange: (layout: TilesLayoutItem[]) => void;
+  // `fromUser` is true only for a real drag/resize gesture — the signal that hands
+  // the canvas off to System 2. Programmatic changes (streaming packing, gravity
+  // reflow, reconcile sync) pass false so they never commit an arrangement nobody made.
+  onLayoutChange: (layout: TilesLayoutItem[], fromUser: boolean) => void;
   // Hide a card from the canvas (reversible — re-addable from its tool tab). Wired
   // to the EyeOff action on the card's back face.
   onHide: (cardId: string) => void;
@@ -103,12 +110,19 @@ export function TilesCanvas({
       el
     );
     gridRef.current = grid;
-    // Every layout change (drag, resize, or gravity compaction) serializes the grid
-    // back to the saved layout. System 2 treats every position as canonical, so there's
-    // no need to distinguish a user move from a reflow anymore.
-    grid.on("change", () => onChangeRef.current(serialize(grid)));
+    // The handoff to System 2 happens ONLY when the user moves or resizes a card —
+    // dragstop/resizestop pass fromUser:true so persistLayout commits the arrangement.
+    // A plain `change` (streaming packing, gravity compaction, reconcile sync) fires
+    // throughout the initial build; it passes fromUser:false so it can't flip an
+    // untouched canvas into System 2 (the mid-stream auto-save bug). Once arranged,
+    // persistLayout accepts change events too (it's already in System 2).
+    grid.on("change", () => onChangeRef.current(serialize(grid), false));
+    grid.on("dragstop", () => onChangeRef.current(serialize(grid), true));
+    grid.on("resizestop", () => onChangeRef.current(serialize(grid), true));
     return () => {
       grid.off("change");
+      grid.off("dragstop");
+      grid.off("resizestop");
       grid.destroy(false);
       gridRef.current = null;
     };
