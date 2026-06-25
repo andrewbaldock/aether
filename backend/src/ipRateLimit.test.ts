@@ -41,7 +41,7 @@ mock.module("./llm", () => ({
   generateTitle: mock(async () => null),
 }));
 
-const { tryConsumeChat } = await import("./ipRateLimit");
+const { tryConsumeChat, CHAT_HOURLY_BUDGET } = await import("./ipRateLimit");
 
 let server: { fetch: (req: Request) => Response | Promise<Response> };
 beforeAll(async () => {
@@ -64,11 +64,11 @@ const VALID_BODY = { messages: [{ role: "user", content: "hi" }] };
 
 describe("tryConsumeChat per-IP budget", () => {
   it("allows at the budget ceiling", async () => {
-    rpcResult = 60; // CHAT_HOURLY_BUDGET
+    rpcResult = CHAT_HOURLY_BUDGET;
     expect(await tryConsumeChat("1.2.3.4")).toBe(true);
   });
   it("blocks over the budget", async () => {
-    rpcResult = 61;
+    rpcResult = CHAT_HOURLY_BUDGET + 1;
     expect(await tryConsumeChat("1.2.3.4")).toBe(false);
   });
   it("fails OPEN when the counter errors", async () => {
@@ -79,7 +79,7 @@ describe("tryConsumeChat per-IP budget", () => {
 
 describe("/api/chat rate-limit wiring", () => {
   it("returns 429 and skips the model when over budget", async () => {
-    rpcResult = 61; // limiter will block
+    rpcResult = CHAT_HOURLY_BUDGET + 1; // limiter will block
     createClient.mockClear();
     const res = await postChat(VALID_BODY);
     expect(res.status).toBe(429);

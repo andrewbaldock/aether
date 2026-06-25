@@ -499,10 +499,21 @@ async function runAgentLoop<M>(
           t.inputChunks.push(ev.json);
           if (t.streamable && onToolPartial) {
             const now = Date.now();
-            const snapshot = t.inputChunks.join("");
-            if (snapshot && now - t.lastPartialAt >= 120) {
+            if (now - t.lastPartialAt >= 120) {
               t.lastPartialAt = now;
-              await onToolPartial(t.name, snapshot, false);
+              // Salvage the in-flight snapshot to valid JSON before emitting, so the
+              // widget can paint NOW instead of waiting for the whole tool to finish.
+              // The raw mid-stream accumulation is unbalanced ({"images":[{...},{...)
+              // and the frontend parsers are strict JSON.parse, so every raw partial
+              // failed to parse and nothing dripped — widgets only appeared once the
+              // final (complete) partial landed. closeTruncatedJson rewinds to the
+              // last COMPLETED element and balances the brackets, so the partial
+              // carries every fully-streamed row/image/point and grows each tick.
+              // Skipped until the first element completes (parseBestEffort undefined).
+              const closed = closeTruncatedJson(t.inputChunks.join(""));
+              if (parseBestEffort(closed) !== undefined) {
+                await onToolPartial(t.name, closed, false);
+              }
             }
           }
         }

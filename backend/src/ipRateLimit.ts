@@ -5,11 +5,12 @@ import { incrementCounter } from "./appState";
 // Same fixed-window scheme as rateLimit.ts, shared across Fly instances via the
 // app_state counter so the cap holds no matter which machine serves the request.
 //
-// Budget is a spend backstop, not a correctness gate: a heavy real session runs
-// maybe 20–40 turns/hr, so 60 leaves headroom for a real user while still capping
-// an abuser to 60 model calls/hr per IP. One knob — bump if real users hit it,
-// lower if it's being abused. A hard provider-side spend cap is the real ceiling.
-const CHAT_HOURLY_BUDGET = 60;
+// Budget is a spend backstop, not a correctness gate. Set very high so it never
+// bites a real user / demo (heavy testing was tripping the old 60/hr cap, which
+// 429'd new conversations before the model ran — they came back empty and untitled).
+// It still caps a truly runaway script eventually; a hard provider-side spend cap is
+// the real ceiling. ponytail: one knob — lower it again if the open endpoint gets abused.
+export const CHAT_HOURLY_BUDGET = 100_000;
 
 function hourBucket(now = new Date()): string {
   // e.g. "2026-06-22T15" — year-month-day-hour in UTC. Next hour = new key =
