@@ -26,6 +26,7 @@ import { TilesCanvas } from "./TilesCanvas";
 import {
   placeCards,
   STACK_BREAKPOINT_PX,
+  STACK_HYSTERESIS_PX,
   type TilesLayoutItem,
 } from "./tilesLayout";
 import { useCardDuplicate } from "./useCardDuplicate";
@@ -90,19 +91,31 @@ export function BigsailWidget(_props: { widget: Widget }) {
   // Measure the panel only to decide the skinny breakpoint. The grid is always
   // 24 columns; below the breakpoint cards collapse to full-width stacked, above
   // it they reflow to their true fractional layout. Re-measures on resize.
+  // The breakpoint decision is HYSTERETIC, not a bare width compare. A bare compare
+  // here flipped `stacked` every time the measured width jittered across 560px — and
+  // it jitters by exactly the scrollbar gutter, because the stacked layout is taller
+  // and toggles the vertical scrollbar that shrinks the measured width. That feedback
+  // loop (flip → relayout → scrollbar toggles → width re-crosses → flip) blew React's
+  // update-depth limit (#185) and whited out the page on resize. Only stack below
+  // 560-margin and only un-stack above 560+margin, so the gutter jitter can't ping-pong.
   const hostRef = useRef<HTMLDivElement>(null);
-  const [panelWidth, setPanelWidth] = useState(0);
+  const [stacked, setStacked] = useState(false);
   useEffect(() => {
     const el = hostRef.current;
     if (!el) return;
     const ro = new ResizeObserver(([entry]) => {
-      if (entry) setPanelWidth(entry.contentRect.width);
+      if (!entry) return;
+      const w = entry.contentRect.width;
+      if (w === 0) return; // unmounted/hidden — don't unstack to a phantom 0 width
+      setStacked((prev) =>
+        prev
+          ? w < STACK_BREAKPOINT_PX + STACK_HYSTERESIS_PX // stacked: stay until clearly wide
+          : w < STACK_BREAKPOINT_PX - STACK_HYSTERESIS_PX // wide: stack only when clearly narrow
+      );
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-
-  const stacked = panelWidth > 0 && panelWidth < STACK_BREAKPOINT_PX;
 
   const graphTitle = currentSession?.title ?? undefined;
   const realCards = useMemo(

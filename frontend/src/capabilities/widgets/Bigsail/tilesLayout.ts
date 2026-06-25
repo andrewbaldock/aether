@@ -34,6 +34,16 @@ export const GRID_MARGIN = 6; // px gap around every card (tight grid, no overla
 // to their true fractional layout. Tuned by eye.
 export const STACK_BREAKPOINT_PX = 560;
 
+// Hysteresis dead-band around the breakpoint. A stacked canvas is taller, so it
+// shows a vertical scrollbar that shrinks the measured contentRect width by the
+// scrollbar gutter (~15px). Right at 560px that gutter makes the width oscillate
+// across the threshold, flipping `stacked` on every ResizeObserver tick → endless
+// re-layout → React "max update depth exceeded" (#185), white screen. With a
+// dead-band we only stack below 560-margin and only un-stack above 560+margin, so a
+// ~15px scrollbar jitter can't ping-pong the 48px gap. ponytail: deadband, not a
+// debounce/RAF batch — the scrollbar jitter is the only perturbation, this kills it.
+export const STACK_HYSTERESIS_PX = 24;
+
 // ── Fixed template geometry (grid units) ────────────────────────────────────
 // The canvas has ONE deterministic shape, mirroring the agreed layout:
 //   KG | Timeline    top row, side by side (each half width, standard height)
