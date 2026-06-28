@@ -191,9 +191,14 @@ export function SpecTimeline({
         )
       )}
       {lanes.map((lane) => (
-        <div key={lane.key ?? "__ungrouped"}>
+        <div
+          key={lane.key ?? "__ungrouped"}
+          // Rule + breathing room between stacked group spines. not-first so a
+          // single (ungrouped) lane gets no spurious divider.
+          className="not-first:border-t not-first:border-border not-first:pt-4"
+        >
           {lane.key !== undefined && (
-            <p className="mb-1 text-xs font-medium uppercase tracking-wider text-content-subtle">
+            <p className="mb-2 font-display text-sm font-semibold text-content">
               {groupLabel.get(lane.key) ?? lane.key}
             </p>
           )}

@@ -533,9 +533,52 @@ app.post("/api/chat", async (c) => {
     .reverse()
     .find((m) => m.role === "user");
 
+  // Only a brand-new session needs a title — the first turn is the one where the
+  // client has sent exactly one user message. Guarding on this also drops a Haiku
+  // call that used to fire every turn (relying on the conditional UPDATE no-op).
+  const isFirstTurn =
+    messages.filter((m) => m.role === "user").length === 1;
+
   return streamSSE(c, async (stream) => {
     const sse = createSseEmitter(stream);
     let assistantText = "";
+
+    // Kick the auto-title Haiku call off NOW, in parallel with the main answer,
+    // instead of after it — so the sidebar can be named while the answer is still
+    // streaming. `titleResult` stays `undefined` until it settles; the token loop
+    // flushes the `titled` event the moment it does. A failure resolves to null
+    // and the flush falls back to the truncated prompt.
+    let titleResult: { title: string; icon: string | null } | null | undefined;
+    const titlePromise =
+      isFirstTurn && persistSession && lastUserMessage?.content
+        ? generateTitle(lastUserMessage.content)
+            .then((g) => {
+              titleResult = g;
+            })
+            .catch(() => {
+              titleResult = null;
+            })
+        : null;
+
+    // Emit `titled` exactly once, inline on the single SSE write path (never from a
+    // concurrent task — that would interleave mid-event). No-op until the title has
+    // settled. The conditional UPDATE is a no-op once a title exists.
+    let titleEmitted = false;
+    async function flushTitleIfReady() {
+      if (!titlePromise || titleEmitted || titleResult === undefined) return;
+      titleEmitted = true;
+      try {
+        const title =
+          titleResult?.title ?? lastUserMessage!.content.slice(0, 60);
+        const icon = titleResult?.icon ?? null;
+        await updateSessionTitleIfEmpty(persistSession!, title, icon);
+        // Hand the freshly-assigned title to the client so it patches its session
+        // cache directly — no refetch, no race.
+        await sse.titled(persistSession!, title, icon);
+      } catch (err) {
+        console.error("Failed to auto-title session:", err);
+      }
+    }
 
     try {
       await llm.stream(
@@ -544,6 +587,9 @@ app.post("/api/chat", async (c) => {
           onToken: async (token) => {
             assistantText += token;
             await sse.text(token);
+            // Name the conversation as soon as Haiku replies — typically within the
+            // first few tokens, well before the answer finishes.
+            await flushTitleIfReady();
           },
           onDone: async () => {
             // The conversation pane must never come back empty. The model is told
@@ -589,37 +635,14 @@ app.post("/api/chat", async (c) => {
               }
             }
 
-            // Auto-title the session from the first user message, BEFORE [DONE], so
-            // we can push the title to the client over this same stream (the `titled`
-            // event below) instead of racing a post-[DONE] refetch — the old order
-            // titled after [DONE], but the client's only title refresh fired ON
-            // [DONE], so it always read a still-null title and the raw prompt stuck.
-            // A one-shot Haiku micro-agent names it in a few words; if that fails
-            // (bad key, rate limit) it returns null and we fall back to the truncated
-            // message. The conditional UPDATE is a no-op once a title exists, and a
-            // failure here must never affect message persistence — so it's decoupled
-            // in its own try/catch. The user already has the full streamed answer on
-            // screen by now, so the slight delay to [DONE] isn't perceived.
-            if (persistSession && lastUserMessage && lastUserMessage.content) {
-              try {
-                const generated = await generateTitle(lastUserMessage.content);
-                const title =
-                  generated?.title ?? lastUserMessage.content.slice(0, 60);
-                await updateSessionTitleIfEmpty(
-                  persistSession,
-                  title,
-                  generated?.icon ?? null
-                );
-                // Hand the freshly-assigned title to the client so it patches its
-                // session cache directly — no refetch, no race.
-                await sse.titled(
-                  persistSession,
-                  title,
-                  generated?.icon ?? null
-                );
-              } catch (err) {
-                console.error("Failed to auto-title session:", err);
-              }
+            // Fallback for answers that stream no tokens (e.g. tool-only turns):
+            // onToken never ran, so the title was never flushed. Await the in-flight
+            // Haiku call and emit `titled` before [DONE]. A no-op when the token loop
+            // already flushed it. Decoupled in its own try/catch (inside the flush)
+            // so a title failure never affects message persistence above.
+            if (titlePromise && !titleEmitted) {
+              await titlePromise;
+              await flushTitleIfReady();
             }
 
             // Terminal signal — the client's read loop breaks on [DONE], so it must
