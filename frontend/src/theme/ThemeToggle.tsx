@@ -1,4 +1,4 @@
-import { Tooltip } from "../shell/Tooltip";
+import { IconButton } from "../shell/IconButton";
 import { useTheme } from "./useTheme";
 
 // Sun/moon theme switch. Shows the icon for the current theme (moon = dark,
@@ -15,16 +15,14 @@ export function ThemeToggle({
   const isDark = theme === "dark";
   const label = isDark ? "Switch to light theme" : "Switch to dark theme";
   return (
-    <Tooltip label={label} side={side} className={className}>
-      <button
-        type="button"
-        onClick={toggle}
-        aria-label={label}
-        className="shrink-0 rounded-md border border-transparent p-1.5 text-content-muted transition-colors hover:border-border hover:bg-elevated hover:text-neon-pink"
-      >
-        {isDark ? <MoonIcon /> : <SunIcon />}
-      </button>
-    </Tooltip>
+    <IconButton
+      label={label}
+      side={side}
+      className={className}
+      onClick={toggle}
+    >
+      {isDark ? <MoonIcon /> : <SunIcon />}
+    </IconButton>
   );
 }
 

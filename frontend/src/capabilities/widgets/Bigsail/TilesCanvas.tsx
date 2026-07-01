@@ -4,7 +4,7 @@ import { Copy, EyeOff, GripVertical, RotateCcw, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ConfirmDialog } from "../../../shell/ConfirmDialog";
-import { Tooltip } from "../../../shell/Tooltip";
+import { ICON_BUTTON_CLASS, IconButton } from "../../../shell/IconButton";
 import { BigsailCard } from "./BigsailCard";
 import { CardBack } from "./CardBack";
 import type { Card } from "./cards";
@@ -343,12 +343,13 @@ function CardShell({
             className="bigsail-card-drag flex h-7 shrink-0 cursor-grab items-center gap-2 px-3 bg-elevated/60 active:cursor-grabbing"
             title="Drag to rearrange"
           >
-            <CardChromeButton
+            <IconButton
+              variant="chrome"
               label="Show this widget's parameters"
               onClick={() => setFlipped(true)}
             >
               <Settings className="h-3.5 w-3.5" aria-hidden />
-            </CardChromeButton>
+            </IconButton>
             <span className="truncate font-display text-sm font-semibold text-content">
               {title}
             </span>
@@ -375,12 +376,13 @@ function CardShell({
             className="bigsail-card-drag flex h-7 shrink-0 cursor-grab items-center gap-2 px-3 bg-elevated/60 active:cursor-grabbing"
             title="Drag to rearrange"
           >
-            <CardChromeButton
+            <IconButton
+              variant="chrome"
               label="Back to the widget"
               onClick={() => setFlipped(false)}
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-            </CardChromeButton>
+            </IconButton>
             <span className="truncate font-display text-sm font-semibold text-content">
               {title}
             </span>
@@ -388,13 +390,14 @@ function CardShell({
                 "… (copy)") lands directly beneath it on the canvas and in the tool
                 tab — the user then re-prompts/regenerates the copy. ml-auto pushes
                 this pair to the right; the hide button sits just after it. */}
-            <CardChromeButton
+            <IconButton
+              variant="chrome"
               label="Duplicate this widget"
               className="ml-auto"
               onClick={() => onDuplicate(card.id)}
             >
               <Copy className="h-3.5 w-3.5" aria-hidden />
-            </CardChromeButton>
+            </IconButton>
             {/* Plain button (no Tooltip wrapper) as the dialog trigger: AlertDialog's
                 asChild clones a single DOM element, so nesting a Tooltip (which is
                 its own Radix tree) inside the trigger would be fragile. The title
@@ -411,7 +414,7 @@ function CardShell({
                   aria-label="Hide from canvas"
                   title="Hide from canvas"
                   onPointerDown={(e) => e.stopPropagation()}
-                  className="shrink-0 rounded p-0.5 text-content-faint/60 transition-colors hover:text-content focus-visible:text-content focus-visible:outline-none"
+                  className={`shrink-0 transition-colors ${ICON_BUTTON_CLASS.chrome}`}
                 >
                   <EyeOff className="h-3.5 w-3.5" aria-hidden />
                 </button>
@@ -426,40 +429,5 @@ function CardShell({
         </div>
       </div>
     </div>
-  );
-}
-
-// A small icon button living in a card's drag-handle strip. It stops its own
-// pointer gesture so clicking it acts (flip / hide) instead of starting a GridStack
-// drag, and recedes by default, brightening on hover. `className` is for LAYOUT
-// (e.g. ml-auto) and lands on the Tooltip's flex wrapper — the real DOM node in the
-// handle row — so positioning works even when this is also an AlertDialog trigger.
-function CardChromeButton({
-  label,
-  onClick,
-  className,
-  children,
-}: {
-  label: string;
-  onClick?: () => void;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Tooltip
-      label={label}
-      className={`shrink-0${className ? ` ${className}` : ""}`}
-    >
-      <button
-        type="button"
-        aria-label={label}
-        onClick={onClick}
-        // Keep the drag handle from claiming this gesture.
-        onPointerDown={(e) => e.stopPropagation()}
-        className="rounded p-0.5 text-content-faint/60 transition-colors hover:text-content focus-visible:text-content focus-visible:outline-none"
-      >
-        {children}
-      </button>
-    </Tooltip>
   );
 }

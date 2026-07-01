@@ -16,10 +16,16 @@ commit; see [docs/ROADMAP.md](docs/ROADMAP.md).
   same commit.** No exceptions — a stale stack doc is worse than none.
 - **Any commit that changes how the pieces connect** (new endpoint, new data flow, runtime/port
   change, new tool wiring) **MUST update `docs/ARCHITECTURE.md`.**
+- **Any commit that adds/changes a shared UI primitive or token** (a `shell/*` component, a
+  button/icon-button variant, a color/spacing/typography token) **MUST update
+  `docs/DESIGN_SYSTEM.md` AND add/update the matching live example on the `/style-guide` page**
+  ([`frontend/src/capabilities/widgets/StyleGuide/StyleGuideWidget.tsx`](frontend/src/capabilities/widgets/StyleGuide/StyleGuideWidget.tsx))
+  in the same commit — there's no Storybook here, `/style-guide` is that role, and it's meant to
+  read as ground truth, not lag the code.
 - The README's "tech stack at a glance" and run instructions must match reality too.
 
-When you finish a change, ask: did the stack or the architecture change? If yes, the docs edit is
-part of *this* commit, not a follow-up.
+When you finish a change, ask: did the stack, the architecture, or a shared UI primitive change?
+If yes, the docs edit is part of *this* commit, not a follow-up.
 
 ## The maintainer commits, not the assistant
 
@@ -55,8 +61,8 @@ the phone path first, not as an afterthought.
 - **Seek meaningful unit tests.** Look for opportunities to add unit tests that help future devs
   not break things. Do this autonomously — no need to ask.
 - **Check whether docs need updating.** On every change, check whether `STACK.md`,
-  `ARCHITECTURE.md`, or the README need updates (reinforces "Keep docs current" above). Do this
-  autonomously.
+  `ARCHITECTURE.md`, `DESIGN_SYSTEM.md`/`/style-guide`, or the README need updates (reinforces
+  "Keep docs current" above). Do this autonomously.
 - **Code-review agents (Odin / Angel) are expensive — ask first.** Seek meaningful opportunities
   to run them, but **always ask the maintainer before launching**, and only suggest it at natural
   moments: big changes, seam/architecture changes, refactors. Never run them unprompted.

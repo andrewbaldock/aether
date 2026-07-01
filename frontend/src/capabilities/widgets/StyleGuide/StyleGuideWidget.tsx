@@ -1,5 +1,7 @@
+import { Settings } from "lucide-react";
 import { AdminPage } from "../../../shell/AdminPage";
 import { ConfirmDialog } from "../../../shell/ConfirmDialog";
+import { IconButton } from "../../../shell/IconButton";
 import { Tooltip } from "../../../shell/Tooltip";
 import { FONT_STACK, TEXT_SIZE_PX } from "../../../theme/useAppearance";
 import type { Widget } from "../../registry";
@@ -98,6 +100,29 @@ export function StyleGuideWidget(_props: { widget: Widget }) {
             confirmLabel="Got it"
             onConfirm={() => {}}
           />
+        </div>
+      </Section>
+
+      <Section title="Icon buttons">
+        <p className="mb-3 text-xs text-content-muted">
+          The two icon-only treatments from{" "}
+          <code className="text-content-subtle">shell/IconButton.tsx</code> —
+          "chrome" recedes until hovered (Bigsail card actions), "nav" is
+          bordered and muted until hover/active (sidebar/toolbar utilities).
+        </p>
+        <div className="flex flex-wrap items-center gap-6 rounded-lg border border-border bg-surface-raised p-4">
+          <div className="flex items-center gap-3">
+            <IconButton variant="chrome" label="Chrome variant">
+              <Settings className="h-3.5 w-3.5" aria-hidden />
+            </IconButton>
+            <span className="text-xs text-content-muted">chrome</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <IconButton variant="nav" label="Nav variant">
+              <Settings className="h-4 w-4" aria-hidden />
+            </IconButton>
+            <span className="text-xs text-content-muted">nav</span>
+          </div>
         </div>
       </Section>
 

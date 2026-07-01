@@ -6,7 +6,8 @@ is [STACK.md](./STACK.md), mobile/responsive specifics are [MOBILE.md](./MOBILE.
 
 **See it live, not just described:** the `/style-guide` admin page (Style Guide tab, next to
 Settings/Health) renders every color token, the type scale, the spacing rhythm, a couple of
-primitives, and the five Bigsail widget skeletons — pulled from the running app, not a mockup.
+primitives, both icon-button variants, and the five Bigsail widget skeletons — pulled from the
+running app, not a mockup.
 Source: [`frontend/src/capabilities/widgets/StyleGuide/`](../frontend/src/capabilities/widgets/StyleGuide/).
 
 ---
@@ -123,6 +124,30 @@ token-driven styling and use Radix's `asChild` pattern so a caller's own layout 
 working on the trigger element. There's no packaged component library (shadcn/Chakra) and no
 custom compound-component API beyond what Radix provides — composition here means "wrap a Radix
 primitive," not "build a `<Tabs.List>`-style system."
+
+### Icon buttons
+
+Every icon-only button is the shared `IconButton`
+([`frontend/src/shell/IconButton.tsx`](../frontend/src/shell/IconButton.tsx)) — a Tooltip-wrapped
+`<button>` where `label` doubles as the aria-label and the tooltip text. It has two variants
+(`ICON_BUTTON_CLASS`, exported so a raw `<button>` that can't wrap in `<Tooltip>` — e.g. an
+`AlertDialog` trigger — can still read its class from the same source instead of hand-copying it):
+
+- **`chrome`** (default `stopPointerDown`) — naked, recedes until hovered/focused. Used for
+  Bigsail card drag-handle actions (flip, duplicate, hide) in
+  [`TilesCanvas.tsx`](../frontend/src/capabilities/widgets/Bigsail/TilesCanvas.tsx), where it also
+  swallows its own `pointerdown` so a click doesn't start a GridStack drag.
+- **`nav`** — bordered, muted until hover/active. Used by `HelpButton.tsx` and `ThemeToggle.tsx`
+  (sidebar/toolbar utilities).
+
+**Not migrated, deliberately:** the capability toolbar's right-cluster utility chips
+(`CapabilityChip` with `bare`, in
+[`CapabilityColumn.tsx`](../frontend/src/shell/CapabilityColumn.tsx)) and the fullscreen toggle
+button in the same file look like icon buttons but are coupled to the toolbar chip's
+active/filled/glow state machine and footprint — they stay bespoke rather than forcing a shared
+component to also model chip state.
+
+Live examples of both variants: `/style-guide` → "Icon buttons".
 
 ## Motion
 

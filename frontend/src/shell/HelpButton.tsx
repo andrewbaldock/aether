@@ -1,4 +1,4 @@
-import { Tooltip } from "./Tooltip";
+import { IconButton } from "./IconButton";
 import { useAdminNav } from "./useAdminNav";
 
 // Opens the "Welcome to Aether" explainer. Lives in the sidebar header on
@@ -8,19 +8,17 @@ import { useAdminNav } from "./useAdminNav";
 export function HelpButton({ className }: { className?: string }) {
   const { activate } = useAdminNav("welcome");
   return (
-    <Tooltip label="What is Aether?" side="bottom" className={className}>
-      <button
-        type="button"
-        onClick={(e) => {
-          activate();
-          e.currentTarget.blur();
-        }}
-        aria-label="What is Aether?"
-        className="shrink-0 rounded-md border border-transparent p-1.5 text-content-muted transition-colors hover:border-border hover:bg-elevated hover:text-neon-pink"
-      >
-        <HelpIcon />
-      </button>
-    </Tooltip>
+    <IconButton
+      label="What is Aether?"
+      side="bottom"
+      className={className}
+      onClick={(e) => {
+        activate();
+        e.currentTarget.blur();
+      }}
+    >
+      <HelpIcon />
+    </IconButton>
   );
 }
 
