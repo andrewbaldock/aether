@@ -2,6 +2,8 @@
 
 ![Aether wordmark](design/aether-wordmark.jpg)
 
+![Aether in action](docs/aether-sm.gif)
+
 > Ask questions. Get answers as 3D scenes, graphs, and charts.
 
 [![Frontend: React 19](https://img.shields.io/badge/frontend-React%2019-149eca?logo=react&logoColor=white)](https://react.dev)
