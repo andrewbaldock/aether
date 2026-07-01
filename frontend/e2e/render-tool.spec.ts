@@ -46,14 +46,19 @@ test("render_table round trip renders the table widget", async ({
     // overlapped mid-transition when we click — that overlap is what made the
     // Table-chip click flake on the narrow iphone viewport (the top bar intercepted
     // the pointer event).
-    await expect(page.getByRole("button", { name: "Back to chat" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Back to chat" })
+    ).toBeVisible();
   }
 
   // Activate the Table capability, then assert the spec's content rendered. The
   // chip sits just under the sticky top bar on mobile; force past any residual
   // overlap so the click lands on the chip itself (we've already asserted it's the
   // right, visible element via its accessible name).
-  await page.getByRole("button", { name: "Table" }).first().click({ force: true });
+  await page
+    .getByRole("button", { name: "Table" })
+    .first()
+    .click({ force: true });
 
   // The title text now appears in several places (the capability tab's card title,
   // the Bigsail card header, and the back-face spec JSON), so assert on the first

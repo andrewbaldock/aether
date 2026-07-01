@@ -894,7 +894,9 @@ type ToolEntry = {
 
 const TOOL_REGISTRY: Record<string, ToolEntry> = {
   get_current_datetime: { execute: () => new Date().toISOString() },
-  search_images: { execute: (input, sessionId) => searchImages(input, sessionId) },
+  search_images: {
+    execute: (input, sessionId) => searchImages(input, sessionId),
+  },
   wikidata_search: { execute: (input) => wikidataSearch(input) },
   wikidata_query: { execute: (input) => wikidataQuery(input) },
   world_bank: { execute: (input) => worldBank(input) },
@@ -909,10 +911,16 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
       return JSON.stringify(input);
     },
   },
-  build_knowledge_graph: { streamable: true, execute: (input) => JSON.stringify(input) },
+  build_knowledge_graph: {
+    streamable: true,
+    execute: (input) => JSON.stringify(input),
+  },
   render_table: { streamable: true, execute: (input) => JSON.stringify(input) },
   render_chart: { streamable: true, execute: (input) => JSON.stringify(input) },
-  render_timeline: { streamable: true, execute: (input) => JSON.stringify(input) },
+  render_timeline: {
+    streamable: true,
+    execute: (input) => JSON.stringify(input),
+  },
 };
 
 export async function executeTool(

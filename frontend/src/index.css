@@ -318,7 +318,8 @@ body {
   right: 8px;
   bottom: 8px;
   /* Two stacked corner ticks → a "drag me" grip in the SE corner. */
-  background-image: linear-gradient(
+  background-image:
+    linear-gradient(
       135deg,
       transparent 0 45%,
       var(--content-faint, #b8b2c4) 45% 55%,
@@ -343,7 +344,8 @@ body {
 .grid-stack .grid-stack-item.ui-draggable-dragging > .grid-stack-item-content {
   outline: 2px solid var(--neon-cyan, #16c2ff);
   outline-offset: -1px;
-  box-shadow: 0 0 0 1px var(--neon-cyan, #16c2ff),
+  box-shadow:
+    0 0 0 1px var(--neon-cyan, #16c2ff),
     0 8px 28px rgb(0 0 0 / 0.45);
 }
 /* The placeholder GridStack drops where the card will land — make it readable. */
@@ -506,11 +508,15 @@ body {
 @keyframes aether-unseen-glow {
   0%,
   100% {
-    box-shadow: 0 0 2px 0 #fd40a4, 0 0 4px 0 #fd40a466;
+    box-shadow:
+      0 0 2px 0 #fd40a4,
+      0 0 4px 0 #fd40a466;
     opacity: 0.85;
   }
   50% {
-    box-shadow: 0 0 5px 1px #fd40a4, 0 0 9px 2px #fd40a466;
+    box-shadow:
+      0 0 5px 1px #fd40a4,
+      0 0 9px 2px #fd40a466;
     opacity: 1;
   }
 }

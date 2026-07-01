@@ -287,7 +287,9 @@ export function useChat({
           role: m.role,
           content: isLast && displayText ? text : m.text,
           ...(isLast && displayText ? { displayText } : {}),
-          ...(isLast && wireAttachments ? { attachments: wireAttachments } : {}),
+          ...(isLast && wireAttachments
+            ? { attachments: wireAttachments }
+            : {}),
         };
       });
       const requestInit: RequestInit = {
@@ -445,13 +447,18 @@ export function useChat({
               const remap = new Map<string, string>();
               if (localUserId) remap.set(localUserId, event.userId);
               remap.set(assistantId, event.assistantId);
-              const updated = messagesRef.current.map((m) =>
-                remap.has(m.id) ? { ...m, id: remap.get(m.id)! } : m
-              );
+              const updated = messagesRef.current.map((m) => {
+                const remapped = remap.get(m.id);
+                return remapped ? { ...m, id: remapped } : m;
+              });
               messagesRef.current = updated;
               onMessagesChange(updated);
             }
-          } else if (event.type === "titled" && event.sessionId && event.title) {
+          } else if (
+            event.type === "titled" &&
+            event.sessionId &&
+            event.title
+          ) {
             // The first-turn auto-title landed. Patch the named row's title/icon
             // straight into the session-list cache — no refetch, and no race with
             // the title write (it's already persisted backend-side by now). Drop if

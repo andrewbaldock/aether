@@ -1,16 +1,16 @@
 import { type ReactNode, useState } from "react";
-import { EditWidgetDialog } from "../../../shell/EditWidgetDialog";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
+import { EditWidgetDialog } from "../../../shell/EditWidgetDialog";
 import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { BigsailReAddButton } from "../BigsailReAddButton";
 import { ExploreMenu } from "../ContextMenu";
-import { resolveVocabularyIcon } from "../vocabularyIcon";
 import { useAwaitingClarification } from "../useAwaitingClarification";
 import { useEntryReload } from "../useEntryReload";
 import { useFillFromConversation } from "../useFillFromConversation";
 import { useQueuedExplore } from "../useQueuedExplore";
+import { resolveVocabularyIcon } from "../vocabularyIcon";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
 import {
@@ -146,9 +146,9 @@ export function SpecTimeline({
   const sorted = [...spec.items].sort((a, b) => {
     const ta = Date.parse(a.start);
     const tb = Date.parse(b.start);
-    if (isNaN(ta) && isNaN(tb)) return 0;
-    if (isNaN(ta)) return 1;
-    if (isNaN(tb)) return -1;
+    if (Number.isNaN(ta) && Number.isNaN(tb)) return 0;
+    if (Number.isNaN(ta)) return 1;
+    if (Number.isNaN(tb)) return -1;
     return ta - tb;
   });
 
@@ -293,12 +293,12 @@ function formatDate(iso: string): string {
   // Year-month: "2024-06"
   if (/^\d{4}-\d{2}$/.test(iso)) {
     const d = new Date(`${iso}-01`);
-    return isNaN(d.getTime())
+    return Number.isNaN(d.getTime())
       ? iso
       : d.toLocaleDateString(undefined, { year: "numeric", month: "short" });
   }
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
+  if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",

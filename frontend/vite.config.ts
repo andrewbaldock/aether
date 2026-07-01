@@ -28,7 +28,11 @@ export default defineConfig({
       registerType: "autoUpdate",
       // favicon SVGs are referenced from index.html at runtime, so precache
       // them alongside the built assets.
-      includeAssets: ["favicon.svg", "favicon-light.svg", "apple-touch-icon.png"],
+      includeAssets: [
+        "favicon.svg",
+        "favicon-light.svg",
+        "apple-touch-icon.png",
+      ],
       manifest: {
         name: "Aether — Ask Anything",
         short_name: "Aether",
@@ -84,7 +88,9 @@ export default defineConfig({
     // Matches the `paths` entry in tsconfig.app.json; covers dev/build/preview/vitest
     // (all read this config). Backend resolves the same path via its own tsconfig.
     alias: {
-      "@contract": fileURLToPath(new URL("../shared/contract", import.meta.url)),
+      "@contract": fileURLToPath(
+        new URL("../shared/contract", import.meta.url)
+      ),
     },
   },
   server: {

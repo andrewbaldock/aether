@@ -1,5 +1,5 @@
 import { RotateCcw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { Card } from "./cards";
 import { cardSummarySeed, useCardRegenerate } from "./useCardRegenerate";
 
@@ -24,6 +24,7 @@ export function CardBack({
   const { canRegenerate, regenerate, queued } = useCardRegenerate(card);
   const seed = cardSummarySeed(card);
   const [draft, setDraft] = useState(seed);
+  const promptFieldId = useId();
 
   // Re-seed if the underlying spec's summary changes (e.g. after a regenerate lands a
   // new description) and the user hasn't diverged from the previous seed.
@@ -45,10 +46,14 @@ export function CardBack({
     <div className="flex h-full flex-col">
       {canRegenerate ? (
         <div className="shrink-0 border-border border-b px-3 py-2">
-          <label className="mb-1 block font-display text-xs font-semibold text-content-muted">
+          <label
+            htmlFor={promptFieldId}
+            className="mb-1 block font-display text-xs font-semibold text-content-muted"
+          >
             What this {nounFor(card)} shows — edit to regenerate
           </label>
           <textarea
+            id={promptFieldId}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             // Don't let the drag handle (the strip above) or the card swallow typing

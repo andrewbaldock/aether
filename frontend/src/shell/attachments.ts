@@ -128,7 +128,10 @@ export async function fileToAttachment(
   // Image: downscale if needed, then enforce the byte cap on the result.
   const { data, mediaType } = await maybeDownscaleImage(file);
   if (base64ByteLength(data) > MAX_IMAGE_BYTES) {
-    return { name: file.name, reason: "Image is too large even after resizing" };
+    return {
+      name: file.name,
+      reason: "Image is too large even after resizing",
+    };
   }
   return {
     kind: "image",

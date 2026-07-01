@@ -1,5 +1,5 @@
-import type { SseEvent } from "@contract/sse";
 import type { CompositionPlan } from "@contract/plan";
+import type { SseEvent } from "@contract/sse";
 import type { SSEStreamingApi } from "hono/streaming";
 
 // A typed emitter for the /api/chat SSE stream. Centralizes the framing
@@ -9,7 +9,8 @@ import type { SSEStreamingApi } from "hono/streaming";
 // `done()` writes the raw `[DONE]` sentinel (not a JSON SseEvent — the reader checks
 // for it before JSON.parse, so it's intentionally not part of the union).
 export function createSseEmitter(stream: SSEStreamingApi) {
-  const send = (event: SseEvent) => stream.writeSSE({ data: JSON.stringify(event) });
+  const send = (event: SseEvent) =>
+    stream.writeSSE({ data: JSON.stringify(event) });
   return {
     text: (content: string) => send({ type: "text", content }),
     status: (message: string) => send({ type: "status", message }),

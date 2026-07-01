@@ -46,7 +46,10 @@ export function useHiddenCards(): HiddenCards {
     [sessionId, updateSession]
   );
 
-  const isHidden = useCallback((cardId: string) => hidden.has(cardId), [hidden]);
+  const isHidden = useCallback(
+    (cardId: string) => hidden.has(cardId),
+    [hidden]
+  );
 
   const hide = useCallback(
     (cardId: string) => {

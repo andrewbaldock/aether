@@ -536,8 +536,7 @@ app.post("/api/chat", async (c) => {
   // Only a brand-new session needs a title — the first turn is the one where the
   // client has sent exactly one user message. Guarding on this also drops a Haiku
   // call that used to fire every turn (relying on the conditional UPDATE no-op).
-  const isFirstTurn =
-    messages.filter((m) => m.role === "user").length === 1;
+  const isFirstTurn = messages.filter((m) => m.role === "user").length === 1;
 
   return streamSSE(c, async (stream) => {
     const sse = createSseEmitter(stream);
@@ -549,32 +548,37 @@ app.post("/api/chat", async (c) => {
     // flushes the `titled` event the moment it does. A failure resolves to null
     // and the flush falls back to the truncated prompt.
     let titleResult: { title: string; icon: string | null } | null | undefined;
-    const titlePromise =
+    // Captured once, alongside the truthiness check that guards it, so the closures
+    // below (a different function scope) get a definitely-non-null narrowing instead
+    // of re-reading the outer `persistSession`/`lastUserMessage` optionals.
+    const titleContext =
       isFirstTurn && persistSession && lastUserMessage?.content
-        ? generateTitle(lastUserMessage.content)
-            .then((g) => {
-              titleResult = g;
-            })
-            .catch(() => {
-              titleResult = null;
-            })
+        ? { sessionId: persistSession, userText: lastUserMessage.content }
         : null;
+    const titlePromise = titleContext
+      ? generateTitle(titleContext.userText)
+          .then((g) => {
+            titleResult = g;
+          })
+          .catch(() => {
+            titleResult = null;
+          })
+      : null;
 
     // Emit `titled` exactly once, inline on the single SSE write path (never from a
     // concurrent task — that would interleave mid-event). No-op until the title has
     // settled. The conditional UPDATE is a no-op once a title exists.
     let titleEmitted = false;
     async function flushTitleIfReady() {
-      if (!titlePromise || titleEmitted || titleResult === undefined) return;
+      if (!titleContext || titleEmitted || titleResult === undefined) return;
       titleEmitted = true;
       try {
-        const title =
-          titleResult?.title ?? lastUserMessage!.content.slice(0, 60);
+        const title = titleResult?.title ?? titleContext.userText.slice(0, 60);
         const icon = titleResult?.icon ?? null;
-        await updateSessionTitleIfEmpty(persistSession!, title, icon);
+        await updateSessionTitleIfEmpty(titleContext.sessionId, title, icon);
         // Hand the freshly-assigned title to the client so it patches its session
         // cache directly — no refetch, no race.
-        await sse.titled(persistSession!, title, icon);
+        await sse.titled(titleContext.sessionId, title, icon);
       } catch (err) {
         console.error("Failed to auto-title session:", err);
       }

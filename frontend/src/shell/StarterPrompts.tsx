@@ -69,7 +69,9 @@ function sample<T>(items: readonly T[], n: number): T[] {
     // j ∈ [0, i]), but under noUncheckedIndexedAccess a tuple-destructuring swap
     // assigns T | undefined back into T slots — which tsc -b rejects. A plain
     // three-step swap with non-null reads sidesteps that.
+    // biome-ignore lint/style/noNonNullAssertion: provably in-bounds (see above)
     const tmp = copy[i]!;
+    // biome-ignore lint/style/noNonNullAssertion: provably in-bounds (see above)
     copy[i] = copy[j]!;
     copy[j] = tmp;
   }

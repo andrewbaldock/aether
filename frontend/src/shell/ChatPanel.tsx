@@ -1,12 +1,6 @@
 import * as RadixTooltip from "@radix-ui/react-tooltip";
 import { ChevronDown, FileText, Plus, Share2, Trash2, X } from "lucide-react";
-import {
-  type FormEvent,
-  useEffect,
-  useReducer,
-  useRef,
-  useState,
-} from "react";
+import { type FormEvent, useEffect, useReducer, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
@@ -14,7 +8,6 @@ import { ThinkingGlyph } from "../brand/ThinkingGlyph";
 import { Wordmark } from "../brand/Wordmark";
 import { CAPABILITIES, HOME_BASE_ID } from "../capabilities/catalog";
 import { useCapabilities } from "../capabilities/useCapabilities";
-import { resolveVocabularyIcon } from "../capabilities/widgets/vocabularyIcon";
 import { CHART_WIDGET } from "../capabilities/widgets/Chart";
 import { useChartState } from "../capabilities/widgets/Chart/useChartState";
 import { IMAGES_WIDGET } from "../capabilities/widgets/Images";
@@ -26,15 +19,16 @@ import { TABLE_WIDGET } from "../capabilities/widgets/Table";
 import { useTableState } from "../capabilities/widgets/Table/useTableState";
 import { TIMELINE_WIDGET } from "../capabilities/widgets/Timeline";
 import { useTimelineState } from "../capabilities/widgets/Timeline/useTimelineState";
+import { resolveVocabularyIcon } from "../capabilities/widgets/vocabularyIcon";
 import { WELCOME_WIDGET } from "../capabilities/widgets/Welcome";
 import { replaceRoute, useRoute, viewPath } from "../hooks/useRoute";
 import { useUpdateSession } from "../hooks/useUpdateSession";
 import { useAgentEvents } from "./AgentEventContext";
+import { ACCEPTED_TYPES, filesToAttachments } from "./attachments";
 import { ModelPicker } from "./ModelPicker";
 import { useSessionContext } from "./SessionContext";
 import { StarterPrompts } from "./StarterPrompts";
 import { Tooltip } from "./Tooltip";
-import { ACCEPTED_TYPES, filesToAttachments } from "./attachments";
 import { type Attachment, useChat } from "./useChat";
 import { useIsMobile } from "./useIsMobile";
 import { useToolProgress } from "./useToolProgress";
@@ -103,10 +97,7 @@ export function ChatPanel() {
     const idx = messages.findIndex((m) => m.id === assistantId);
     const prev = idx > 0 ? messages[idx - 1] : undefined;
     const userMsg = prev?.role === "user" ? prev : null;
-    const toRemove = new Set([
-      assistantId,
-      ...(userMsg ? [userMsg.id] : []),
-    ]);
+    const toRemove = new Set([assistantId, ...(userMsg ? [userMsg.id] : [])]);
     setMessages(messages.filter((m) => !toRemove.has(m.id)));
     setConfirmingDeleteId(null);
     if (sessionId) {
@@ -214,7 +205,7 @@ export function ChatPanel() {
     if (errors.length > 0) {
       const detail =
         errors.length === 1
-          ? `${errors[0]!.name}: ${errors[0]!.reason}`
+          ? `${errors[0]?.name}: ${errors[0]?.reason}`
           : `${errors.length} files couldn't be attached`;
       toast.error(detail);
     }
@@ -551,6 +542,7 @@ export function ChatPanel() {
                         {m.attachments.map((a, ai) =>
                           a.kind === "image" && a.previewUrl ? (
                             <img
+                              // biome-ignore lint/suspicious/noArrayIndexKey: attachments have no stable id and names can collide; this list is set once per message and never reordered
                               key={`${a.name}-${ai}`}
                               src={a.previewUrl}
                               alt={a.name}
@@ -558,6 +550,7 @@ export function ChatPanel() {
                             />
                           ) : (
                             <span
+                              // biome-ignore lint/suspicious/noArrayIndexKey: attachments have no stable id and names can collide; this list is set once per message and never reordered
                               key={`${a.name}-${ai}`}
                               className="flex items-center gap-1.5 rounded-lg bg-surface px-2 py-1 text-xs text-content-muted"
                             >
@@ -783,8 +776,8 @@ export function ChatPanel() {
               {/* Hide the blurb on a short (landscape phone) viewport — the
                   vertical room is needed to keep the composer above the fold. */}
               <p className="text-sm text-content-muted max-md:px-2 short:hidden">
-                Ask me anything. I'll answer in whatever form fits best — text, a
-                chart, a table, a graph — rendered live beside us.
+                Ask me anything. I'll answer in whatever form fits best — text,
+                a chart, a table, a graph — rendered live beside us.
               </p>
             </div>
             {/* Pills float in the gap between hero and input. The spacers are
@@ -801,6 +794,7 @@ export function ChatPanel() {
           </>
         )}
         <div className="mx-auto w-full max-w-2xl">
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: drag-and-drop is a progressive enhancement; the file input below is the keyboard-accessible path */}
           <div
             // Drop zone for files. dragDepth (a counter, not a flag) survives the
             // dragenter/dragleave churn from child elements so the highlight only
@@ -826,6 +820,7 @@ export function ChatPanel() {
               <ul className="flex flex-wrap gap-2 px-3 pt-3">
                 {attachments.map((a, i) => (
                   <li
+                    // biome-ignore lint/suspicious/noArrayIndexKey: attachments have no stable id and names can collide; a removal splices the row itself so content stays attached to its key
                     key={`${a.name}-${i}`}
                     className="group/att relative flex items-center gap-2 rounded-lg border border-border-strong bg-surface py-1 pr-2 pl-1"
                   >

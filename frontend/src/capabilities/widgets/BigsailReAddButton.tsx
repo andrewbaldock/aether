@@ -15,7 +15,10 @@ export function BigsailReAddButton({ cardId }: { cardId: string }) {
   if (!isHidden(cardId)) return null;
   const label = "Add this back to the Bigsail canvas";
   return (
-    <Tooltip label={label} contentClassName="w-64 whitespace-normal leading-snug">
+    <Tooltip
+      label={label}
+      contentClassName="w-64 whitespace-normal leading-snug"
+    >
       <button
         type="button"
         onClick={() => unhide(cardId)}

@@ -156,7 +156,8 @@ export function useStreamingEntries<Spec>(
         // existing entry (and we're not doing a whole-set replace), retarget the
         // streaming slot onto that entry so the new spec supersedes it in place
         // instead of appending a near-duplicate (the follow-up-turn dupe bug).
-        const newTitle = freshSlot && !replacing ? normTitle(getTitle?.(parsed)) : undefined;
+        const newTitle =
+          freshSlot && !replacing ? normTitle(getTitle?.(parsed)) : undefined;
         if (newTitle !== undefined) {
           const match = entriesRef.current.find(
             (e) => normTitle(getTitle?.(e.spec)) === newTitle
@@ -181,7 +182,7 @@ export function useStreamingEntries<Spec>(
       if (finalize) streamingId.current = null;
     }
     return bus.subscribe(handle);
-  }, [bus, toolName, parse]);
+  }, [bus, toolName, parse, getTitle]);
 
   return { entries, setEntries, nextId, requestReplace, requestReplaceEntry };
 }

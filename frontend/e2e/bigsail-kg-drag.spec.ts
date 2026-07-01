@@ -4,6 +4,7 @@ import { expect, test } from "./fixtures/mockApi";
 // code path from the mousedown handling this test guards, and the reported bug
 // (and the fix) are about desktop mouse dragging. Scope to desktop-chrome, the
 // only non-touch project in the matrix (see e2e/devices.ts).
+// biome-ignore lint/correctness/noEmptyPattern: Playwright requires an object-destructuring first param to detect which fixtures a hook uses; empty means none
 test.beforeEach(({}, testInfo) => {
   test.skip(
     testInfo.project.name !== "desktop-chrome",
@@ -51,8 +52,8 @@ test("dragging a Knowledge Graph node doesn't drag the Bigsail panel", async ({
   const node = page.locator(".kg-node").first();
   await expect(node).toBeVisible();
 
-  const gsId = await node.evaluate(
-    (el) => el.closest(".grid-stack-item")?.getAttribute("gs-id")
+  const gsId = await node.evaluate((el) =>
+    el.closest(".grid-stack-item")?.getAttribute("gs-id")
   );
   if (!gsId) throw new Error("Knowledge Graph grid item has no gs-id");
   const item = page.locator(`[gs-id="${gsId}"]`);

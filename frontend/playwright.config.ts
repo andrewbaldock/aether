@@ -38,7 +38,8 @@ export default defineConfig({
     : {
         // VITE_E2E=1 drops the /api proxy and disables the PWA service worker (see
         // vite.config.ts), so the network mock is the only thing answering /api.
-        command: "bun run build:app && bun run preview --port 5174 --strictPort",
+        command:
+          "bun run build:app && bun run preview --port 5174 --strictPort",
         url: BASE_URL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

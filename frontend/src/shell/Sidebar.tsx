@@ -60,38 +60,18 @@ export function Sidebar({
 
   return (
     <div className="flex h-full flex-col bg-surface-raised text-content-muted">
-      <div className="relative flex items-center justify-between px-4 py-3">
-        <Tooltip label="Collapse sidebar" side="bottom">
-          <button
-            type="button"
-            onClick={(e) => {
-              onToggle();
-              e.currentTarget.blur();
-            }}
-            aria-label="Collapse sidebar"
-            className="-ml-1 shrink-0 rounded-md border border-transparent p-1.5 text-content-muted transition-colors hover:border-border hover:bg-elevated hover:text-neon-pink"
-          >
-            <SidebarToggleIcon />
-          </button>
-        </Tooltip>
-        {/* Absolutely centred against the full bar so the differing widths of the
-            toggle (left) and theme toggle (right) don't push it off-centre. The
-            wrapper stays pointer-events-none so only the wordmark itself is a
-            click target — clicking it goes home / starts a new conversation. */}
-        <div className="pointer-events-none absolute left-1/2 -translate-x-1/2">
-          <button
-            type="button"
-            onClick={() => {
-              startNewConversation();
-              onNavigate?.();
-            }}
-            aria-label="Aether — new conversation"
-            className="pointer-events-auto block rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong"
-          >
-            <Wordmark height={28} compact={!started} decorative />
-          </button>
-        </div>
-        <ThemeToggle />
+      <div className="flex items-center justify-center px-4 py-3">
+        <button
+          type="button"
+          onClick={() => {
+            startNewConversation();
+            onNavigate?.();
+          }}
+          aria-label="Aether — new conversation"
+          className="block rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-strong"
+        >
+          <Wordmark height={28} compact={!started} decorative />
+        </button>
       </div>
 
       <nav className="px-2">
@@ -134,15 +114,31 @@ export function Sidebar({
         ))}
       </ul>
 
-      <div className="px-4 pb-3 pt-2 text-center">
+      <div className="relative flex items-center px-4 pb-3 pt-2">
+        <Tooltip label="Collapse sidebar" side="top">
+          <button
+            type="button"
+            onClick={(e) => {
+              onToggle();
+              e.currentTarget.blur();
+            }}
+            aria-label="Collapse sidebar"
+            className="-ml-1.5 shrink-0 rounded-md border border-transparent p-1.5 text-content-muted transition-colors hover:border-border hover:bg-elevated hover:text-neon-pink"
+          >
+            <SidebarToggleIcon />
+          </button>
+        </Tooltip>
+        {/* Absolutely centred against the full row so the toggle button's
+            width on the left doesn't push the link off-centre. */}
         <a
           href={SITE_URL}
           target="_blank"
           rel="noreferrer"
-          className="text-xs text-content-faint transition-colors hover:text-content-muted"
+          className="absolute left-1/2 -translate-x-1/2 text-xs text-content-faint transition-colors hover:text-content-muted"
         >
           andrewbaldock.com
         </a>
+        <ThemeToggle />
       </div>
     </div>
   );
@@ -150,15 +146,15 @@ export function Sidebar({
 
 // Rendered instead of the full Sidebar when collapsed — a slim rail so the
 // sidebar never fully disappears. Just enough to get back in: the wordmark
-// (new conversation), the expand toggle, and a dedicated new-conversation
-// icon. No theme toggle here — that stays in the full sidebar's header.
+// (new conversation), a dedicated new-conversation icon, the theme toggle,
+// and the expand toggle, the last two pinned to the bottom.
 export function CollapsedSidebar({ onExpand }: { onExpand: () => void }) {
   const { startNewConversation } = useSessionContext();
   const railButton =
     "rounded-md border border-transparent p-1.5 text-content-muted transition-colors hover:border-border hover:bg-elevated hover:text-neon-pink";
 
   return (
-    <div className="flex h-full flex-col items-center gap-1 bg-surface-raised pt-3">
+    <div className="flex h-full flex-col items-center gap-1 bg-surface-raised pb-3 pt-3">
       <Tooltip label="Aether — new conversation" side="right">
         <button
           type="button"
@@ -169,6 +165,18 @@ export function CollapsedSidebar({ onExpand }: { onExpand: () => void }) {
           <Wordmark height={22} compact decorative />
         </button>
       </Tooltip>
+      <Tooltip label="New conversation" side="right">
+        <button
+          type="button"
+          onClick={() => startNewConversation()}
+          aria-label="New conversation"
+          className={railButton}
+        >
+          <Plus className="h-4.5 w-4.5" aria-hidden />
+        </button>
+      </Tooltip>
+      <div className="flex-1" />
+      <ThemeToggle side="right" className="" />
       <Tooltip label="Expand sidebar" side="right">
         <button
           type="button"
@@ -180,16 +188,6 @@ export function CollapsedSidebar({ onExpand }: { onExpand: () => void }) {
           className={railButton}
         >
           <SidebarToggleIcon />
-        </button>
-      </Tooltip>
-      <Tooltip label="New conversation" side="right">
-        <button
-          type="button"
-          onClick={() => startNewConversation()}
-          aria-label="New conversation"
-          className={railButton}
-        >
-          <Plus className="h-4.5 w-4.5" aria-hidden />
         </button>
       </Tooltip>
     </div>

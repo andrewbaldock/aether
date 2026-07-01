@@ -3,7 +3,6 @@ import { useUpdateSession } from "../../../hooks/useUpdateSession";
 import { SCHEMA_VERSIONS } from "../../../lib/schemaVersion";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
 import { useSessionContext } from "../../../shell/SessionContext";
-import { Tooltip } from "../../../shell/Tooltip";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
 import { useChartState } from "../Chart/useChartState";
@@ -107,10 +106,11 @@ export function BigsailWidget(_props: { widget: Widget }) {
       if (!entry) return;
       const w = entry.contentRect.width;
       if (w === 0) return; // unmounted/hidden — don't unstack to a phantom 0 width
-      setStacked((prev) =>
-        prev
-          ? w < STACK_BREAKPOINT_PX + STACK_HYSTERESIS_PX // stacked: stay until clearly wide
-          : w < STACK_BREAKPOINT_PX - STACK_HYSTERESIS_PX // wide: stack only when clearly narrow
+      setStacked(
+        (prev) =>
+          prev
+            ? w < STACK_BREAKPOINT_PX + STACK_HYSTERESIS_PX // stacked: stay until clearly wide
+            : w < STACK_BREAKPOINT_PX - STACK_HYSTERESIS_PX // wide: stack only when clearly narrow
       );
     });
     ro.observe(el);
@@ -356,7 +356,7 @@ export function BigsailWidget(_props: { widget: Widget }) {
   // positions — it must NOT also gate `placed`, or it would permanently pin the
   // canvas to the auto-layout and ignore drags saved after the first reset.
   const [resetTick, setResetTick] = useState(0);
-  function resetLayout() {
+  function _resetLayout() {
     if (sessionId) {
       updateSession.mutate({
         id: sessionId,

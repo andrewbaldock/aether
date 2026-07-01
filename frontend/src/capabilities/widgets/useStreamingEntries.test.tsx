@@ -179,9 +179,12 @@ describe("useStreamingEntries", () => {
 
   // requestReplaceEntry arms on a microtask too; flush before driving the turn.
   async function armEntry(
-    r: { current: { streaming: { requestReplaceEntry: (id: number) => void } } },
-    id: number
+    r: {
+      current: { streaming: { requestReplaceEntry: (id: number) => void } };
+    },
+    id: number | undefined
   ) {
+    if (id === undefined) throw new Error("entry id not found");
     await act(async () => {
       r.current.streaming.requestReplaceEntry(id);
       await Promise.resolve();
@@ -196,8 +199,8 @@ describe("useStreamingEntries", () => {
     result(bus, '{"rows":[{"v":1}]}');
     result(bus, '{"rows":[{"v":2}]}');
     expect(r.current.streaming.entries).toHaveLength(2);
-    const firstId = r.current.streaming.entries[0]!.id;
-    const secondId = r.current.streaming.entries[1]!.id;
+    const firstId = r.current.streaming.entries[0]?.id;
+    const secondId = r.current.streaming.entries[1]?.id;
 
     // Reload just the FIRST entry.
     await armEntry(r, firstId);
@@ -217,7 +220,7 @@ describe("useStreamingEntries", () => {
     const { result: r } = setup();
     const { bus } = r.current;
     result(bus, '{"rows":[{"v":1}]}');
-    const id = r.current.streaming.entries[0]!.id;
+    const id = r.current.streaming.entries[0]?.id;
     await armEntry(r, id);
     emit(bus, { type: "done" });
     expect(r.current.streaming.entries).toHaveLength(1);
@@ -284,7 +287,7 @@ describe("useStreamingEntries", () => {
 
     result(bus, '{"title":"History of Bowling","rows":[{"v":1}]}');
     expect(r.current.streaming.entries).toHaveLength(1);
-    const id = r.current.streaming.entries[0]!.id;
+    const id = r.current.streaming.entries[0]?.id;
 
     // Follow-up turn re-emits the SAME title — must overwrite, not append.
     result(bus, '{"title":"History of Bowling","rows":[{"v":2},{"v":3}]}');
@@ -322,7 +325,7 @@ describe("useStreamingEntries", () => {
     const { result: r } = setupTitled();
     const { bus } = r.current;
     result(bus, '{"title":"Trend","rows":[{"v":1}]}');
-    const id = r.current.streaming.entries[0]!.id;
+    const id = r.current.streaming.entries[0]?.id;
 
     // A later turn streams a same-titled spec: the FIRST parseable partial binds the
     // slot to the matched entry, and subsequent partials keep upserting it (not a

@@ -100,7 +100,9 @@ describe("SKELETON_FLOOR", () => {
     // A plan can never reach a :900 ordinal in practice, so the floor ids stay
     // distinct from any real plan skeleton (no double-cover, no GridStack id clash).
     const planIds = new Set(
-      planToSkeletons(plan(["table", "chart", "knowledge-graph"])).map((s) => s.id)
+      planToSkeletons(plan(["table", "chart", "knowledge-graph"])).map(
+        (s) => s.id
+      )
     );
     expect(SKELETON_FLOOR.every((c) => !planIds.has(c.id))).toBe(true);
     expect(SKELETON_FLOOR.every((c) => c.id.endsWith(":900"))).toBe(true);

@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicClient } from "./anthropicClient";
 
 // The Strongification intelligence pre-pass: a cheap router that decides whether a

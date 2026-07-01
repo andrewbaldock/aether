@@ -1,7 +1,7 @@
 import { type ReactNode, useState } from "react";
 import { safeHref } from "../../../lib/links";
-import { EditWidgetDialog } from "../../../shell/EditWidgetDialog";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
+import { EditWidgetDialog } from "../../../shell/EditWidgetDialog";
 import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";

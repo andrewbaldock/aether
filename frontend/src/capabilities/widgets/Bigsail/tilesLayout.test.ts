@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Card, CardCapability } from "./cards";
-import { autoLayout, GRID_COLUMNS, placeCards } from "./tilesLayout";
+import {
+  autoLayout,
+  GRID_COLUMNS,
+  type PlacedCard,
+  placeCards,
+} from "./tilesLayout";
 
 // A card of a given capability type. The template places by capabilityType, so the
 // spec/sizeHint don't affect geometry — they're just filled to satisfy the type.
@@ -11,9 +16,20 @@ const card = (id: string, type: CardCapability = "chart"): Card => ({
   sizeHint: { w: 360, h: 320 },
 });
 
+// Both layout engines always resolve x/y for every placed card; this test suite
+// leans on that guarantee to assert on them without re-checking it everywhere.
+type Placed = PlacedCard & { x: number; y: number };
+
+function must<T>(v: T | undefined): T {
+  if (v === undefined) throw new Error("expected a defined value");
+  return v;
+}
+
 const HALF = GRID_COLUMNS / 2;
-const find = (placed: ReturnType<typeof autoLayout>, id: string) =>
-  placed.find((p) => p.card.id === id)!;
+const find = (placed: ReturnType<typeof autoLayout>, id: string): Placed => {
+  const p = placed.find((c) => c.card.id === id);
+  return must(p) as Placed;
+};
 
 // ── SYSTEM 1: the fixed role-based template (autoLayout). Runs only on the initial
 //    build of a conversation's canvas. ────────────────────────────────────────────
@@ -65,7 +81,7 @@ describe("autoLayout — fixed role-based template (System 1)", () => {
     expect(find(placed, "c1").w).toBe(GRID_COLUMNS);
     expect(find(placed, "c2").w).toBe(GRID_COLUMNS);
     // Charts stack vertically, each on its own row.
-    expect(find(placed, "c2").y!).toBeGreaterThan(find(placed, "c1").y!);
+    expect(find(placed, "c2").y).toBeGreaterThan(find(placed, "c1").y);
   });
 
   it("orders the bands KG/timeline → table → chart → images, top to bottom", () => {
@@ -79,7 +95,7 @@ describe("autoLayout — fixed role-based template (System 1)", () => {
       ],
       false
     );
-    const yOf = (id: string) => find(placed, id).y!;
+    const yOf = (id: string) => find(placed, id).y;
     expect(yOf("kg")).toBe(yOf("t")); // same top row
     expect(yOf("t")).toBeLessThan(yOf("tbl"));
     expect(yOf("tbl")).toBeLessThan(yOf("c"));
@@ -95,7 +111,7 @@ describe("autoLayout — fixed role-based template (System 1)", () => {
     const kg = find(placed, "kg");
     const tbl = find(placed, "tbl");
     expect(kg.w).toBe(GRID_COLUMNS); // promoted — no half-gap
-    expect(tbl.y).toBe(kg.y! + kg.h);
+    expect(tbl.y).toBe(kg.y + kg.h);
   });
 
   it("stacks extra cards of a type full-width below the template", () => {
@@ -105,7 +121,7 @@ describe("autoLayout — fixed role-based template (System 1)", () => {
     );
     // First table in its slot; extras full-width, stacked, below.
     expect(placed.every((p) => p.w === GRID_COLUMNS)).toBe(true);
-    const ys = placed.map((p) => p.y!).sort((a, b) => a - b);
+    const ys = placed.map((p) => must(p.y)).sort((a, b) => a - b);
     expect(new Set(ys).size).toBe(3); // three distinct rows
   });
 
@@ -119,15 +135,15 @@ describe("autoLayout — fixed role-based template (System 1)", () => {
       ],
       false
     );
-    const topRowBottom = find(placed, "t").y! + find(placed, "t").h;
+    const topRowBottom = find(placed, "t").y + find(placed, "t").h;
     for (const id of ["c1", "c2", "c3"]) {
       const c = find(placed, id);
       expect(c.w).toBe(GRID_COLUMNS);
-      expect(c.y!).toBeGreaterThanOrEqual(topRowBottom);
+      expect(c.y).toBeGreaterThanOrEqual(topRowBottom);
     }
     // Distinct rows, stacked in order.
-    expect(find(placed, "c2").y!).toBeGreaterThan(find(placed, "c1").y!);
-    expect(find(placed, "c3").y!).toBeGreaterThan(find(placed, "c2").y!);
+    expect(find(placed, "c2").y).toBeGreaterThan(find(placed, "c1").y);
+    expect(find(placed, "c3").y).toBeGreaterThan(find(placed, "c2").y);
   });
 
   it("never overflows the grid width and places every card once", () => {
@@ -142,7 +158,7 @@ describe("autoLayout — fixed role-based template (System 1)", () => {
     const placed = autoLayout(cards, false);
     expect(placed).toHaveLength(cards.length);
     for (const p of placed) {
-      expect(p.x! + p.w).toBeLessThanOrEqual(GRID_COLUMNS);
+      expect(must(p.x) + p.w).toBeLessThanOrEqual(GRID_COLUMNS);
       expect(p.w).toBeGreaterThan(0);
     }
   });
@@ -166,10 +182,10 @@ describe("autoLayout — stacked (skinny viewport)", () => {
     ];
     const placed = autoLayout(cards, true);
     expect(placed.every((p) => p.w === GRID_COLUMNS && p.x === 0)).toBe(true);
-    const ys = placed.map((p) => p.y!);
+    const ys = placed.map((p) => must(p.y));
     expect(new Set(ys).size).toBe(placed.length);
     for (let i = 1; i < ys.length; i++) {
-      expect(ys[i]!).toBeGreaterThan(ys[i - 1]!);
+      expect(must(ys[i])).toBeGreaterThan(must(ys[i - 1]));
     }
   });
 });
@@ -264,7 +280,7 @@ describe("placeCards — System 2 (saved layout present: honor + append)", () =>
     const pOld = find(placed, "table:x");
     expect(pOld.autoPlace).toBe(false); // honored verbatim
     expect(pNew.autoPlace).toBe(true); // appended (a starting hint, not a pin)
-    expect(pNew.y!).toBeGreaterThanOrEqual(pOld.y! + pOld.h); // below everything saved
+    expect(pNew.y).toBeGreaterThanOrEqual(pOld.y + pOld.h); // below everything saved
     expect(pNew.x).toBe(0);
     expect(pNew.w).toBe(GRID_COLUMNS); // appended full-width
   });
@@ -278,8 +294,8 @@ describe("placeCards — System 2 (saved layout present: honor + append)", () =>
     b.id = "chart:b";
     const saved = [{ id: "table:x", x: 0, y: 0, w: 24, h: 10 }];
     const placed = placeCards([existing, a, b], saved, false);
-    expect(find(placed, "chart:b").y!).toBeGreaterThan(
-      find(placed, "chart:a").y!
+    expect(find(placed, "chart:b").y).toBeGreaterThan(
+      find(placed, "chart:a").y
     );
   });
 });
@@ -287,10 +303,11 @@ describe("placeCards — System 2 (saved layout present: honor + append)", () =>
 describe("placeCards — stacked (skinny) short-circuit", () => {
   it("stacks full-width and ignores the saved layout when skinny", () => {
     const saved = [{ id: "chart:a", x: 12, y: 0, w: 12, h: 5 }];
-    const cards = [card("a"), card("b")];
-    cards[0]!.id = "chart:a";
-    cards[1]!.id = "chart:b";
-    const placed = placeCards(cards, saved, true);
+    const a = card("a");
+    a.id = "chart:a";
+    const b = card("b");
+    b.id = "chart:b";
+    const placed = placeCards([a, b], saved, true);
     expect(placed.every((p) => p.w === GRID_COLUMNS && p.x === 0)).toBe(true);
   });
 });

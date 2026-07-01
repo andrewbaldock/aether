@@ -193,6 +193,7 @@ function StatusDot({ ok, configured }: { ok: boolean; configured: boolean }) {
     return (
       <Tooltip label="Not configured" className="mt-0.5 shrink-0">
         <span
+          role="img"
           className="h-2 w-2 rounded-full bg-amber-400"
           aria-label="Not configured"
         />
@@ -203,6 +204,7 @@ function StatusDot({ ok, configured }: { ok: boolean; configured: boolean }) {
   return (
     <Tooltip label={label} className="mt-0.5 shrink-0">
       <span
+        role="img"
         className={`h-2 w-2 rounded-full ${ok ? "bg-green-400" : "bg-red-400"}`}
         aria-label={label}
       />

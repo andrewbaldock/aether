@@ -9,6 +9,7 @@ import {
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useAgentEvents } from "../../../shell/AgentEventContext";
+import { EditWidgetDialog } from "../../../shell/EditWidgetDialog";
 import { useSessionContext } from "../../../shell/SessionContext";
 import { useAgentBusy } from "../../../shell/useAgentBusy";
 import type { Widget } from "../../registry";
@@ -20,7 +21,6 @@ import { useFillFromConversation } from "../useFillFromConversation";
 import { useQueuedExplore } from "../useQueuedExplore";
 import { WidgetEmptyState } from "../WidgetEmptyState";
 import { WidgetLoading } from "../WidgetLoading";
-import { EditWidgetDialog } from "../../../shell/EditWidgetDialog";
 import {
   WidgetDuplicateButton,
   WidgetEditButton,

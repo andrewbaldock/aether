@@ -2,13 +2,20 @@ import { Tooltip } from "../shell/Tooltip";
 import { useTheme } from "./useTheme";
 
 // Sun/moon theme switch. Shows the icon for the current theme (moon = dark,
-// sun = light). Lives in the sidebar header next to the wordmark.
-export function ThemeToggle() {
+// sun = light). Lives in the sidebar footer, next to the site link (or, in
+// the collapsed rail, stacked above the expand toggle).
+export function ThemeToggle({
+  side = "top",
+  className = "ml-auto -mr-1.5",
+}: {
+  side?: "top" | "right" | "bottom" | "left";
+  className?: string;
+}) {
   const { theme, toggle } = useTheme();
   const isDark = theme === "dark";
   const label = isDark ? "Switch to light theme" : "Switch to dark theme";
   return (
-    <Tooltip label={label} side="bottom" className="ml-auto">
+    <Tooltip label={label} side={side} className={className}>
       <button
         type="button"
         onClick={toggle}

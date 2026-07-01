@@ -166,6 +166,101 @@ export function ForceGraph({
   const didFinalFitRef = useRef(false);
   const userZoomedRef = useRef(false);
 
+  // Compute the transform that fits every node perfectly in the viewport: measure
+  // the node bounding box, scale to fit with a margin (clamped to the zoom
+  // extent), then translate so the bbox centre lands at the viewBox centre.
+  // Returns null when there are no nodes (nothing to fit). Pure — used both to
+  // apply the fit and to decide whether the Fit button would change anything.
+  const computeFitTransform = useCallback((): ZoomTransform | null => {
+    // Read nodes LIVE off the ref, not a render-snapshot: the reconcile reassigns
+    // simNodes.current to a NEW array, so a closure that captured the old snapshot
+    // (e.g. the sim 'end' handler bound at firstBuild, when it was empty) would
+    // otherwise see 0 nodes forever and never fit.
+    const liveNodes = simNodes.current;
+    if (liveNodes.length === 0) return null;
+
+    // Fit against the CURRENT viewBox (width tracks the card aspect; height fixed).
+    const vw = viewWRef.current;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const n of liveNodes) {
+      const x = n.x ?? vw / 2;
+      const y = n.y ?? VIEW_H / 2;
+      minX = Math.min(minX, x - NODE_R);
+      minY = Math.min(minY, y - NODE_R);
+      maxX = Math.max(maxX, x + NODE_R);
+      maxY = Math.max(maxY, y + NODE_R);
+    }
+
+    const PADDING = 40; // viewBox units of breathing room around the graph
+    const bboxW = maxX - minX;
+    const bboxH = maxY - minY;
+    const k = Math.max(
+      0.3,
+      Math.min(
+        3,
+        Math.min((vw - PADDING * 2) / bboxW, (VIEW_H - PADDING * 2) / bboxH)
+      )
+    );
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    return zoomIdentity
+      .translate(vw / 2 - k * cx, VIEW_H / 2 - k * cy)
+      .scale(k);
+  }, []);
+
+  // Apply the fit transform. When `animate` is true, d3 tweens the zoom
+  // transform over FIT_DURATION ms — each transition tick fires a `zoom` event
+  // that bumps the `transform` state, so the <g> re-renders smoothly instead of
+  // snapping. When false (the very first early auto-fit, before there's a view
+  // to disturb), it jumps instantly. Any in-flight fit is interrupted first so a
+  // second fit doesn't fight the first.
+  const fitView = useCallback(
+    (animate = true) => {
+      const svgEl = svgRef.current;
+      const zoomBehavior = zoomRef.current;
+      const target = computeFitTransform();
+      if (!svgEl || !zoomBehavior || !target) return;
+      const sel = select(svgEl);
+      interrupt(svgEl); // cancel any running fit transition before starting/snapping
+      if (animate) {
+        sel
+          .transition()
+          .duration(FIT_DURATION)
+          .call(zoomBehavior.transform, target);
+      } else {
+        sel.call(zoomBehavior.transform, target);
+      }
+    },
+    [computeFitTransform]
+  );
+
+  // Auto-fit one stage (see the refs up top). The early stage frames the rough
+  // layout fast; the final stage re-frames once the sim settles. Each is a one-shot;
+  // a user zoom/pan cancels the final stage. If d3-zoom isn't wired yet — its effect
+  // can lose the race on a restored graph that settles in a tick or two — retry next
+  // frame rather than dropping the fit (the bug where the graph opened unframed).
+  const autoFit = useCallback(
+    (isFinal: boolean) => {
+      if (!autoFitEnabled) return; // full tool panel opts out — frame manually
+      const done = isFinal ? didFinalFitRef : didEarlyFitRef;
+      if (done.current) return;
+      if (isFinal && userZoomedRef.current) return; // user took over — don't yank
+      if (!svgRef.current) return; // unmounted — stop retrying
+      if (!zoomRef.current || !computeFitTransform()) {
+        requestAnimationFrame(() => autoFit(isFinal));
+        return;
+      }
+      done.current = true;
+      // Early fit jumps (no prior framing to ease from); the final settle animates.
+      fitView(isFinal);
+    },
+    [autoFitEnabled, computeFitTransform, fitView]
+  );
+
   // Report current positions (incl. pinned fx/fy) up so saves capture layout.
   const reportPositions = useCallback(() => {
     const map = new Map<string, NodePosition>();
@@ -300,7 +395,7 @@ export function ForceGraph({
       // the sim) earns the strong fling that lays the graph out from scratch.
       sim.alpha(firstBuild ? 0.8 : 0.3).restart();
     }
-  }, [nodes, links, reportPositions]);
+  }, [nodes, links, reportPositions, autoFit]);
 
   // Tear the simulation down on unmount; clear any pending long-press timer.
   useEffect(() => {
@@ -346,7 +441,7 @@ export function ForceGraph({
     });
     ro.observe(svgEl);
     return () => ro.disconnect();
-  }, []);
+  }, [computeFitTransform]);
 
   // Wire d3-zoom for pan/zoom — writes the transform string into React state.
   useEffect(() => {
@@ -395,95 +490,6 @@ export function ForceGraph({
 
   function endpoint(p: string | GraphNode): GraphNode | undefined {
     return typeof p === "string" ? nodeById.get(p) : p;
-  }
-
-  // Compute the transform that fits every node perfectly in the viewport: measure
-  // the node bounding box, scale to fit with a margin (clamped to the zoom
-  // extent), then translate so the bbox centre lands at the viewBox centre.
-  // Returns null when there are no nodes (nothing to fit). Pure — used both to
-  // apply the fit and to decide whether the Fit button would change anything.
-  const computeFitTransform = useCallback((): ZoomTransform | null => {
-    // Read nodes LIVE off the ref, not a render-snapshot: the reconcile reassigns
-    // simNodes.current to a NEW array, so a closure that captured the old snapshot
-    // (e.g. the sim 'end' handler bound at firstBuild, when it was empty) would
-    // otherwise see 0 nodes forever and never fit.
-    const liveNodes = simNodes.current;
-    if (liveNodes.length === 0) return null;
-
-    // Fit against the CURRENT viewBox (width tracks the card aspect; height fixed).
-    const vw = viewWRef.current;
-
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (const n of liveNodes) {
-      const x = n.x ?? vw / 2;
-      const y = n.y ?? VIEW_H / 2;
-      minX = Math.min(minX, x - NODE_R);
-      minY = Math.min(minY, y - NODE_R);
-      maxX = Math.max(maxX, x + NODE_R);
-      maxY = Math.max(maxY, y + NODE_R);
-    }
-
-    const PADDING = 40; // viewBox units of breathing room around the graph
-    const bboxW = maxX - minX;
-    const bboxH = maxY - minY;
-    const k = Math.max(
-      0.3,
-      Math.min(
-        3,
-        Math.min((vw - PADDING * 2) / bboxW, (VIEW_H - PADDING * 2) / bboxH)
-      )
-    );
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
-    return zoomIdentity
-      .translate(vw / 2 - k * cx, VIEW_H / 2 - k * cy)
-      .scale(k);
-  }, []);
-
-  // Apply the fit transform. When `animate` is true, d3 tweens the zoom
-  // transform over FIT_DURATION ms — each transition tick fires a `zoom` event
-  // that bumps the `transform` state, so the <g> re-renders smoothly instead of
-  // snapping. When false (the very first early auto-fit, before there's a view
-  // to disturb), it jumps instantly. Any in-flight fit is interrupted first so a
-  // second fit doesn't fight the first.
-  function fitView(animate = true) {
-    const svgEl = svgRef.current;
-    const zoomBehavior = zoomRef.current;
-    const target = computeFitTransform();
-    if (!svgEl || !zoomBehavior || !target) return;
-    const sel = select(svgEl);
-    interrupt(svgEl); // cancel any running fit transition before starting/snapping
-    if (animate) {
-      sel
-        .transition()
-        .duration(FIT_DURATION)
-        .call(zoomBehavior.transform, target);
-    } else {
-      sel.call(zoomBehavior.transform, target);
-    }
-  }
-
-  // Auto-fit one stage (see the refs up top). The early stage frames the rough
-  // layout fast; the final stage re-frames once the sim settles. Each is a one-shot;
-  // a user zoom/pan cancels the final stage. If d3-zoom isn't wired yet — its effect
-  // can lose the race on a restored graph that settles in a tick or two — retry next
-  // frame rather than dropping the fit (the bug where the graph opened unframed).
-  function autoFit(isFinal: boolean) {
-    if (!autoFitEnabled) return; // full tool panel opts out — frame manually
-    const done = isFinal ? didFinalFitRef : didEarlyFitRef;
-    if (done.current) return;
-    if (isFinal && userZoomedRef.current) return; // user took over — don't yank
-    if (!svgRef.current) return; // unmounted — stop retrying
-    if (!zoomRef.current || !computeFitTransform()) {
-      requestAnimationFrame(() => autoFit(isFinal));
-      return;
-    }
-    done.current = true;
-    // Early fit jumps (no prior framing to ease from); the final settle animates.
-    fitView(isFinal);
   }
 
   // Whether clicking Fit would actually move the view — false when there are no

@@ -304,8 +304,11 @@ export async function updateSessionTitleIfEmpty(
   title: string,
   topicIcon?: string | null
 ): Promise<void> {
-  const patch: { title: string; topic_icon?: string | null; updated_at: string } =
-    { title, updated_at: new Date().toISOString() };
+  const patch: {
+    title: string;
+    topic_icon?: string | null;
+    updated_at: string;
+  } = { title, updated_at: new Date().toISOString() };
   if (topicIcon !== undefined) patch.topic_icon = topicIcon;
   const { error } = await getDb()
     .from("sessions")

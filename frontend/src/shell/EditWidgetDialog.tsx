@@ -1,5 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { CardCapability } from "../capabilities/widgets/Bigsail/cards";
 import {
   recreationPromptOf,
@@ -60,6 +60,8 @@ export function EditWidgetDialog({
   const [prompt, setPrompt] = useState("");
   const [paramsText, setParamsText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const promptFieldId = useId();
+  const paramsFieldId = useId();
 
   // Re-seed the fields from the current spec each time the dialog opens, so it always
   // reflects the live widget (and a reopen after an edit shows the new values).
@@ -108,10 +110,14 @@ export function EditWidgetDialog({
 
           <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
             <div>
-              <label className="mb-1 block font-display text-xs font-semibold text-content-muted">
+              <label
+                htmlFor={promptFieldId}
+                className="mb-1 block font-display text-xs font-semibold text-content-muted"
+              >
                 Recreation prompt — what this {noun} shows
               </label>
               <textarea
+                id={promptFieldId}
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 readOnly={readOnly}
@@ -121,10 +127,14 @@ export function EditWidgetDialog({
               />
             </div>
             <div className="flex min-h-0 flex-1 flex-col">
-              <label className="mb-1 block font-display text-xs font-semibold text-content-muted">
+              <label
+                htmlFor={paramsFieldId}
+                className="mb-1 block font-display text-xs font-semibold text-content-muted"
+              >
                 Parameters (JSON)
               </label>
               <textarea
+                id={paramsFieldId}
                 value={paramsText}
                 onChange={(e) => setParamsText(e.target.value)}
                 readOnly={readOnly}

@@ -202,11 +202,12 @@ function buildPlannerInput(
 ): string {
   let lastUserIdx = -1;
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i]!.role === "user") {
+    if (messages[i]?.role === "user") {
       lastUserIdx = i;
       break;
     }
   }
+  // biome-ignore lint/style/noNonNullAssertion: lastUserIdx, when >= 0, is an index found in the loop above and is provably in-bounds
   const latest = lastUserIdx >= 0 ? messages[lastUserIdx]!.content : "";
   // Prior context = everything before the latest user turn, capped + truncated.
   const prior = (lastUserIdx >= 0 ? messages.slice(0, lastUserIdx) : messages)

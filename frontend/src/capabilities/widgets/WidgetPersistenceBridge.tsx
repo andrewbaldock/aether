@@ -24,7 +24,10 @@ const SAVE_DEBOUNCE_MS = 900;
 // (summary, or blurb for images) — the seed for the back-face/edit re-prompt box.
 // Conversations made before summary was required have these blank; we ask the
 // backend to backfill them once on load. Defensive: any non-array is "nothing missing".
-function hasMissingPrompts(value: unknown, field: "summary" | "blurb"): boolean {
+function hasMissingPrompts(
+  value: unknown,
+  field: "summary" | "blurb"
+): boolean {
   if (!Array.isArray(value)) return false;
   return value.some((entry) => {
     const spec = (entry as { spec?: Record<string, unknown> })?.spec;
@@ -57,25 +60,21 @@ export function WidgetPersistenceBridge() {
     entries: tableEntries,
     loadEntries: loadTable,
     clearEntries: clearTable,
-    updateEntry: updateTable,
   } = useTableState();
   const {
     entries: chartEntries,
     loadEntries: loadChart,
     clearEntries: clearChart,
-    updateEntry: updateChart,
   } = useChartState();
   const {
     entries: timelineEntries,
     loadEntries: loadTimeline,
     clearEntries: clearTimeline,
-    updateEntry: updateTimeline,
   } = useTimelineState();
   const {
     entries: imageEntries,
     loadEntries: loadImages,
     clearEntries: clearImages,
-    updateEntry: updateImages,
   } = useImagesState();
 
   const loadedSessionRef = useRef<string | null>(null);

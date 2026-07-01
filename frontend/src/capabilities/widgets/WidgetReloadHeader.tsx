@@ -61,7 +61,10 @@ export function WidgetReloadHeaderButton({
   label?: string;
 }) {
   return (
-    <Tooltip label={label} contentClassName="w-64 whitespace-normal leading-snug">
+    <Tooltip
+      label={label}
+      contentClassName="w-64 whitespace-normal leading-snug"
+    >
       <button
         type="button"
         onClick={onReload}
@@ -92,7 +95,10 @@ export function WidgetDuplicateButton({
   label?: string;
 }) {
   return (
-    <Tooltip label={label} contentClassName="w-64 whitespace-normal leading-snug">
+    <Tooltip
+      label={label}
+      contentClassName="w-64 whitespace-normal leading-snug"
+    >
       <button
         type="button"
         onClick={onClick}
@@ -117,7 +123,10 @@ export function WidgetEditButton({
   label?: string;
 }) {
   return (
-    <Tooltip label={label} contentClassName="w-64 whitespace-normal leading-snug">
+    <Tooltip
+      label={label}
+      contentClassName="w-64 whitespace-normal leading-snug"
+    >
       <button
         type="button"
         onClick={onClick}
@@ -152,7 +161,10 @@ export function WidgetReloadAll({
     // scrolls into view at the end. Callers must NOT add their own bottom padding
     // to the scroll container (it would stack on this and break the ≤10px rule).
     <div className="mt-auto flex justify-center pt-6 pb-2">
-      <Tooltip label={label} contentClassName="w-64 whitespace-normal leading-snug">
+      <Tooltip
+        label={label}
+        contentClassName="w-64 whitespace-normal leading-snug"
+      >
         <button
           type="button"
           onClick={onReload}

@@ -85,7 +85,11 @@ describe("useAgentBusy", () => {
       const b = bus as unknown as AgentEventBus;
       b.emit({ type: "request_start" });
       b.emit({ type: "text", content: "Which tradition?" });
-      b.emit({ type: "clarify", question: "Which tradition?", options: ["a", "b"] });
+      b.emit({
+        type: "clarify",
+        question: "Which tradition?",
+        options: ["a", "b"],
+      });
     });
     // The clarify event mid-turn must not flip anything off — still busy until done.
     expect(result.current).toBe(true);

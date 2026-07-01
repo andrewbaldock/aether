@@ -84,10 +84,7 @@ export const FALLBACK_SKELETONS: Card[] = capabilitiesToSkeletons(
 // counterpart simply vanish when the turn settles (cards → realCards once !busy).
 export const MIN_SKELETONS = 5;
 
-export function padSkeletons(
-  skeletons: Card[],
-  min = MIN_SKELETONS
-): Card[] {
+export function padSkeletons(skeletons: Card[], min = MIN_SKELETONS): Card[] {
   if (skeletons.length >= min) return skeletons;
   const have = new Set(skeletons.map((s) => s.capabilityType));
   const padded = [...skeletons];

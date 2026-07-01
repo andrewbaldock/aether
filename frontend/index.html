@@ -67,7 +67,7 @@
           // Seeded pre-paint so text size and body font don't flash on load.
           const sizes = { xs: 14, sm: 15, md: 16, lg: 18 };
           const s = localStorage.getItem("aether-text-size");
-          if (sizes[s]) el.style.fontSize = sizes[s] + "px";
+          if (sizes[s]) el.style.fontSize = `${sizes[s]}px`;
 
           const fonts = {
             geist: '"Geist", ui-sans-serif, system-ui, sans-serif',

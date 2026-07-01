@@ -54,9 +54,7 @@ export function useCardRegenerate(card: Card): CardRegenerate {
   const images = useImagesState();
   const reload = useQueuedExplore();
 
-  const replaceById: Partial<
-    Record<CardCapability, (id: number) => void>
-  > = {
+  const replaceById: Partial<Record<CardCapability, (id: number) => void>> = {
     table: table.requestReplaceEntry,
     chart: chart.requestReplaceEntry,
     timeline: timeline.requestReplaceEntry,
@@ -65,8 +63,7 @@ export function useCardRegenerate(card: Card): CardRegenerate {
 
   const requestReplaceEntry = replaceById[card.capabilityType];
   const entryId = entryIdOf(card);
-  const canRegenerate =
-    !!requestReplaceEntry && Number.isFinite(entryId);
+  const canRegenerate = !!requestReplaceEntry && Number.isFinite(entryId);
 
   function regenerate(editedSummary: string) {
     const text = editedSummary.trim();
@@ -101,7 +98,10 @@ function promptFieldFor(type: CardCapability): "summary" | "blurb" {
 
 // Read the recreation prompt off any spec (handles the images/blurb vs summary
 // split). Empty string when absent.
-export function recreationPromptOf(type: CardCapability, spec: unknown): string {
+export function recreationPromptOf(
+  type: CardCapability,
+  spec: unknown
+): string {
   const field = promptFieldFor(type);
   const v = (spec as Record<string, unknown>)?.[field];
   return typeof v === "string" ? v : "";
