@@ -1,6 +1,7 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { MoreVertical } from "lucide-react";
 import type { ReactNode } from "react";
+import { ICON_BUTTON_CLASS } from "../../shell/IconButton";
 
 // A small kebab-triggered action menu shared by the Table / Chart / Images /
 // Timeline widgets — the "Explore further" affordance on a row, series, tile, or
@@ -80,15 +81,19 @@ export function ExploreMenu({
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
+        {/* Raw button, not <IconButton>: Radix's asChild clones this element
+            directly and needs a real DOM ref, which the shared component (a
+            plain function returning a <Tooltip> wrapper) can't forward. Same
+            shared class as every other icon button, plus the open-state pink.
+            The negative margin keeps the 44px hit area from bloating tight
+            layouts; a caller can override the whole trigger style via
+            triggerClassName. */}
         <button
           type="button"
           aria-label={label}
-          // 44px hit area (the rule), but the glyph stays visually small. The
-          // negative margin keeps the padded button from bloating tight layouts.
-          // A caller can override the whole trigger style via triggerClassName.
           className={
             triggerClassName ??
-            `-m-2 inline-flex h-11 w-11 items-center justify-center rounded text-content-subtle transition-colors hover:bg-elevated hover:text-content focus-visible:bg-elevated focus-visible:text-content focus-visible:outline-none data-[state=open]:bg-elevated data-[state=open]:text-content ${className ?? ""}`
+            `-m-2 ${ICON_BUTTON_CLASS} data-[state=open]:border-border data-[state=open]:bg-elevated data-[state=open]:text-neon-pink ${className ?? ""}`
           }
         >
           <MoreVertical className="h-4 w-4" aria-hidden />

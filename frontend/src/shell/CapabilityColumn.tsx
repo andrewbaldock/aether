@@ -142,8 +142,9 @@ export function CapabilityColumn() {
               aria-label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
               // Match the settings-gear chip's footprint (same padding + 1px box) so
               // the right cluster aligns and is equally wide. A stroked SVG icon —
-              // the old ⛶/⤢ Unicode glyphs rendered thin and undersized.
-              className="flex shrink-0 items-center rounded-lg border border-transparent px-2.5 py-1.5 text-content-muted transition-colors hover:border-border hover:bg-elevated hover:text-content"
+              // the old ⛶/⤢ Unicode glyphs rendered thin and undersized. Same
+              // hover/active/focus colors as every other icon button.
+              className="flex shrink-0 items-center rounded-lg border border-transparent px-2.5 py-1.5 text-content-muted transition-colors hover:border-border hover:bg-elevated hover:text-neon-pink active:border-border active:bg-elevated active:text-neon-pink focus-visible:border-border focus-visible:bg-elevated focus-visible:text-neon-pink focus-visible:outline-none"
             >
               {isFullscreen ? <ExitFullscreenIcon /> : <FullscreenIcon />}
             </button>
@@ -208,13 +209,18 @@ function CapabilityChip({
     "relative flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors max-md:h-11 max-md:min-w-11 max-md:justify-center max-md:px-3";
   let tone: string;
   if (bare) {
-    // Bare chips (right-cluster utilities) carry no resting chrome: transparent
-    // border (keeps the 1px box so state changes never shift layout) and a muted
-    // icon. Active looks exactly like hover — a thin border + fill — rather than
-    // the heavier stronger-border + ring the content chips use.
+    // Bare chips (right-cluster utilities: help, settings) carry no resting
+    // chrome: transparent border (keeps the 1px box so state changes never
+    // shift layout) and a muted icon. Active looks exactly like hover — a thin
+    // border + fill — rather than the heavier stronger-border + ring the
+    // content chips use. Hover/active/focus colors are hand-matched to
+    // IconButton's ICON_BUTTON_CLASS (same border/bg/pink treatment as every
+    // other icon button) — this component can't just render <IconButton>
+    // itself, since it also carries the active-page state, aria-pressed, and
+    // glow-dot logic the content chips need.
     tone = active
-      ? "border-border bg-elevated text-content"
-      : "border-transparent text-content-muted hover:border-border hover:bg-elevated hover:text-content";
+      ? "border-border bg-elevated text-content hover:text-neon-pink"
+      : "border-transparent text-content-muted hover:border-border hover:bg-elevated hover:text-neon-pink active:border-border active:bg-elevated active:text-neon-pink focus-visible:border-border focus-visible:bg-elevated focus-visible:text-neon-pink focus-visible:outline-none";
   } else if (filled && active) {
     // Active content tab: soft grey-green fill (lighter sage in dark) so the
     // showing view reads as "selected" with the brand's grey-green, not a flat grey.

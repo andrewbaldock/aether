@@ -4,6 +4,7 @@ import { useCapabilities } from "../capabilities/useCapabilities";
 import { useKnowledgeGraphState } from "../capabilities/widgets/KnowledgeGraph/useKnowledgeGraphState";
 import { CapabilityColumn } from "./CapabilityColumn";
 import { ChatPanel } from "./ChatPanel";
+import { IconButton } from "./IconButton";
 import { useSessionContext } from "./SessionContext";
 import { Sidebar, SidebarToggleIcon } from "./Sidebar";
 
@@ -64,14 +65,13 @@ export function MobileShell() {
           dvh root (above) tracks the iOS URL bar/keyboard; the safe-area top
           padding clears the notch. */}
       <div className="relative flex shrink-0 items-center gap-2 border-b border-border bg-surface-raised pb-2 pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))]">
-        <button
-          type="button"
+        <IconButton
+          label="Open sidebar"
+          tooltip={false}
           onClick={() => setDrawerOpen(true)}
-          aria-label="Open sidebar"
-          className="flex h-11 w-11 items-center justify-center rounded-md text-content-muted hover:bg-elevated hover:text-content"
         >
           <SidebarToggleIcon />
-        </button>
+        </IconButton>
         <div className="pointer-events-none absolute left-1/2 -translate-x-1/2">
           <Wordmark height={24} compact={!started} />
         </div>

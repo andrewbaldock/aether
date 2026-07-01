@@ -2,11 +2,12 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "../brand/Wordmark";
 import { ExploreMenu } from "../capabilities/widgets/ContextMenu";
+import { resolveVocabularyIcon } from "../capabilities/widgets/vocabularyIcon";
 import { SITE_URL } from "../lib/links";
 import { ThemeToggle } from "../theme/ThemeToggle";
+import { IconButton } from "./IconButton";
 import { useModelLabel } from "./ModelPicker";
 import { useSessionContext } from "./SessionContext";
-import { Tooltip } from "./Tooltip";
 
 export function Sidebar({
   onToggle,
@@ -101,6 +102,7 @@ export function Sidebar({
             key={s.id}
             id={s.id}
             title={titleFor(s)}
+            icon={s.topic_icon}
             date={s.created_at}
             modelLabel={labelForModel(s.model)}
             active={s.id === sessionId}
@@ -115,19 +117,16 @@ export function Sidebar({
       </ul>
 
       <div className="relative flex items-center px-4 pb-3 pt-2">
-        <Tooltip label="Collapse sidebar" side="top">
-          <button
-            type="button"
-            onClick={(e) => {
-              onToggle();
-              e.currentTarget.blur();
-            }}
-            aria-label="Collapse sidebar"
-            className="-ml-1.5 shrink-0 rounded-md border border-transparent p-1.5 text-content-muted transition-colors hover:border-border hover:bg-elevated hover:text-neon-pink"
-          >
-            <SidebarToggleIcon />
-          </button>
-        </Tooltip>
+        <IconButton
+          label="Collapse sidebar"
+          className="-ml-1.5"
+          onClick={(e) => {
+            onToggle();
+            e.currentTarget.blur();
+          }}
+        >
+          <SidebarToggleIcon />
+        </IconButton>
         {/* Absolutely centred against the full row so the toggle button's
             width on the left doesn't push the link off-centre. */}
         <a
@@ -150,46 +149,35 @@ export function Sidebar({
 // and the expand toggle, the last two pinned to the bottom.
 export function CollapsedSidebar({ onExpand }: { onExpand: () => void }) {
   const { startNewConversation } = useSessionContext();
-  const railButton =
-    "rounded-md border border-transparent p-1.5 text-content-muted transition-colors hover:border-border hover:bg-elevated hover:text-neon-pink";
 
   return (
     <div className="flex h-full flex-col items-center gap-1 bg-surface-raised pb-3 pt-3">
-      <Tooltip label="Aether — new conversation" side="right">
-        <button
-          type="button"
-          onClick={() => startNewConversation()}
-          aria-label="Aether — new conversation"
-          className="rounded-md border border-transparent p-1.5 transition-colors hover:border-border hover:bg-elevated"
-        >
-          <Wordmark height={22} compact decorative />
-        </button>
-      </Tooltip>
-      <Tooltip label="New conversation" side="right">
-        <button
-          type="button"
-          onClick={() => startNewConversation()}
-          aria-label="New conversation"
-          className={railButton}
-        >
-          <Plus className="h-4.5 w-4.5" aria-hidden />
-        </button>
-      </Tooltip>
+      <IconButton
+        label="Aether — new conversation"
+        side="right"
+        onClick={() => startNewConversation()}
+      >
+        <Wordmark height={22} compact decorative />
+      </IconButton>
+      <IconButton
+        label="New conversation"
+        side="right"
+        onClick={() => startNewConversation()}
+      >
+        <Plus className="h-4.5 w-4.5" aria-hidden />
+      </IconButton>
       <div className="flex-1" />
       <ThemeToggle side="right" className="" />
-      <Tooltip label="Expand sidebar" side="right">
-        <button
-          type="button"
-          onClick={(e) => {
-            onExpand();
-            e.currentTarget.blur();
-          }}
-          aria-label="Expand sidebar"
-          className={railButton}
-        >
-          <SidebarToggleIcon />
-        </button>
-      </Tooltip>
+      <IconButton
+        label="Expand sidebar"
+        side="right"
+        onClick={(e) => {
+          onExpand();
+          e.currentTarget.blur();
+        }}
+      >
+        <SidebarToggleIcon />
+      </IconButton>
     </div>
   );
 }
@@ -197,6 +185,9 @@ export function CollapsedSidebar({ onExpand }: { onExpand: () => void }) {
 interface SessionItemProps {
   id: string;
   title: string;
+  // The summarizer's topic icon (vocabulary kebab name), null until one lands —
+  // the backend self-heals missing icons on the next turn.
+  icon: string | null;
   date: string;
   // Short label of the model this conversation last used (e.g. "Sonnet 4.6").
   // Sessions with no explicit model resolve to the default's label; null only
@@ -210,6 +201,7 @@ interface SessionItemProps {
 
 function SessionItem({
   title,
+  icon,
   date,
   modelLabel,
   active,
@@ -244,6 +236,10 @@ function SessionItem({
     if (e.key === "Escape") setRenaming(false);
   }
 
+  // Same pink topic icon the conversation title bar shows; nothing (title
+  // full-width) until the summarizer has picked one.
+  const TopicIcon = icon ? resolveVocabularyIcon(icon) : null;
+
   return (
     <li className="group relative">
       {renaming ? (
@@ -264,7 +260,15 @@ function SessionItem({
             active ? "bg-selected text-content" : "text-content-muted"
           }`}
         >
-          <div className="truncate pr-5">{title}</div>
+          <div className="flex items-center gap-1.5 pr-5">
+            {TopicIcon && (
+              <TopicIcon
+                className="h-3.5 w-3.5 shrink-0 text-pink-400/80"
+                aria-hidden
+              />
+            )}
+            <span className="truncate">{title}</span>
+          </div>
           <div className="mt-0.5 truncate text-xs text-content-faint">
             {formatDate(date)}
             {modelLabel && ` · ${modelLabel}`}

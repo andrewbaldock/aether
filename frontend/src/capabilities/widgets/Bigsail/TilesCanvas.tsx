@@ -343,18 +343,19 @@ function CardShell({
             className="bigsail-card-drag flex h-7 shrink-0 cursor-grab items-center gap-2 px-3 bg-elevated/60 active:cursor-grabbing"
             title="Drag to rearrange"
           >
-            <IconButton
-              variant="chrome"
-              label="Show this widget's parameters"
-              onClick={() => setFlipped(true)}
-            >
-              <Settings className="h-3.5 w-3.5" aria-hidden />
-            </IconButton>
             <span className="truncate font-display text-sm font-semibold text-content">
               {title}
             </span>
+            <IconButton
+              label="Show this widget's parameters"
+              stopPointerDown
+              onClick={() => setFlipped(true)}
+              className="ml-auto"
+            >
+              <Settings className="h-3.5 w-3.5" aria-hidden />
+            </IconButton>
             <GripVertical
-              className="ml-auto h-4 w-4 shrink-0 text-content-faint/50 transition-colors group-hover:text-content-faint"
+              className="h-4 w-4 shrink-0 text-content-faint/50 transition-colors group-hover:text-content-faint"
               aria-hidden
             />
           </div>
@@ -376,24 +377,12 @@ function CardShell({
             className="bigsail-card-drag flex h-7 shrink-0 cursor-grab items-center gap-2 px-3 bg-elevated/60 active:cursor-grabbing"
             title="Drag to rearrange"
           >
-            <IconButton
-              variant="chrome"
-              label="Back to the widget"
-              onClick={() => setFlipped(false)}
-            >
-              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-            </IconButton>
             <span className="truncate font-display text-sm font-semibold text-content">
               {title}
             </span>
-            {/* Duplicate this widget: clones the entry in place so a copy (titled
-                "… (copy)") lands directly beneath it on the canvas and in the tool
-                tab — the user then re-prompts/regenerates the copy. ml-auto pushes
-                this pair to the right; the hide button sits just after it. */}
             <IconButton
-              variant="chrome"
               label="Duplicate this widget"
-              className="ml-auto"
+              stopPointerDown
               onClick={() => onDuplicate(card.id)}
             >
               <Copy className="h-3.5 w-3.5" aria-hidden />
@@ -414,12 +403,22 @@ function CardShell({
                   aria-label="Hide from canvas"
                   title="Hide from canvas"
                   onPointerDown={(e) => e.stopPropagation()}
-                  className={`shrink-0 transition-colors ${ICON_BUTTON_CLASS.chrome}`}
+                  className={`shrink-0 transition-colors ${ICON_BUTTON_CLASS}`}
                 >
                   <EyeOff className="h-3.5 w-3.5" aria-hidden />
                 </button>
               }
             />
+            {/* Flip back to the front. ml-auto pushes it to the far right, mirroring
+                the front face's gear-before-grip cluster. */}
+            <IconButton
+              label="Back to the widget"
+              stopPointerDown
+              className="ml-auto"
+              onClick={() => setFlipped(false)}
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+            </IconButton>
           </div>
           {/* Editable summary ("re-prompt") + read-only spec JSON. Regenerating
               flips back to the front so the user watches the new result land. */}

@@ -19,6 +19,7 @@ import {
   type UiState,
   updateSessionGraphData,
   updateSessionGraphMode,
+  updateSessionIconIfEmpty,
   updateSessionModel,
   updateSessionTitle,
   updateSessionTitleIfEmpty,
@@ -584,6 +585,46 @@ app.post("/api/chat", async (c) => {
       }
     }
 
+    // Self-heal a missing topic icon on later turns. Turn one can leave
+    // topic_icon null (generateTitle failed, or Haiku picked an off-list name
+    // that was dropped), and older sessions predate icons entirely — either way
+    // the lotus fallback would show forever. Re-pick from the existing title (a
+    // tiny Haiku call, fired only when the icon is actually missing) and patch
+    // just the icon; the client gets the same `titled` event with the unchanged
+    // title, so its caches update without a rename. Mirrors the title machinery
+    // above: settle into a result, flush inline on the SSE write path.
+    const healSession = !titleContext ? persistSession : null;
+    let healResult: { title: string; icon: string } | null | undefined;
+    const healPromise = healSession
+      ? (async () => {
+          try {
+            const session = await getSession(healSession);
+            if (!session?.title || session.topic_icon) return null;
+            const generated = await generateTitle(session.title);
+            return generated?.icon
+              ? { title: session.title, icon: generated.icon }
+              : null;
+          } catch {
+            return null;
+          }
+        })().then((r) => {
+          healResult = r;
+        })
+      : null;
+
+    let healEmitted = false;
+    async function flushHealIfReady() {
+      if (!healSession || healEmitted || healResult === undefined) return;
+      healEmitted = true;
+      if (!healResult) return;
+      try {
+        await updateSessionIconIfEmpty(healSession, healResult.icon);
+        await sse.titled(healSession, healResult.title, healResult.icon);
+      } catch (err) {
+        console.error("Failed to self-heal topic icon:", err);
+      }
+    }
+
     try {
       await llm.stream(
         messages,
@@ -594,6 +635,7 @@ app.post("/api/chat", async (c) => {
             // Name the conversation as soon as Haiku replies — typically within the
             // first few tokens, well before the answer finishes.
             await flushTitleIfReady();
+            await flushHealIfReady();
           },
           onDone: async () => {
             // The conversation pane must never come back empty. The model is told
@@ -647,6 +689,10 @@ app.post("/api/chat", async (c) => {
             if (titlePromise && !titleEmitted) {
               await titlePromise;
               await flushTitleIfReady();
+            }
+            if (healPromise && !healEmitted) {
+              await healPromise;
+              await flushHealIfReady();
             }
 
             // Terminal signal — the client's read loop breaks on [DONE], so it must

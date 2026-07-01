@@ -36,7 +36,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 // Lazy per-icon loader: resolves a model-chosen icon by name on demand without
 // bundling all ~1500 icons. Unknown names render its fallback, so an invalid
 // model suggestion degrades gracefully.
-import { Tooltip } from "../../../shell/Tooltip";
+import { IconButton } from "../../../shell/IconButton";
 import { MenuItems } from "../ContextMenu";
 import { resolveVocabularyIcon } from "../vocabularyIcon";
 import { TYPE_COLOR } from "./colors";
@@ -804,20 +804,14 @@ export function ForceGraph({
           entirely when the view is already fitted (or there are no nodes) —
           clicking would change nothing, so we don't show it at all. */}
       {canFit && (
-        <Tooltip
+        <IconButton
           label="Fit graph to view"
           side="right"
           className="absolute bottom-2 left-2"
+          onClick={() => fitView()}
         >
-          <button
-            type="button"
-            onClick={() => fitView()}
-            aria-label="Fit graph to view"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-content-muted transition-colors hover:bg-surface-raised hover:text-content"
-          >
-            <Maximize2 className="h-4 w-4" aria-hidden />
-          </button>
-        </Tooltip>
+          <Maximize2 className="h-4 w-4" aria-hidden />
+        </IconButton>
       )}
     </div>
   );

@@ -318,6 +318,21 @@ export async function updateSessionTitleIfEmpty(
   if (error) throw new Error(`updateSessionTitleIfEmpty: ${error.message}`);
 }
 
+// Self-heal: sets the topic icon only if the session doesn't already have one.
+// Same conditional-UPDATE shape as updateSessionTitleIfEmpty — no
+// read-then-write race, and a no-op once an icon exists.
+export async function updateSessionIconIfEmpty(
+  sessionId: string,
+  topicIcon: string
+): Promise<void> {
+  const { error } = await getDb()
+    .from("sessions")
+    .update({ topic_icon: topicIcon, updated_at: new Date().toISOString() })
+    .eq("id", sessionId)
+    .is("topic_icon", null);
+  if (error) throw new Error(`updateSessionIconIfEmpty: ${error.message}`);
+}
+
 export async function updateSessionGraphMode(
   sessionId: string,
   graphMode: boolean,

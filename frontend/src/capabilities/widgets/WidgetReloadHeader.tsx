@@ -1,5 +1,6 @@
 import { Copy, RefreshCw, Settings } from "lucide-react";
 import type { ReactNode } from "react";
+import { IconButton } from "../../shell/IconButton";
 import { Tooltip } from "../../shell/Tooltip";
 
 // Per-ENTRY header: one table/chart/timeline/gallery's own title on the left, with a
@@ -61,24 +62,16 @@ export function WidgetReloadHeaderButton({
   label?: string;
 }) {
   return (
-    <Tooltip
+    <IconButton
       label={label}
       contentClassName="w-64 whitespace-normal leading-snug"
+      onClick={onReload}
     >
-      <button
-        type="button"
-        onClick={onReload}
-        aria-label={label}
-        // Dim by default (text-content-subtle/60) so it recedes; brightens on hover.
-        // Spins while a reload is queued behind an in-flight turn.
-        className="shrink-0 rounded-md p-1 text-content-subtle/60 transition-colors hover:bg-elevated hover:text-content focus-visible:bg-elevated focus-visible:text-content focus-visible:outline-none"
-      >
-        <RefreshCw
-          className={`h-4 w-4 ${queued ? "animate-spin" : ""}`}
-          aria-hidden
-        />
-      </button>
-    </Tooltip>
+      <RefreshCw
+        className={`h-4 w-4 ${queued ? "animate-spin" : ""}`}
+        aria-hidden
+      />
+    </IconButton>
   );
 }
 
@@ -95,20 +88,13 @@ export function WidgetDuplicateButton({
   label?: string;
 }) {
   return (
-    <Tooltip
+    <IconButton
       label={label}
       contentClassName="w-64 whitespace-normal leading-snug"
+      onClick={onClick}
     >
-      <button
-        type="button"
-        onClick={onClick}
-        aria-label={label}
-        // Dim by default so it recedes; brightens on hover — matches the reload icon.
-        className="shrink-0 rounded-md p-1 text-content-subtle/60 transition-colors hover:bg-elevated hover:text-content focus-visible:bg-elevated focus-visible:text-content focus-visible:outline-none"
-      >
-        <Copy className="h-4 w-4" aria-hidden />
-      </button>
-    </Tooltip>
+      <Copy className="h-4 w-4" aria-hidden />
+    </IconButton>
   );
 }
 
@@ -123,19 +109,13 @@ export function WidgetEditButton({
   label?: string;
 }) {
   return (
-    <Tooltip
+    <IconButton
       label={label}
       contentClassName="w-64 whitespace-normal leading-snug"
+      onClick={onClick}
     >
-      <button
-        type="button"
-        onClick={onClick}
-        aria-label={label}
-        className="shrink-0 rounded-md p-1 text-content-subtle/60 transition-colors hover:bg-elevated hover:text-content focus-visible:bg-elevated focus-visible:text-content focus-visible:outline-none"
-      >
-        <Settings className="h-4 w-4" aria-hidden />
-      </button>
-    </Tooltip>
+      <Settings className="h-4 w-4" aria-hidden />
+    </IconButton>
   );
 }
 

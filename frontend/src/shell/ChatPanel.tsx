@@ -25,6 +25,7 @@ import { replaceRoute, useRoute, viewPath } from "../hooks/useRoute";
 import { useUpdateSession } from "../hooks/useUpdateSession";
 import { useAgentEvents } from "./AgentEventContext";
 import { ACCEPTED_TYPES, filesToAttachments } from "./attachments";
+import { ICON_BUTTON_CLASS, IconButton } from "./IconButton";
 import { ModelPicker } from "./ModelPicker";
 import { useSessionContext } from "./SessionContext";
 import { StarterPrompts } from "./StarterPrompts";
@@ -708,11 +709,15 @@ export function ChatPanel() {
                               </button>
                             </span>
                           ) : (
+                            // Raw button, not <IconButton>: this lives inline in a
+                            // text-xs footer row and only reveals on row hover — the
+                            // shared component's padded box and Tooltip would bloat
+                            // that row. Same hover/active/focus treatment by hand.
                             <button
                               type="button"
                               aria-label="Delete this exchange"
                               onClick={() => setConfirmingDeleteId(m.id)}
-                              className="opacity-0 transition-opacity hover:text-content group-hover/turn:opacity-100"
+                              className="rounded border border-transparent p-0.5 opacity-0 transition-all hover:border-border hover:bg-elevated hover:text-neon-pink active:border-border active:bg-elevated active:text-neon-pink focus-visible:border-border focus-visible:bg-elevated focus-visible:text-neon-pink focus-visible:opacity-100 focus-visible:outline-none group-hover/turn:opacity-100"
                             >
                               <Trash2 size={13} />
                             </button>
@@ -838,11 +843,15 @@ export function ChatPanel() {
                     <span className="max-w-32 truncate text-xs text-content-muted">
                       {a.name}
                     </span>
+                    {/* Raw button, not <IconButton>: this sits inside a compact
+                        attachment chip — the shared component's padded box (and
+                        44px mobile touch target) would overflow the chip's own
+                        height. Same hover/active/focus treatment by hand. */}
                     <button
                       type="button"
                       aria-label={`Remove ${a.name}`}
                       onClick={() => removeAttachment(i)}
-                      className="flex h-5 w-5 items-center justify-center rounded-full text-content-subtle transition-colors hover:bg-elevated hover:text-content"
+                      className="flex h-5 w-5 items-center justify-center rounded-full border border-transparent text-content-subtle transition-colors hover:border-border hover:bg-elevated hover:text-neon-pink active:border-border active:bg-elevated active:text-neon-pink focus-visible:border-border focus-visible:bg-elevated focus-visible:text-neon-pink focus-visible:outline-none"
                     >
                       <X size={13} />
                     </button>
@@ -881,16 +890,12 @@ export function ChatPanel() {
               }}
             />
             <div className="absolute bottom-2 left-2 flex items-center">
-              <Tooltip label="Attach image or PDF" side="top">
-                <button
-                  type="button"
-                  aria-label="Attach image or PDF"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex h-[22.5px] w-[22.5px] items-center justify-center rounded-lg border border-transparent text-content-muted transition hover:border-border-strong hover:bg-surface hover:text-content max-md:h-11 max-md:w-11"
-                >
-                  <Plus size={14} />
-                </button>
-              </Tooltip>
+              <IconButton
+                label="Attach image or PDF"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Plus size={14} aria-hidden />
+              </IconButton>
             </div>
             <div className="absolute bottom-2 right-2 flex items-center gap-2">
               {/* Model picker — which Claude answers this conversation. */}
@@ -1053,12 +1058,16 @@ function ConversationTitle({
           aria-hidden
         />
       </button>
+      {/* Raw Radix tooltip, not <IconButton>: the bubble needs a controlled
+          `open` state so "URL Copied" sticks after the click instead of
+          hiding with the pointer, which the shared <Tooltip> doesn't expose.
+          Same shared class as every other icon button. */}
       <RadixTooltip.Root open={copied || undefined}>
         <RadixTooltip.Trigger asChild>
           <button
             type="button"
             onClick={handleShare}
-            className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center rounded-lg border border-transparent px-2.5 py-1.5 text-content-muted transition-colors hover:border-border hover:bg-elevated hover:text-content"
+            className={`absolute right-3 top-1/2 -translate-y-1/2 ${ICON_BUTTON_CLASS}`}
             aria-label="Copy link"
           >
             <Share2 className="h-3.5 w-3.5" />

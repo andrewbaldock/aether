@@ -19,9 +19,9 @@
 @theme {
   --color-surface: var(--surface);
   --color-surface-raised: var(--surface-raised);
-  --color-surface-overlay: var(--surface-overlay);
   --color-elevated: var(--elevated);
   --color-selected: var(--selected);
+  --color-surface-overlay: var(--surface-overlay);
   --color-content: var(--content);
   --color-content-muted: var(--content-muted);
   --color-content-subtle: var(--content-subtle);
@@ -29,8 +29,8 @@
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-accent: var(--accent);
-  --color-on-accent: var(--on-accent);
   --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
   --color-neon-pink: var(--neon-pink);
   --color-neon-cyan: var(--neon-cyan);
   --color-danger-surface: var(--danger-surface);
@@ -45,9 +45,9 @@
   color-scheme: light;
   --surface: #ffffff;
   --surface-raised: #ebf2eb; /* soft grey-green sidebar */
-  --surface-overlay: #1a1020; /* dark tooltip even in light, for neon contrast */
   --elevated: #eef3ee; /* hover fills / assistant bubble */
   --selected: #d6e3d6; /* active sidebar row — stronger than elevated */
+  --surface-overlay: #1a1020; /* dark tooltip even in light, for neon contrast */
   --content: #171717;
   --content-muted: #4a4458;
   --content-subtle: #8b8597;
@@ -55,8 +55,8 @@
   --border: #e2e8e2;
   --border-strong: #cdd6cd;
   --accent: #ff2e9a; /* neon pink — user bubble + Send */
-  --on-accent: #ffffff;
   --accent-hover: #ff5cb0;
+  --on-accent: #ffffff;
   --neon-pink: #ff2e9a;
   --neon-cyan: #16c2ff;
   --danger-surface: #fee2e2;
@@ -69,9 +69,9 @@
   color-scheme: dark;
   --surface: #171717; /* neutral-900 */
   --surface-raised: #0a0a0a; /* neutral-950 */
-  --surface-overlay: #0a0a0a; /* neutral-950 */
   --elevated: #262626; /* neutral-800 */
   --selected: #383838; /* active sidebar row — stronger than elevated */
+  --surface-overlay: #0a0a0a; /* neutral-950 */
   --content: #f5f5f5; /* neutral-100 */
   --content-muted: #a3a3a3; /* neutral-400 */
   --content-subtle: #737373; /* neutral-500 */
@@ -79,8 +79,8 @@
   --border: #262626; /* neutral-800 */
   --border-strong: #404040; /* neutral-700/600 */
   --accent: #ff2e9a; /* neon pink (was neutral-100/white) */
-  --on-accent: #1a0a14; /* near-black, pink-tinted, for text on accent */
   --accent-hover: #ff5cb0;
+  --on-accent: #1a0a14; /* near-black, pink-tinted, for text on accent */
   --neon-pink: #ff2e9a;
   --neon-cyan: #16c2ff;
   --danger-surface: rgb(127 29 29 / 0.4); /* red-900/40 */
