@@ -1,5 +1,5 @@
 import { test as base, type Page, type Route } from "@playwright/test";
-import { type SseEvent, sseBody, tableTurn, textTurn } from "./sse";
+import { graphTurn, type SseEvent, sseBody, tableTurn, textTurn } from "./sse";
 
 // The whole E2E + screenshot strategy hinges on this: a clean, composable mock of
 // every `/api/*` route, installed at the network layer via page.route. No backend
@@ -89,6 +89,12 @@ export class MockApi {
   /** Make the next chat turn stream a render_table round trip. */
   streamTable() {
     this.chatEvents = tableTurn();
+    this.chatDone = true;
+  }
+
+  /** Make the next chat turn stream a build_knowledge_graph round trip. */
+  streamGraph() {
+    this.chatEvents = graphTurn();
     this.chatDone = true;
   }
 

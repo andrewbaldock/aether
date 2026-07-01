@@ -8,8 +8,7 @@ import { CapabilityColumn } from "./CapabilityColumn";
 import { ChatPanel } from "./ChatPanel";
 import { MobileShell } from "./MobileShell";
 import { SessionProvider, useSessionContext } from "./SessionContext";
-import { Sidebar, SidebarToggleIcon } from "./Sidebar";
-import { Tooltip } from "./Tooltip";
+import { CollapsedSidebar, Sidebar } from "./Sidebar";
 import { useIsMobile } from "./useIsMobile";
 
 // The resize handle IS the 1px divider line: it takes only 1px of layout width
@@ -29,6 +28,7 @@ const handleDot =
 
 const SIDEBAR_COLLAPSED_KEY = "aether-sidebar-collapsed";
 const SIDEBAR_WIDTH = 240; // px — fixed so the wordmark never gets cramped
+const SIDEBAR_RAIL_WIDTH = 56; // px — collapsed sidebar: a single column of icons, never fully gone
 
 // The capability column width is chrome, not conversation state: it lives ONLY
 // in localStorage, keyed per device, and NEVER travels with a shared/loaded
@@ -153,11 +153,16 @@ function ShellInner() {
 
   return (
     <div className="relative flex h-screen w-screen overflow-hidden bg-surface">
-      {!sidebarCollapsed && (
-        <div className="shrink-0" style={{ width: SIDEBAR_WIDTH }}>
+      <div
+        className="shrink-0"
+        style={{ width: sidebarCollapsed ? SIDEBAR_RAIL_WIDTH : SIDEBAR_WIDTH }}
+      >
+        {sidebarCollapsed ? (
+          <CollapsedSidebar onExpand={toggleSidebar} />
+        ) : (
           <Sidebar onToggle={toggleSidebar} />
-        </div>
-      )}
+        )}
+      </div>
 
       <Group
         // Remount the group when fullscreen toggles so the panels re-derive their
@@ -209,29 +214,9 @@ function ShellInner() {
             }
           }}
         >
-          <CapabilityColumn sidebarCollapsed={sidebarCollapsed} />
+          <CapabilityColumn />
         </Panel>
       </Group>
-
-      {sidebarCollapsed && (
-        <Tooltip
-          label="Open sidebar"
-          side="right"
-          className="absolute left-2 top-3 z-10"
-        >
-          <button
-            type="button"
-            onClick={(e) => {
-              toggleSidebar();
-              e.currentTarget.blur();
-            }}
-            aria-label="Open sidebar"
-            className="rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-content"
-          >
-            <SidebarToggleIcon />
-          </button>
-        </Tooltip>
-      )}
     </div>
   );
 }

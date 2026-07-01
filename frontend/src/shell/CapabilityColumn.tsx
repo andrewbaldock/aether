@@ -34,11 +34,7 @@ const UTILITY_TITLES: Record<string, string> = {
 //
 // The Knowledge Graph is home base (first chip, the default active view). The
 // Welcome/help page is pinned to the right; the (?) icon elsewhere activates it.
-export function CapabilityColumn({
-  sidebarCollapsed,
-}: {
-  sidebarCollapsed: boolean;
-}) {
+export function CapabilityColumn() {
   const { activeId, unseen, isFullscreen, setFullscreen } = useCapabilities();
   const hasContent = useCapabilityContent();
   const isMobile = useIsMobile();
@@ -81,14 +77,7 @@ export function CapabilityColumn({
           a second row while the right cluster stays pinned top-right. Chips are
           tap-sized on mobile. `items-start` keeps the right cluster top-aligned
           when the left group grows to two rows. */}
-      <div
-        className={`@container flex min-h-11 items-start gap-1 border-b border-border px-2 py-1.5${
-          // When the sidebar is collapsed AND this column is fullscreen, it
-          // becomes the leftmost panel and the floating "Open sidebar" button
-          // (absolute left-2 top-3) overlaps the first chip. Reserve space.
-          sidebarCollapsed && isFullscreen ? " pl-12" : ""
-        }`}
-      >
+      <div className="@container flex min-h-11 items-start gap-1 border-b border-border px-2 py-1.5">
         <div className="flex flex-1 flex-wrap items-center gap-1">
           {CAPABILITIES.map((cap) => (
             <CapabilityChip
@@ -300,8 +289,7 @@ function CapabilityChip({
 function HelpIcon() {
   return (
     <svg
-      width="18"
-      height="18"
+      className="h-4.5 w-4.5"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -320,8 +308,7 @@ function HelpIcon() {
 function GearIcon() {
   return (
     <svg
-      width="18"
-      height="18"
+      className="h-4.5 w-4.5"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -336,13 +323,13 @@ function GearIcon() {
   );
 }
 
-// Enter-fullscreen: four corner brackets pointing outward. Same 18px / 1.75 stroke
-// as GearIcon so the right-cluster utilities read as one consistent set.
+// Enter-fullscreen: four corner brackets pointing outward. Same 1.125rem (18px
+// at the default text size) / 1.75 stroke as GearIcon so the right-cluster
+// utilities read as one consistent set.
 function FullscreenIcon() {
   return (
     <svg
-      width="18"
-      height="18"
+      className="h-4.5 w-4.5"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -363,8 +350,7 @@ function FullscreenIcon() {
 function ExitFullscreenIcon() {
   return (
     <svg
-      width="18"
-      height="18"
+      className="h-4.5 w-4.5"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"

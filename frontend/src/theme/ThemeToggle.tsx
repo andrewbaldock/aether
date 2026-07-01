@@ -13,7 +13,7 @@ export function ThemeToggle() {
         type="button"
         onClick={toggle}
         aria-label={label}
-        className="shrink-0 rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-neon-pink"
+        className="shrink-0 rounded-md border border-transparent p-1.5 text-content-muted transition-colors hover:border-border hover:bg-elevated hover:text-neon-pink"
       >
         {isDark ? <MoonIcon /> : <SunIcon />}
       </button>

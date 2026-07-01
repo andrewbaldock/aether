@@ -93,6 +93,13 @@ export function TilesCanvas({
   const onChangeRef = useRef(onLayoutChange);
   onChangeRef.current = onLayoutChange;
 
+  // cardId → already re-initialized its drag/resize handles (see the effect
+  // below). GridStack computes the drag `handle` at addWidget() time, when
+  // content is still empty ("") — it finds no `.bigsail-card-drag` and falls
+  // back to making the WHOLE item draggable. Cleared on removal so a
+  // hide-then-re-add (a fresh grid item) gets the fix reapplied too.
+  const ddFixedIds = useRef<Set<string>>(new Set());
+
   // Init GridStack once. The grid is always GRID_COLUMNS wide — responsiveness is
   // the column WIDTH (the grid spans 100% of the panel), not a changing count.
   useEffect(() => {
@@ -147,6 +154,7 @@ export function TilesCanvas({
     for (const node of grid.engine.nodes.slice()) {
       if (typeof node.id === "string" && !liveIds.has(node.id) && node.el) {
         grid.removeWidget(node.el, true);
+        ddFixedIds.current.delete(node.id);
       }
     }
 
@@ -208,6 +216,25 @@ export function TilesCanvas({
     // own as widgets are added/removed, which is exactly System 2's gap-closing.
     setPortals(nextPortals);
   }, [placed]);
+
+  // Re-scan each new item's drag handle once its portal content (with the
+  // real `.bigsail-card-drag` strip) has actually mounted. Runs after the
+  // render that committed it, so `force: true` finds the handle and stops
+  // GridStack from treating the whole card — e.g. a Knowledge Graph's SVG
+  // canvas — as one big drag target. See ddFixedIds above for why this is
+  // needed at all.
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    for (const [id, host] of portals) {
+      if (ddFixedIds.current.has(id)) continue;
+      const item = host.closest<HTMLElement>(".grid-stack-item");
+      if (item) {
+        grid.prepareDragDrop(item, true);
+        ddFixedIds.current.add(id);
+      }
+    }
+  }, [portals]);
 
   // Stagger index per placeholder card, in placed order, so skeletons cascade in
   // (the CSS uses --i to delay each one). Only placeholders get an index; real

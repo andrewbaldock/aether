@@ -16,7 +16,7 @@ export function HelpButton({ className }: { className?: string }) {
           e.currentTarget.blur();
         }}
         aria-label="What is Aether?"
-        className="shrink-0 rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-neon-pink"
+        className="shrink-0 rounded-md border border-transparent p-1.5 text-content-muted transition-colors hover:border-border hover:bg-elevated hover:text-neon-pink"
       >
         <HelpIcon />
       </button>

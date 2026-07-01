@@ -891,9 +891,9 @@ export function ChatPanel() {
                   type="button"
                   aria-label="Attach image or PDF"
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex h-[30px] w-[30px] items-center justify-center rounded-lg border border-border-strong text-content-muted transition hover:bg-surface hover:text-content max-md:h-11 max-md:w-11"
+                  className="flex h-[22.5px] w-[22.5px] items-center justify-center rounded-lg border border-transparent text-content-muted transition hover:border-border-strong hover:bg-surface hover:text-content max-md:h-11 max-md:w-11"
                 >
-                  <Plus size={18} />
+                  <Plus size={14} />
                 </button>
               </Tooltip>
             </div>
@@ -1013,9 +1013,12 @@ function ConversationTitle({
     setTimeout(() => setCopied(false), 2000);
   }
 
+  // h-11.25 (45px), not h-11 (44px) — matches the capability toolbar's natural
+  // height with its 18px icons (CapabilityColumn.tsx), so the two panel
+  // headers' bottom borders line up instead of sitting 1px apart.
   if (editing) {
     return (
-      <div className="aether-titlebar-texture relative flex h-11 items-center justify-center border-b border-border px-4">
+      <div className="aether-titlebar-texture relative flex h-11.25 items-center justify-center border-b border-border px-4">
         <input
           ref={inputRef}
           value={draft}
@@ -1029,7 +1032,7 @@ function ConversationTitle({
   }
 
   return (
-    <div className="aether-titlebar-texture relative flex h-11 items-center border-b border-border">
+    <div className="aether-titlebar-texture relative flex h-11.25 items-center border-b border-border">
       <button
         type="button"
         onClick={() => setEditing(true)}
@@ -1060,7 +1063,7 @@ function ConversationTitle({
           <button
             type="button"
             onClick={handleShare}
-            className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-content transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center rounded-lg border border-transparent px-2.5 py-1.5 text-content-muted transition-colors hover:border-border hover:bg-elevated hover:text-content"
             aria-label="Copy link"
           >
             <Share2 className="h-3.5 w-3.5" />

@@ -71,3 +71,33 @@ export function tableTurn(): SseEvent[] {
     { type: "text", content: " — rendered in the Table tab." },
   ];
 }
+
+// A build_knowledge_graph round trip: mirrors tableTurn() above, but for the
+// Knowledge Graph widget's tool (a GraphPayload of entities/relationships
+// rather than columns/rows). The widget keys on the tool name
+// "build_knowledge_graph" exactly, per useKnowledgeGraphState.tsx.
+export function graphTurn(): SseEvent[] {
+  const payload = {
+    entities: [
+      { id: "a", label: "Alpha", type: "concept" },
+      { id: "b", label: "Beta", type: "concept" },
+      { id: "c", label: "Gamma", type: "concept" },
+    ],
+    relationships: [
+      { from: "a", to: "b", label: "relates to" },
+      { from: "b", to: "c", label: "relates to" },
+    ],
+  };
+  const json = JSON.stringify(payload);
+  return [
+    { type: "text", content: "Here's how those concepts connect:" },
+    {
+      type: "tool_start",
+      tool: "build_knowledge_graph",
+      input: payload,
+      label: "Building a knowledge graph",
+    },
+    { type: "tool_result", tool: "build_knowledge_graph", result: json },
+    { type: "text", content: " — rendered in the Knowledge Graph tab." },
+  ];
+}

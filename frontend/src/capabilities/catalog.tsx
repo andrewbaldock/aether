@@ -109,8 +109,7 @@ export const CAPABILITIES: Capability[] = [
 function BigsailIcon() {
   return (
     <svg
-      width="18"
-      height="18"
+      className="h-4.5 w-4.5"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -129,8 +128,7 @@ function BigsailIcon() {
 function GraphIcon() {
   return (
     <svg
-      width="18"
-      height="18"
+      className="h-4.5 w-4.5"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -153,8 +151,7 @@ function GraphIcon() {
 function TableIcon() {
   return (
     <svg
-      width="18"
-      height="18"
+      className="h-4.5 w-4.5"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -174,8 +171,7 @@ function TableIcon() {
 function TimelineIcon() {
   return (
     <svg
-      width="18"
-      height="18"
+      className="h-4.5 w-4.5"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -197,8 +193,7 @@ function TimelineIcon() {
 function ImagesIcon() {
   return (
     <svg
-      width="18"
-      height="18"
+      className="h-4.5 w-4.5"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -219,8 +214,7 @@ function ImagesIcon() {
 function ChartIcon() {
   return (
     <svg
-      width="18"
-      height="18"
+      className="h-4.5 w-4.5"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"

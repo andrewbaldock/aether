@@ -1,4 +1,4 @@
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "../brand/Wordmark";
 import { ExploreMenu } from "../capabilities/widgets/ContextMenu";
@@ -69,7 +69,7 @@ export function Sidebar({
               e.currentTarget.blur();
             }}
             aria-label="Collapse sidebar"
-            className="-ml-1 shrink-0 rounded-md p-1.5 text-content-muted hover:bg-elevated hover:text-content"
+            className="-ml-1 shrink-0 rounded-md border border-transparent p-1.5 text-content-muted transition-colors hover:border-border hover:bg-elevated hover:text-neon-pink"
           >
             <SidebarToggleIcon />
           </button>
@@ -144,6 +144,54 @@ export function Sidebar({
           andrewbaldock.com
         </a>
       </div>
+    </div>
+  );
+}
+
+// Rendered instead of the full Sidebar when collapsed — a slim rail so the
+// sidebar never fully disappears. Just enough to get back in: the wordmark
+// (new conversation), the expand toggle, and a dedicated new-conversation
+// icon. No theme toggle here — that stays in the full sidebar's header.
+export function CollapsedSidebar({ onExpand }: { onExpand: () => void }) {
+  const { startNewConversation } = useSessionContext();
+  const railButton =
+    "rounded-md border border-transparent p-1.5 text-content-muted transition-colors hover:border-border hover:bg-elevated hover:text-neon-pink";
+
+  return (
+    <div className="flex h-full flex-col items-center gap-1 bg-surface-raised pt-3">
+      <Tooltip label="Aether — new conversation" side="right">
+        <button
+          type="button"
+          onClick={() => startNewConversation()}
+          aria-label="Aether — new conversation"
+          className="rounded-md border border-transparent p-1.5 transition-colors hover:border-border hover:bg-elevated"
+        >
+          <Wordmark height={22} compact decorative />
+        </button>
+      </Tooltip>
+      <Tooltip label="Expand sidebar" side="right">
+        <button
+          type="button"
+          onClick={(e) => {
+            onExpand();
+            e.currentTarget.blur();
+          }}
+          aria-label="Expand sidebar"
+          className={railButton}
+        >
+          <SidebarToggleIcon />
+        </button>
+      </Tooltip>
+      <Tooltip label="New conversation" side="right">
+        <button
+          type="button"
+          onClick={() => startNewConversation()}
+          aria-label="New conversation"
+          className={railButton}
+        >
+          <Plus className="h-4.5 w-4.5" aria-hidden />
+        </button>
+      </Tooltip>
     </div>
   );
 }
