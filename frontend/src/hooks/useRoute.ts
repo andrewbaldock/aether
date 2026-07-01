@@ -25,12 +25,18 @@ type Route =
 
 // The admin pages addressable by path. The route id IS the widget id, so
 // activate(route.id) just works.
-export type AdminPageId = "welcome" | "settings" | "health" | "screenshots";
+export type AdminPageId =
+  | "welcome"
+  | "settings"
+  | "health"
+  | "styleguide"
+  | "screenshots";
 
 const ADMIN_PATHS: Record<AdminPageId, string> = {
   welcome: "/welcome",
   settings: "/settings",
   health: "/health",
+  styleguide: "/style-guide",
   screenshots: "/screenshots",
 };
 const ADMIN_IDS: Record<string, AdminPageId> = Object.fromEntries(

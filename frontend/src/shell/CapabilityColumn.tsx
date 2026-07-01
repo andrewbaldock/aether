@@ -4,6 +4,7 @@ import { useCapabilities } from "../capabilities/useCapabilities";
 import { useCapabilityContent } from "../capabilities/useCapabilityContent";
 import { HEALTH_WIDGET } from "../capabilities/widgets/Health";
 import { SETTINGS_WIDGET } from "../capabilities/widgets/Settings";
+import { STYLEGUIDE_WIDGET } from "../capabilities/widgets/StyleGuide";
 import { WELCOME_WIDGET } from "../capabilities/widgets/Welcome";
 import { replaceRoute, viewPath } from "../hooks/useRoute";
 import { useSessionContext } from "./SessionContext";
@@ -18,6 +19,7 @@ const UTILITY_TITLES: Record<string, string> = {
   [WELCOME_WIDGET.id]: WELCOME_WIDGET.title,
   [SETTINGS_WIDGET.id]: SETTINGS_WIDGET.title,
   [HEALTH_WIDGET.id]: HEALTH_WIDGET.title,
+  [STYLEGUIDE_WIDGET.id]: STYLEGUIDE_WIDGET.title,
   // Dev-only Screenshots admin page. Literal id (not an import) so the gallery
   // module stays out of the prod bundle; the renderer is only registered in dev,
   // and the tab that activates it is dev-gated too.

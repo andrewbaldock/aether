@@ -10,6 +10,7 @@ import "./capabilities/widgets/Health";
 import "./capabilities/widgets/Images";
 import "./capabilities/widgets/KnowledgeGraph";
 import "./capabilities/widgets/Settings";
+import "./capabilities/widgets/StyleGuide";
 import "./capabilities/widgets/Table";
 import "./capabilities/widgets/Timeline";
 import "./capabilities/widgets/Welcome";

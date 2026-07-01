@@ -59,6 +59,8 @@ can't silently drift from the code. Full write-up in
   the two-runtime model, the `/api` proxy wiring, and the testing strategy.
 - **[docs/MOBILE.md](docs/MOBILE.md)** — mobile/responsive behavior, the PWA (installable +
   service worker), icon assets, and how mobile is tested.
+- **[docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md)** — design tokens, the shared widget/admin-page
+  shells, motion conventions, and composition patterns. See it live at `/style-guide`.
 - **[docs/HISTORY.md](docs/HISTORY.md)** — how Aether unfolded commit by commit: the order things
   were built, the decisions made, and the dev rhythms behind them.
 
