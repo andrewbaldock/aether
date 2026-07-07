@@ -30,39 +30,39 @@ function isArticle(text: string): boolean {
   );
 }
 
-// Claude opens a turn with a one-line process announcement before its tool calls
-// ("Now let me build the full response…", "Let me pull the population figures…").
-// That's chatter, not the article — it must NOT get the drop cap / standfirst.
-// Split it off so it renders as a quiet muted note and the editorial treatment
-// lands on the first real content paragraph instead.
+// Claude opens (and, across an agent loop, punctuates) a turn with process
+// narration before its tool calls — "Now let me build the full response…", "Let me
+// pull the figures…", "I have the photos. Let me render them." That's scaffolding,
+// not the article: it must NOT get the drop cap / standfirst. New turns no longer
+// persist it (the backend keeps only the answer), but it still streams live and
+// lives in legacy transcripts, so we peel the WHOLE leading chain off here and
+// render it as quiet muted notes, leaving the editorial treatment for the first
+// real content paragraph. Mirrors backend/src/staging.ts (kept conservative — only
+// clearly self-narrating, short, leading paragraphs).
+const STAGING_OPENER =
+  /^(let['’]s\b|i['’]ll\b|i will\b|i['’]ve\b|i have\b|i['’]m (?:going|about) to\b|now (?:let me|i)\b|okay[,\s]|ok[,\s]|alright[,\s]|first,\s|sure[,\s]|great[,\s])/i;
+const LET_ME_ACTION =
+  /\blet me (?:pull|grab|get|fetch|build|render|chart|map|assemble|gather|start|dig|look|search|find|check|put together|pull up|run|query|surface|show)\b/i;
+const STRUCTURAL = /^(#{1,6}\s|:::|::[a-z]|>|[-*]\s|\d+[.)]\s|\||---|!\[)/i;
+function isStagingParagraph(paragraph: string): boolean {
+  const t = paragraph.trim();
+  if (!t || t.length > 240) return false;
+  if (STRUCTURAL.test(t)) return false;
+  return STAGING_OPENER.test(t) || LET_ME_ACTION.test(t);
+}
 function splitPreamble(text: string): {
-  preamble: string | null;
+  preamble: string[];
   body: string;
 } {
   const trimmed = text.replace(/^\s+/, "");
-  // A short lead-in before the first heading is a preamble (the content starts
-  // at the heading). Single paragraph, kept short so we don't swallow real prose.
-  const headingIdx = trimmed.search(/^#{1,6}\s/m);
-  if (headingIdx > 0) {
-    const before = trimmed.slice(0, headingIdx).trim();
-    if (before && before.length <= 220 && !/\n\s*\n/.test(before)) {
-      return { preamble: before, body: trimmed.slice(headingIdx) };
-    }
-  }
-  // Otherwise: a short opening "Let me…/Now let me…/I'll…" line is an
-  // announcement, even when it's momentarily the only text (mid-stream).
-  const brk = trimmed.search(/\n\s*\n/);
-  const first = (brk === -1 ? trimmed : trimmed.slice(0, brk)).trim();
-  if (
-    first.length <= 200 &&
-    /^(now\s+)?(let me|let['’]s|i['’]ll|i will)\b/i.test(first)
-  ) {
-    return {
-      preamble: first,
-      body: brk === -1 ? "" : trimmed.slice(brk).trim(),
-    };
-  }
-  return { preamble: null, body: trimmed };
+  const paras = trimmed.split(/\n\s*\n/);
+  let i = 0;
+  while (i < paras.length && isStagingParagraph(paras[i] ?? "")) i++;
+  if (i === 0) return { preamble: [], body: trimmed };
+  return {
+    preamble: paras.slice(0, i).map((p) => p.trim()),
+    body: paras.slice(i).join("\n\n"),
+  };
 }
 
 // remark plugin: convert remark-directive's directive nodes into ordinary
@@ -203,7 +203,12 @@ export function ProseMarkdown({ text }: { text: string }) {
       className="prose-editorial"
       data-variant={isArticle(body) ? "article" : "compact"}
     >
-      {preamble ? <p className="prose-preamble">{preamble}</p> : null}
+      {preamble.map((line, idx) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: staging lines have no id and never reorder
+        <p key={idx} className="prose-preamble">
+          {line}
+        </p>
+      ))}
       {/* The article treatment (drop cap, standfirst) targets .prose-body's first
           paragraph, so the muted preamble above never gets dressed up. */}
       <div className="prose-body">

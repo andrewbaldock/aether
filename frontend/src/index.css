@@ -579,14 +579,15 @@ body {
   line-height: 1.6;
   color: var(--content);
 }
-/* Drop cap on that lead paragraph's first letter. */
+/* Drop cap on that lead paragraph's first letter. Kept modest (~3 lines tall,
+   not the classic 4–5) so it accents the standfirst without dominating it. */
 .prose-editorial[data-variant="article"]
   .prose-body
   > p:first-of-type::first-letter {
   float: left;
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 3.1em;
+  font-size: 2.3em;
   line-height: 0.82;
   padding: 0.02em 0.09em 0 0;
   color: var(--accent);

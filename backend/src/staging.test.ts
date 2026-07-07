@@ -1,0 +1,40 @@
+import { expect, test } from "bun:test";
+import { isStagingParagraph, stripStagingChain } from "./staging";
+
+test("recognizes staging lines, not real content", () => {
+  expect(isStagingParagraph("Let me pull the revenue figures.")).toBe(true);
+  expect(isStagingParagraph("I have solid photos. Let me render them.")).toBe(true);
+  expect(isStagingParagraph("Now I have everything I need.")).toBe(true);
+  // real content and structural markdown are never staging
+  expect(isStagingParagraph("Modern logistics began as a business of paper.")).toBe(false);
+  expect(isStagingParagraph("## The digital foundation")).toBe(false);
+  expect(isStagingParagraph(":::pullquote")).toBe(false);
+  // a long "Let me" paragraph is real prose, not a one-line remark
+  expect(isStagingParagraph("Let me be clear about why this matters: ".padEnd(300, "x"))).toBe(false);
+  // rhetorical "let me" openers are content, not staging — only "let me <do a thing>" is
+  expect(isStagingParagraph("Let me be clear about the stakes here.")).toBe(false);
+  expect(isStagingParagraph("Let me walk you through the three phases.")).toBe(false);
+  expect(isStagingParagraph("Let me render the chart now.")).toBe(true);
+});
+
+test("strips the whole leading staging chain, keeps the answer", () => {
+  const src = [
+    "I'll build you the full picture — let me start by pulling some data.",
+    "Let me grab a few more visuals while I write up the deep-dive.",
+    "Modern logistics began as a business of paper, phone calls, and trust.",
+    "## The digital foundation",
+  ].join("\n\n");
+  const out = stripStagingChain(src);
+  expect(out.startsWith("Modern logistics began")).toBe(true);
+  expect(out.includes("Let me")).toBe(false);
+});
+
+test("never blanks a pure-staging turn (no real content follows)", () => {
+  const src = "Let me pull the figures.\n\nNow let me render the panels.";
+  expect(stripStagingChain(src)).toBe(src);
+});
+
+test("leaves clean content untouched (idempotent backfill)", () => {
+  const clean = "Modern logistics began as a business of paper.\n\n## Section\n\nMore.";
+  expect(stripStagingChain(clean)).toBe(clean);
+});

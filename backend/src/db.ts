@@ -483,6 +483,20 @@ export async function deleteSession(
   if (error) throw new Error(`deleteSession: ${error.message}`);
 }
 
+// Overwrite a message's content in place (same id). Used by the lazy staging
+// backfill on GET /messages to permanently clean legacy transcripts on next load.
+export async function updateMessageContent(
+  id: string,
+  content: string
+): Promise<void> {
+  if (!content.trim()) return; // never blank a row
+  const { error } = await getDb()
+    .from("messages")
+    .update({ content })
+    .eq("id", id);
+  if (error) throw new Error(`updateMessageContent: ${error.message}`);
+}
+
 // Delete specific message rows, scoped to a session so a stray id can't reach
 // across sessions. Used by the per-turn trash control (deletes the user+assistant
 // pair). Owner-checked: the session must belong to the caller before any row is

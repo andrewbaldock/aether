@@ -23,6 +23,7 @@ import {
   updateSessionModel,
   updateSessionTitle,
   updateSessionTitleIfEmpty,
+  updateMessageContent,
   updateSessionUiState,
   updateSessionWidgetData,
 } from "./db";
@@ -37,7 +38,8 @@ import {
 import { MODELS, type Provider, resolveModel } from "./models";
 import { backfillSnapshotPrompts } from "./recreationPrompt";
 import { createSseEmitter } from "./sse";
-import { toolStatusLabel } from "./tools";
+import { stripStagingChain } from "./staging";
+import { STREAMABLE_RENDER_TOOLS, toolStatusLabel } from "./tools";
 
 const app = new Hono();
 
@@ -287,7 +289,26 @@ app.get("/api/sessions/:id/messages", async (c) => {
   const id = c.req.param("id");
   try {
     const messages = await getMessages(id);
-    return c.json(messages);
+    // Lazy staging backfill: legacy assistant rows have pre-tool narration baked
+    // into their content (new turns no longer persist it). Strip the leading
+    // staging chain, return the cleaned transcript, and — fire-and-forget —
+    // rewrite any changed rows so each conversation permanently cleans itself on
+    // next open. Idempotent (a clean row strips to itself → no write). Never lets
+    // a backfill failure affect the response.
+    const cleaned = messages.map((m) =>
+      m.role === "assistant"
+        ? { ...m, content: stripStagingChain(m.content) }
+        : m
+    );
+    for (const m of cleaned) {
+      const original = messages.find((o) => o.id === m.id);
+      if (original && original.content !== m.content) {
+        void updateMessageContent(m.id, m.content).catch((err) =>
+          console.error("staging backfill failed for", m.id, err)
+        );
+      }
+    }
+    return c.json(cleaned);
   } catch (err) {
     console.error("GET /api/sessions/:id/messages failed:", err);
     return c.json({ error: "Failed to load messages" }, 500);
@@ -543,6 +564,25 @@ app.post("/api/chat", async (c) => {
     const sse = createSseEmitter(stream);
     let assistantText = "";
 
+    // Staging vs. answer. The model narrates before its data-fetch tools ("Let me
+    // pull the figures…") across loop iterations, and writes the real answer in the
+    // iteration that renders (or the terminal one with no tools). We stream ALL text
+    // live (thinking out loud) but persist ONLY the answer — deterministically, by
+    // tool type, not by guessing at wording. An iteration whose tool calls are all
+    // data-fetch is staging; one that calls a render tool, or ends with none, is the
+    // answer. See llm.ts StreamCallbacks (onLoopStart / onToolStart).
+    let answerText = ""; // the substantive text we persist
+    let segText = ""; // current iteration's text, not yet classified
+    let segRendered = false; // current iteration called a render tool
+    let segFetched = false; // current iteration called a data-fetch tool
+    const closeSegment = () => {
+      // Render-bearing OR terminal (no tools at all) → answer; data-fetch-only → staging.
+      if (segRendered || !segFetched) answerText += segText;
+      segText = "";
+      segRendered = false;
+      segFetched = false;
+    };
+
     // Kick the auto-title Haiku call off NOW, in parallel with the main answer,
     // instead of after it — so the sidebar can be named while the answer is still
     // streaming. `titleResult` stays `undefined` until it settles; the token loop
@@ -631,6 +671,7 @@ app.post("/api/chat", async (c) => {
         {
           onToken: async (token) => {
             assistantText += token;
+            segText += token;
             await sse.text(token);
             // Name the conversation as soon as Haiku replies — typically within the
             // first few tokens, well before the answer finishes.
@@ -638,16 +679,26 @@ app.post("/api/chat", async (c) => {
             await flushHealIfReady();
           },
           onDone: async () => {
+            // Close the final iteration's segment (no onLoopStart fires after the
+            // last one), then persist ONLY the answer — the pre-tool staging streamed
+            // live but is not transcript. Tool-classification drops staging from
+            // data-fetch iterations; stripStagingChain then removes any staging
+            // lead-in the model wrote in the SAME message as its render calls
+            // ("Now I'll render the chart and table…"), so the stored content is clean.
+            closeSegment();
+            let persistText = stripStagingChain(answerText).trim();
+
             // The conversation pane must never come back empty. The model is told
             // to lead with real prose, but it sometimes skips straight to tool
-            // calls (notably on a familiar/repeat prompt where it figures the
-            // panels say it all). If nothing streamed, emit a short fallback line
-            // so the chat thread always has a reply, then persist that — not "".
-            if (!assistantText.trim()) {
-              const fallback =
+            // calls (or narrates without ever writing the answer). If there's no
+            // answer text, use a short fallback so the thread always has a reply.
+            if (!persistText) {
+              persistText =
                 "Here's what I found — take a look at the panels alongside for the details.";
-              assistantText = fallback;
-              await sse.text(fallback);
+              // Only stream the fallback when NOTHING streamed at all; if staging
+              // streamed but produced no answer, the live pane already has content,
+              // and the fallback still persists for a clean reload.
+              if (!assistantText.trim()) await sse.text(persistText);
             }
 
             // Persist before [DONE] so the `persisted` id round-trip (below) is
@@ -667,7 +718,7 @@ app.post("/api/chat", async (c) => {
                 const assistantId = await saveMessage(
                   persistSession,
                   "assistant",
-                  assistantText
+                  persistText
                 );
                 // Hand the client the real DB ids so its placeholder ids become
                 // the actual row ids — lets a same-session delete hit the right
@@ -700,6 +751,10 @@ app.post("/api/chat", async (c) => {
             await sse.done();
           },
           onToolStart: async (tool, input) => {
+            // Classify this iteration for staging-vs-answer: a render tool marks the
+            // segment as answer-bearing; anything else is a data-fetch (staging).
+            if (STREAMABLE_RENDER_TOOLS.has(tool)) segRendered = true;
+            else segFetched = true;
             // Carry a human-readable, input-aware label alongside the raw tool so
             // the UI can show "Searching the web for "…"" instead of the bare name.
             // The frontend falls back to "Using {tool}…" if label is ever absent.
@@ -715,6 +770,8 @@ app.post("/api/chat", async (c) => {
             await sse.toolPartial(tool, partialJson, isComplete);
           },
           onLoopStart: async (iteration) => {
+            // A new iteration began — the previous one's text is now classifiable.
+            closeSegment();
             await sse.loopStart(iteration);
           },
           onStatus: async (message) => {
