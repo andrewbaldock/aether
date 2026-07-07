@@ -6,6 +6,7 @@ import { AdminPage } from "../../../shell/AdminPage";
 import { ConfirmDialog } from "../../../shell/ConfirmDialog";
 import { IconButton } from "../../../shell/IconButton";
 import { ModelPicker } from "../../../shell/ModelPicker";
+import { ProseMarkdown } from "../../../shell/ProseMarkdown";
 import { Tooltip } from "../../../shell/Tooltip";
 import { ThemeToggle } from "../../../theme/ThemeToggle";
 import { FONT_STACK, TEXT_SIZE_PX } from "../../../theme/useAppearance";
@@ -127,6 +128,28 @@ export function StyleGuideWidget(_props: { widget: Widget }) {
               </span>
             ))}
           </div>
+        </div>
+      </Section>
+
+      <Section title="Editorial prose">
+        <p className="mb-3 text-xs text-content-muted">
+          How an assistant answer is set — the same ProseMarkdown the chat uses.
+          A substantial answer gets the <code>article</code> variant (larger
+          measure, standfirst + drop cap); the full directive palette
+          (pull-quote, callout, aside, stat, accent) renders live below. The
+          last two lines prove graceful degradation: an unknown{" "}
+          <code>:::directive</code> drops its wrapper and a stray{" "}
+          <code>namespace:function</code> keeps its text.
+        </p>
+        <div className="rounded-lg border border-border bg-surface p-4 text-content">
+          <ProseMarkdown text={PROSE_SAMPLE} />
+        </div>
+        <p className="mt-4 mb-2 text-xs text-content-muted">
+          A short reply stays in the <code>compact</code> variant — no drop cap,
+          no oversized type:
+        </p>
+        <div className="rounded-lg border border-border bg-surface p-4 text-sm text-content">
+          <ProseMarkdown text={PROSE_SAMPLE_COMPACT} />
         </div>
       </Section>
 
@@ -420,6 +443,49 @@ const FONT_FACES: { key: keyof typeof FONT_STACK; label: string }[] = [
   { key: "georgia", label: "Georgia" },
   { key: "lora", label: "Lora" },
 ];
+
+// Exercises every editorial element + the full directive palette, so the whole
+// prose system can be eyeballed here without spending an LLM turn. The final two
+// constructs are deliberately malformed to verify graceful degradation.
+const PROSE_SAMPLE = `Let me pull this together and lay out the panels.
+
+Micronauts began not in America but in Japan, where Takara's Microman line turned interchangeable 3¾-inch figures into a modular engineering kit for children — an idea that would ripple across the whole toy industry.
+
+## Homeworld and the Body Banks
+
+The line's design language felt genuinely alien: partly translucent bodies, standardized peg-and-socket joints, every vehicle connecting to every figure. It read less like a toy and more like a coherent little universe.
+
+:::pullquote{cite="Mego catalog, 1977"}
+Every accessory in the line connected to every figure.
+:::
+
+Mego licensed it in 1976 and the timing was serendipitous — :accent[Star Wars hit the next year] and supercharged demand for science-fiction toys.
+
+- Standardized joints across the whole system
+- Translucent, biomechanical sculpts
+- Vehicles and playsets that all interconnect
+
+::stat[3¾-inch]{label="figure scale"}
+
+:::callout{title="Why it mattered"}
+The interchangeability wasn't a gimmick — it was a system, and systems invite play the way a single toy never can.
+:::
+
+:::aside
+Takara later reused several molds for the Microman revival, which is why some Micronauts sculpts look eerily familiar.
+:::
+
+Compare a translucent \`Time Traveler\` figure to see the aesthetic in one glance.
+
+---
+
+:::bogus{foo="bar"}
+This unknown directive should render as plain text with no leaked colons.
+:::
+
+And a stray namespace:function reference must keep its text intact.`;
+
+const PROSE_SAMPLE_COMPACT = "Yes — Takara's Microman launched in 1974.";
 
 const SPACING_STEPS = [4, 8, 12, 16, 20, 24, 32];
 

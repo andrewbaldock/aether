@@ -1,8 +1,6 @@
 import * as RadixTooltip from "@radix-ui/react-tooltip";
 import { ChevronDown, FileText, Plus, Share2, Trash2, X } from "lucide-react";
 import { type FormEvent, useEffect, useReducer, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { ThinkingGlyph } from "../brand/ThinkingGlyph";
 import { Wordmark } from "../brand/Wordmark";
@@ -27,6 +25,7 @@ import { useAgentEvents } from "./AgentEventContext";
 import { ACCEPTED_TYPES, filesToAttachments } from "./attachments";
 import { ICON_BUTTON_CLASS, IconButton } from "./IconButton";
 import { ModelPicker } from "./ModelPicker";
+import { ProseMarkdown } from "./ProseMarkdown";
 import { useSessionContext } from "./SessionContext";
 import { StarterPrompts } from "./StarterPrompts";
 import { Tooltip } from "./Tooltip";
@@ -584,80 +583,7 @@ export function ChatPanel() {
                         </div>
                       ) : null;
                     })()}
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        p: ({ children }) => (
-                          <p className="mb-2 last:mb-0">{children}</p>
-                        ),
-                        h1: ({ children }) => (
-                          <h1 className="mb-2 text-base font-semibold">
-                            {children}
-                          </h1>
-                        ),
-                        h2: ({ children }) => (
-                          <h2 className="mb-2 text-sm font-semibold">
-                            {children}
-                          </h2>
-                        ),
-                        h3: ({ children }) => (
-                          <h3 className="mb-1 text-sm font-medium">
-                            {children}
-                          </h3>
-                        ),
-                        ul: ({ children }) => (
-                          <ul className="mb-2 list-disc pl-4 space-y-0.5">
-                            {children}
-                          </ul>
-                        ),
-                        ol: ({ children }) => (
-                          <ol className="mb-2 list-decimal pl-4 space-y-0.5">
-                            {children}
-                          </ol>
-                        ),
-                        li: ({ children }) => <li>{children}</li>,
-                        code: ({
-                          inline,
-                          children,
-                        }: {
-                          inline?: boolean;
-                          children?: React.ReactNode;
-                        }) =>
-                          inline ? (
-                            <code className="rounded bg-elevated px-1 py-0.5 font-mono text-xs">
-                              {children}
-                            </code>
-                          ) : (
-                            <code>{children}</code>
-                          ),
-                        pre: ({ children }) => (
-                          <pre className="mb-2 overflow-x-auto rounded-lg bg-surface p-3 font-mono text-xs">
-                            {children}
-                          </pre>
-                        ),
-                        blockquote: ({ children }) => (
-                          <blockquote className="mb-2 border-l-2 border-border-strong pl-3 text-content-muted">
-                            {children}
-                          </blockquote>
-                        ),
-                        a: ({ href, children }) => (
-                          <a
-                            href={href}
-                            className="underline hover:text-content"
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {children}
-                          </a>
-                        ),
-                        strong: ({ children }) => (
-                          <strong className="font-semibold">{children}</strong>
-                        ),
-                        hr: () => <hr className="my-2 border-border-strong" />,
-                      }}
-                    >
-                      {m.text}
-                    </ReactMarkdown>
+                    <ProseMarkdown text={m.text} />
                     {/* Clarifier chips: the planner asked ONE expanding question
                         this turn (m.text is the question). Tapping a chip sends the
                         pick as the next turn, flagged clarified so the planner won't

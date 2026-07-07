@@ -529,3 +529,306 @@ body {
     box-shadow: 0 0 3px 0 #fd40a4;
   }
 }
+
+/* ── Editorial prose ─────────────────────────────────────────────────────────
+   The "designed page" typography for an assistant answer. ProseMarkdown
+   (shell/ProseMarkdown.tsx) wraps every message in .prose-editorial. A
+   substantial answer gets data-variant="article" — a larger reading measure, a
+   standfirst lead paragraph, and a drop cap; short replies stay "compact" and
+   inherit the bubble's text-sm. Body keeps --font-body (the user's Font pick);
+   only display elements (headings, drop cap, stats, pull-quotes) use
+   --font-display. Directive elements (.prose-lead/-aside/-callout/-pullquote/
+   -stat/-accent) are Claude's art-direction palette and render in both variants.
+   Colours are theme tokens only, so light/dark track automatically. */
+.prose-editorial {
+  overflow-wrap: break-word;
+}
+/* Clearfix so a floated aside never bleeds past the message. */
+.prose-editorial::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+
+/* Paragraph rhythm */
+.prose-editorial p {
+  margin: 0 0 0.75em;
+}
+.prose-editorial .prose-body > :last-child {
+  margin-bottom: 0;
+}
+
+/* Preamble — Claude's "Now let me build…" process line. Kept quiet and small so
+   it reads as a working note, never as the article's opening. */
+.prose-editorial .prose-preamble {
+  margin: 0 0 1em;
+  font-size: 0.9em;
+  color: var(--content-subtle);
+}
+
+/* Article variant: a touch larger and airier for a real reading measure. */
+.prose-editorial[data-variant="article"] {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+}
+/* Standfirst — the first CONTENT paragraph reads as a lead. Targets .prose-body's
+   first paragraph (first-of-type, so it still lands under an opening heading) and
+   never the muted preamble. */
+.prose-editorial[data-variant="article"] .prose-body > p:first-of-type {
+  font-size: 1.0625em;
+  line-height: 1.6;
+  color: var(--content);
+}
+/* Drop cap on that lead paragraph's first letter. */
+.prose-editorial[data-variant="article"]
+  .prose-body
+  > p:first-of-type::first-letter {
+  float: left;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 3.1em;
+  line-height: 0.82;
+  padding: 0.02em 0.09em 0 0;
+  color: var(--accent);
+}
+
+/* Headings — display font, real hierarchy */
+.prose-editorial :is(h1, h2, h3) {
+  font-family: var(--font-display);
+  color: var(--content);
+  line-height: 1.25;
+}
+.prose-editorial h1 {
+  font-size: 1.35em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 1.1em 0 0.5em;
+}
+.prose-editorial h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+  font-size: 1.12em;
+  font-weight: 600;
+  margin: 1.4em 0 0.6em;
+  padding-top: 0.6em;
+  border-top: 1px solid var(--border);
+}
+.prose-editorial h2::before {
+  content: "𑁍";
+  color: var(--accent);
+  font-size: 0.7em;
+  line-height: 1;
+}
+.prose-editorial h3 {
+  font-size: 1em;
+  font-weight: 600;
+  color: var(--content-muted);
+  margin: 1.1em 0 0.35em;
+}
+.prose-editorial :is(h1, h2, h3):first-child {
+  margin-top: 0;
+}
+
+/* Lists — lotus bullets for ul, tinted markers for ol */
+.prose-editorial ul {
+  list-style: none;
+  margin: 0 0 0.75em;
+  padding-left: 1.1em;
+}
+.prose-editorial ul > li {
+  position: relative;
+}
+.prose-editorial ul > li::before {
+  content: "𑁍";
+  position: absolute;
+  left: -1.1em;
+  top: 0.36em;
+  color: var(--accent);
+  font-size: 0.62em;
+}
+.prose-editorial ol {
+  margin: 0 0 0.75em;
+  padding-left: 1.3em;
+  list-style: decimal;
+}
+.prose-editorial li {
+  margin: 0.15em 0;
+}
+.prose-editorial ol li::marker {
+  color: var(--content-subtle);
+}
+
+/* Inline code + code blocks */
+.prose-editorial :not(pre) > code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  background: var(--elevated);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.prose-editorial pre {
+  margin: 0 0 0.75em;
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  background: var(--surface-raised);
+  padding: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8em;
+}
+
+/* Links — ink text, accent underline */
+.prose-editorial a {
+  color: var(--content);
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+.prose-editorial a:hover {
+  color: var(--accent);
+}
+
+/* Emphasis */
+.prose-editorial strong {
+  font-weight: 600;
+  color: var(--content);
+}
+.prose-editorial em {
+  font-style: italic;
+}
+
+/* Blockquote → quotation with an accent rule (distinct from :::pullquote). */
+.prose-editorial blockquote {
+  margin: 1.1em 0;
+  padding: 0.1em 0 0.1em 1.1em;
+  border-left: 2px solid var(--accent);
+  font-style: italic;
+  color: var(--content-muted);
+}
+
+/* Ornamental divider (---) */
+.prose-editorial hr {
+  border: 0;
+  margin: 1.6em 0;
+  text-align: center;
+}
+.prose-editorial hr::before {
+  content: "·   𑁍   ·";
+  color: var(--content-subtle);
+  letter-spacing: 0.2em;
+  font-size: 0.85em;
+}
+
+/* Figure — images in prose */
+.prose-editorial .prose-figure {
+  display: block;
+  margin: 1em 0;
+}
+.prose-editorial .prose-figure img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+}
+.prose-editorial .prose-figcaption {
+  display: block;
+  margin-top: 0.4em;
+  font-size: 0.8em;
+  color: var(--content-subtle);
+  text-align: center;
+}
+
+/* ── Directive palette (Claude art-direction) ─────────────────────────────── */
+/* :::lead — force a standfirst block anywhere */
+.prose-editorial .prose-lead {
+  font-size: 1.0625em;
+  line-height: 1.6;
+  color: var(--content);
+  margin: 0 0 0.9em;
+}
+/* :::aside — margin note; floats beside the column on wide article layouts */
+.prose-editorial .prose-aside {
+  margin: 0.9em 0;
+  padding-left: 0.9em;
+  border-left: 2px solid var(--border-strong);
+  font-size: 0.9em;
+  color: var(--content-muted);
+}
+.prose-editorial .prose-aside > :last-child {
+  margin-bottom: 0;
+}
+@media (min-width: 900px) {
+  .prose-editorial[data-variant="article"] .prose-aside {
+    float: right;
+    clear: right;
+    width: 40%;
+    margin: 0.3em 0 0.8em 1.2em;
+  }
+}
+/* :::callout{title="…"} — boxed key takeaway */
+.prose-editorial .prose-callout {
+  margin: 1em 0;
+  padding: 0.8em 1em;
+  border-radius: 0.5rem;
+  background: var(--elevated);
+  border: 1px solid var(--border);
+}
+.prose-editorial .prose-callout-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.9em;
+  color: var(--accent);
+  margin-bottom: 0.3em;
+}
+.prose-editorial .prose-callout > :last-child {
+  margin-bottom: 0;
+}
+/* :::pullquote{cite="…"} — a deliberate pulled phrase */
+.prose-editorial .prose-pullquote {
+  margin: 1.3em 0;
+  padding: 0 0.5em;
+  text-align: center;
+}
+.prose-editorial .prose-pullquote blockquote {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.35em;
+  line-height: 1.35;
+  font-style: normal;
+  color: var(--content);
+}
+.prose-editorial .prose-pullquote figcaption {
+  margin-top: 0.5em;
+  font-size: 0.8em;
+  color: var(--content-subtle);
+}
+/* ::stat[value]{label="…"} — a big figure + caption */
+.prose-editorial .prose-stat {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  vertical-align: top;
+  margin: 0.4em 1.2em 0.4em 0;
+}
+.prose-editorial .prose-stat-value {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.9em;
+  line-height: 1;
+  color: var(--accent);
+}
+.prose-editorial .prose-stat-label {
+  margin-top: 0.15em;
+  font-size: 0.78em;
+  color: var(--content-subtle);
+}
+/* :accent[…] — inline neon emphasis */
+.prose-editorial .prose-accent {
+  color: var(--accent);
+  font-weight: 500;
+}
