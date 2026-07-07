@@ -26,6 +26,7 @@ import {
   __setAnthropicFactoryForTests,
   __setOpenAIFactoryForTests,
   __createClientForTests as createClient,
+  __runAgentLoopForTests as runAgentLoop,
 } from "./llm";
 
 // Scripted wire events/chunks the injected fakes replay. Set per test.
@@ -451,5 +452,110 @@ describe("OpenAI-compat agent loop", () => {
       threw = true;
     }
     expect(threw).toBe(true);
+  });
+});
+
+// ── Render-nudge backstop ──────────────────────────────────────────────────────
+// Drives runAgentLoop directly with a fake adapter (no SDK, no planner, no network),
+// scripting one normalized event-stream per model call. Isolates the backstop that
+// re-prompts a planned turn which narrated intent then ended with no render call.
+describe("render-nudge backstop", () => {
+  // biome-ignore lint/suspicious/noExplicitAny: scripted LoopEvent-shaped literals
+  type Ev = Record<string, any>;
+  const renderSpec = JSON.stringify({
+    columns: [{ key: "a", label: "A" }],
+    rows: [{ a: 1 }],
+  });
+  // A turn that streams text then ends (end_turn, no tools).
+  const textTurn = (t: string): Ev[] => [
+    { kind: "text", text: t },
+    { kind: "stop", reason: "end" },
+  ];
+  // A turn that emits one render_table tool_use.
+  const renderTurn = (): Ev[] => [
+    { kind: "tool_start", index: 1, id: "tu_1", name: "render_table" },
+    { kind: "tool_delta", index: 1, json: renderSpec },
+    { kind: "stop", reason: "tool_use" },
+  ];
+
+  // Replays `streams` one per stream() call; records appendNudge invocations.
+  function fakeAdapter(streams: Ev[][]) {
+    let call = 0;
+    const nudges: string[] = [];
+    const adapter = {
+      stream: () =>
+        (async function* () {
+          for (const e of streams[call++] ?? []) yield e;
+        })(),
+      appendToolRound: () => {},
+      appendNudge: (_h: unknown, _t: string, nudge: string) => {
+        nudges.push(nudge);
+      },
+    };
+    // biome-ignore lint/suspicious/noExplicitAny: structural fake for the generic adapter
+    return { adapter: adapter as any, nudges };
+  }
+
+  test("plan active + narrate-then-stop → nudges once, then renders", async () => {
+    const { adapter, nudges } = fakeAdapter([
+      textTurn("Now I have enough material. Let me render all the panels."),
+      renderTurn(),
+      textTurn("done"),
+    ]);
+    const toolResults: string[] = [];
+    let done = 0;
+    await runAgentLoop(
+      adapter,
+      [],
+      undefined,
+      true, // planActive
+      callbacks({
+        onToolResult: async (_n: string, r: string) => {
+          toolResults.push(r);
+        },
+        onDone: async () => {
+          done++;
+        },
+      })
+    );
+    expect(nudges.length).toBe(1);
+    expect(toolResults).toEqual([renderSpec]); // it rendered after the nudge
+    expect(done).toBe(1);
+  });
+
+  test("no plan → text-only turn ends cleanly, never nudges", async () => {
+    const { adapter, nudges } = fakeAdapter([textTurn("Here's the answer.")]);
+    let done = 0;
+    await runAgentLoop(
+      adapter,
+      [],
+      undefined,
+      false, // planActive
+      callbacks({
+        onDone: async () => {
+          done++;
+        },
+      })
+    );
+    expect(nudges.length).toBe(0);
+    expect(done).toBe(1);
+  });
+
+  test("plan active but empty text turn → no nudge (nothing to commit)", async () => {
+    const { adapter, nudges } = fakeAdapter([[{ kind: "stop", reason: "end" }]]);
+    let done = 0;
+    await runAgentLoop(
+      adapter,
+      [],
+      undefined,
+      true, // planActive
+      callbacks({
+        onDone: async () => {
+          done++;
+        },
+      })
+    );
+    expect(nudges.length).toBe(0);
+    expect(done).toBe(1);
   });
 });

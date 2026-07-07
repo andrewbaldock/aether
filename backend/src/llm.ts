@@ -152,9 +152,30 @@ type ApiMessage = Anthropic.Messages.MessageParam;
 // doesn't — two tools ping-ponging, or a model that keeps calling one — so a turn
 // can't bill unbounded. On the FINAL allowed iteration we re-call the model with
 // NO tools, forcing a plain text answer that closes the turn cleanly (degrade, not
-// throw). Env-overridable like the token budgets. Kept modest: real turns settle
-// in 1–3 iterations; anything past ~6 is a loop, not progress.
-const MAX_ITERATIONS = Number(process.env.LLM_MAX_ITERATIONS) || 6;
+// throw). Env-overridable like the token budgets. A rich composition plan can name
+// 2–8 widgets, and data-backed ones need a fetch round BEFORE their render round
+// (wikidata_search → wikidata_query → render_table), so a legit turn can run well
+// past a handful of iterations. 6 was too tight — the model would arrive at "let me
+// render all the panels" exactly on the capped, tool-stripped iteration and stop
+// with nothing drawn. Headroom here (plus the render-nudge backstop below) keeps
+// those turns finishing.
+const MAX_ITERATIONS = Number(process.env.LLM_MAX_ITERATIONS) || 10;
+
+// Per-turn cap on render nudges. When a plan was active but the model ended a turn
+// having drawn nothing — typically after narrating intent ("Now I have enough
+// material. Let me render all the panels.") then stopping with end_turn and no
+// render tool call — the loop re-prompts ONCE to actually render, instead of
+// finalizing an empty canvas. One nudge is enough: if the model still won't render
+// after a direct instruction, another won't help and would just bill more.
+const MAX_RENDER_NUDGES = Number(process.env.LLM_MAX_RENDER_NUDGES) || 1;
+
+// The nudge itself — a terse, direct instruction folded in as a user turn. Names the
+// render tools explicitly so the model has no ambiguity about what "render" means.
+const RENDER_NUDGE =
+  "You gathered the material and said you'd render the panels, but the turn has no " +
+  "render tool call yet — so nothing has been drawn. Now actually call the render " +
+  "tools (render_table / render_chart / render_timeline / render_images / " +
+  "build_knowledge_graph) to build the planned panels. Do not reply with text alone.";
 
 // ── Shared agent-loop helpers ──────────────────────────────────────────────
 // The two clients (Claude / OpenAI-compat) run the SAME agent loop with different
@@ -413,6 +434,12 @@ interface WireAdapter<M> {
     tools: PendingTool[],
     modelResults: string[]
   ): void;
+  // Append the model's just-streamed text as an assistant turn, then a user turn
+  // carrying `nudge`. Used only by the render-nudge backstop: the model ended with
+  // text and no tools, so that text isn't in `history` yet — we commit it (so the
+  // model sees its own "I'll render" promise) and follow with the nudge. Only called
+  // when assistantText is non-empty, so the resulting sequence always alternates.
+  appendNudge(history: M[], assistantText: string, nudge: string): void;
 }
 
 // The provider-agnostic agent loop. Returns when the model stops calling tools, the
@@ -422,6 +449,11 @@ async function runAgentLoop<M>(
   adapter: WireAdapter<M>,
   history: M[],
   sessionId: string | undefined,
+  // Whether a composition plan steered this turn (a planner preamble was folded in).
+  // Only then does the render-nudge backstop arm: a planned turn that draws nothing
+  // is a failure worth one re-prompt, whereas a plain factual turn ending in text is
+  // a correct, complete answer we must not nag.
+  planActive: boolean,
   callbacks: {
     onToken: (token: string) => Promise<void>;
     onDone: () => Promise<void>;
@@ -448,6 +480,10 @@ async function runAgentLoop<M>(
 
   let iteration = 0;
   let correctionCount = 0;
+  // Render-nudge backstop state: how many render tools have fired this turn, and how
+  // many nudges we've spent. A plan that draws nothing gets one re-prompt.
+  let renderCount = 0;
+  let nudgeCount = 0;
   let turnInput = 0;
   let turnOutput = 0;
   let turnCacheRead = 0;
@@ -579,8 +615,30 @@ async function runAgentLoop<M>(
       );
     }
 
-    // No tool calls — the stream is complete. Log the per-turn totals.
+    // No tool calls — the stream would normally end here.
     if (stopReason !== "tool_use" || pendingTools.size === 0) {
+      // Render-nudge backstop: a planned turn that drew nothing, ending on a non-empty
+      // text turn, is the "Now I have enough material. Let me render all the panels."
+      // failure — the model narrated intent then stopped with end_turn and no render
+      // call. Re-prompt ONCE to actually render instead of finalizing an empty canvas.
+      // Guards: a plan was active (don't nag plain factual turns), nothing rendered
+      // yet, the model DID emit text (so appendNudge yields an alternating sequence,
+      // and this matches the narrate-then-stop symptom), and we have nudge budget.
+      if (
+        planActive &&
+        renderCount === 0 &&
+        nudgeCount < MAX_RENDER_NUDGES &&
+        assistantText.trim().length > 0
+      ) {
+        nudgeCount++;
+        console.log(
+          `[render-nudge] iter=${iteration} plan active, nothing rendered, ended on text → nudging ${nudgeCount}/${MAX_RENDER_NUDGES}`
+        );
+        await onStatus?.("Rendering the panels…");
+        adapter.appendNudge(history, assistantText, RENDER_NUDGE);
+        continue;
+      }
+      // The stream is complete. Log the per-turn totals.
       console.log(
         `[usage] turn total: iterations=${iteration} input=${turnInput} output=${turnOutput} cache_read=${turnCacheRead} cache_creation=${turnCacheCreation}`
       );
@@ -596,6 +654,10 @@ async function runAgentLoop<M>(
       await onToolStart?.(tool.name, input);
       const result = await executeTool(tool.name, input, sessionId);
       await onToolResult?.(tool.name, result);
+      // A streamable render tool actually drew a widget (render_table/chart/timeline/
+      // images + build_knowledge_graph). Count it so the render-nudge backstop knows
+      // whether this turn produced any output at all.
+      if (STREAMABLE_RENDER_TOOLS.has(tool.name)) renderCount++;
       const countStatus = toolResultStatus(tool.name, result);
       if (countStatus) await onStatus?.(countStatus);
       executed.push({ id: tool.id, name: tool.name, result });
@@ -847,9 +909,13 @@ function createClaudeClient(
             }));
           hist.push({ role: "user", content: toolResults });
         },
+        appendNudge: (hist, assistantText, nudge) => {
+          hist.push({ role: "assistant", content: assistantText });
+          hist.push({ role: "user", content: nudge });
+        },
       };
 
-      await runAgentLoop(adapter, history, sessionId, {
+      await runAgentLoop(adapter, history, sessionId, prePass.kind === "preamble", {
         onToken,
         onDone,
         onToolStart,
@@ -1095,9 +1161,13 @@ function createOpenAICompatClient(
               });
             });
           },
+          appendNudge: (hist, assistantText, nudge) => {
+            hist.push({ role: "assistant", content: assistantText });
+            hist.push({ role: "user", content: nudge });
+          },
         };
 
-      await runAgentLoop(adapter, history, sessionId, {
+      await runAgentLoop(adapter, history, sessionId, prePass.kind === "preamble", {
         onToken,
         onDone,
         onToolStart,
@@ -1157,6 +1227,11 @@ export function createClient(opts: {
 // `createClient`; a distinct export name so it survives a sibling test's
 // process-global `mock.module("./llm")` override of `createClient`.
 export const __createClientForTests = createClient;
+
+// Test-only: drive the provider-agnostic agent loop directly with a fake adapter.
+// Lets the render-nudge backstop be tested in isolation — no SDK, no planner, no
+// network — by scripting the adapter's event stream and asserting appendNudge fires.
+export const __runAgentLoopForTests = runAgentLoop;
 
 // A dirt-cheap micro-agent that names a conversation in a few words from its first
 // message. One-shot Haiku — no tools, no streaming, no agent loop — so it's the

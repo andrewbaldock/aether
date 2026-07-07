@@ -118,9 +118,12 @@ export function ChatPanel() {
     null;
 
   const [lastModel, setLastModel] = useState(readLastModel);
-  const model = currentSession
-    ? (currentSession.model ?? undefined)
-    : lastModel;
+  // The saved row model wins; fall back to the last-picked seed when the row has
+  // none yet. A pick made on a brand-new conversation (no sessionId, so selectModel
+  // can't PATCH a row) lives only in `lastModel` — without this fallback the row is
+  // created with model=null and the derivation would drop the seed the instant the
+  // row exists, silently reverting the turn to the server default (Sonnet).
+  const model = currentSession?.model ?? lastModel;
 
   const { sendMessage, abortStream, isLoading, error } = useChat({
     userId,

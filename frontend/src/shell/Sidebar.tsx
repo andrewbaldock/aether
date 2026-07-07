@@ -82,7 +82,7 @@ export function Sidebar({
             startNewConversation();
             onNavigate?.();
           }}
-          className="w-full rounded-md px-3 py-2 text-left text-sm text-content-muted hover:bg-elevated"
+          className="w-full rounded-md px-3 py-2 text-left text-sm text-content-muted hover:bg-selected hover:text-content"
         >
           + New conversation
         </button>
@@ -256,8 +256,10 @@ function SessionItem({
         <button
           type="button"
           onClick={onClick}
-          className={`w-full rounded-md px-3 py-2 text-left text-sm hover:bg-elevated hover:text-content ${
-            active ? "bg-selected text-content" : "text-content-muted"
+          className={`w-full rounded-md px-3 py-2 text-left text-sm ${
+            active
+              ? "bg-selected font-medium text-content"
+              : "text-content-muted hover:bg-selected hover:text-content"
           }`}
         >
           <div className="flex items-center gap-1.5 pr-5">
