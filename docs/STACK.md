@@ -33,8 +33,9 @@ source. See [ARCHITECTURE.md](./ARCHITECTURE.md#two-runtimes).
 | `gridstack` | ^12.6.0 | Draggable/resizable grid | The **Tiles** canvas (project "bigsail") — every render-tool spec becomes a live, draggable/resizable card on a 24-column grid. Default landing surface. |
 | `sonner` | ^2.0.7 | Toasts | Subtle notifications — e.g. the schema-version "saved state was reset" toast. |
 | `tailwindcss` | ^4.3.0 | Utility-first CSS | Styling via composable utility classes in markup — no per-component stylesheets, no leaking. v4 uses a Vite plugin (no PostCSS). |
-| `react-markdown` | ^10.x | Markdown renderer | Renders assistant messages as rich text. Used with `remark-gfm` for tables, strikethrough, task lists. |
+| `react-markdown` | ^10.x | Markdown renderer | Renders assistant messages as rich text. Used with `remark-gfm` + `remark-directive` inside `ProseMarkdown.tsx`. |
 | `remark-gfm` | ^4.x | GitHub Flavored Markdown plugin | Extends `react-markdown` with GFM syntax. |
+| `remark-directive` | ^4.x | Markdown directive syntax (`:::name`, `::name`, `:name`) | Powers the editorial-prose art-direction palette (`:::pullquote`, `:::callout`, `:::aside`, `::stat`, `:accent`). A tiny local remark plugin in `ProseMarkdown.tsx` maps directive nodes to styled elements; unknown directives degrade to plain text. See [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md#editorial-prose-the-chat-answer). |
 | `react-resizable-panels` | ^4.11.2 | Resizable/collapsible panel groups | Powers the three-zone shell (sidebar / chat / capability column). **Unit trap — see [ARCHITECTURE.md](./ARCHITECTURE.md#the-shell--three-zone-layout).** |
 | `d3-force` / `d3-selection` / `d3-zoom` | ^3.x | Force layout + SVG selection + pan/zoom | The knowledge-graph widget: force-directed node layout rendered to SVG with pan/zoom. |
 | `lucide-react` | ^1.17.0 | Icon set | UI glyphs across the shell. |

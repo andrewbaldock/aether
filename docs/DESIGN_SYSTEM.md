@@ -61,6 +61,60 @@ changes; only the value it resolves to flips. That indirection is the entire the
 > value blocks. Never reach for a raw hex in a component — if the token you need doesn't exist,
 > add it here first.
 
+## Editorial prose (the chat answer)
+
+An assistant answer is not a chat bubble of flat text — it's **set like a designed page**. The
+chat is one of Aether's "two panes, two jobs": the panels beside it carry the data, and the prose
+is meant to be a genuinely good read on its own. So the renderer treats the Markdown the model
+already writes as editorial typography.
+
+**Renderer:** [`frontend/src/shell/ProseMarkdown.tsx`](../frontend/src/shell/ProseMarkdown.tsx) —
+`react-markdown` + `remark-gfm` + `remark-directive`, wrapped in a `.prose-editorial` element whose
+styles live in `index.css` (search `── Editorial prose`). `ChatPanel` just renders
+`<ProseMarkdown text={m.text} />`. Body text keeps the user's chosen font (`--font-body`); only
+**display** elements (headings, drop cap, stat numbers, pull-quotes) use `--font-display` (Space
+Grotesk). Colours are theme tokens, so light/dark track for free.
+
+**Two variants, chosen by content.** A substantial answer (has a heading, uses a directive, or is
+simply long) gets `data-variant="article"`: a larger reading measure, a **standfirst** lead
+paragraph, and a **drop cap**. A short reply stays `data-variant="compact"` (today's plain look) —
+so a one-line answer never gets an absurd drop cap. The drop cap + standfirst target
+`.prose-body > p:first-of-type` (the first *real* content paragraph), never the preamble.
+
+**Automatic treatments** (from the Markdown the model already writes): `##` headings become section
+titles with a lotus `𑁍` tick + hairline rule; `---` becomes a lotus divider; blockquotes become
+accent-ruled quotes; images become captioned figures; lists get lotus bullets.
+
+**Directive palette** (art-direction the model opts into, taught in `backend/src/prompt.ts` under
+"Composition palette" — used with restraint, most answers use none):
+
+| Directive | Renders as |
+|---|---|
+| `:::lead` … `:::` | Force a standfirst/lead block |
+| `:::pullquote{cite="…"}` … `:::` | A pulled phrase, set large in the display font |
+| `:::callout{title="…"}` … `:::` | A boxed key takeaway on `--elevated` |
+| `:::aside` … `:::` | A margin note; floats beside the column on wide article layouts |
+| `::stat[value]{label="…"}` | A big figure + caption |
+| `:accent[…]` | Inline emphasis in the brand accent |
+
+A tiny local remark plugin (`remarkDirectiveElements`) maps directive nodes to `div`/`span` tagged
+with `data-directive`; the `components` map styles the known ones and **degrades unknown/malformed
+directives to plain content** — a stray `:::` never leaks literal colons, and an unknown inline
+`:name` is reconstructed so technical prose like `namespace:function` keeps its text.
+
+**Staging vs. content.** The model narrates before its tools ("Let me pull the figures…", "Now
+I'll render the chart…"). That's scaffolding, not the answer, and is separated out at two layers:
+the **backend persists only the answer** (see
+[ARCHITECTURE.md](./ARCHITECTURE.md#staging-vs-content--only-the-answer-is-transcript)), and the
+renderer's `splitPreamble` peels any remaining **leading staging chain** into quiet muted
+`.prose-preamble` notes so the editorial treatment lands on real content. Legacy transcripts clean
+themselves via a lazy backfill on load. New turns are clean at the source, so `splitPreamble` is
+mostly a live-streaming and legacy fallback.
+
+**See it live:** the `/style-guide` page has an "Editorial prose" specimen exercising every element
+and the full directive palette (plus a malformed directive proving graceful degradation) — no LLM
+call needed.
+
 ## Widget shell (Bigsail)
 
 Every card on the Bigsail canvas — table, chart, timeline, images, knowledge-graph — renders

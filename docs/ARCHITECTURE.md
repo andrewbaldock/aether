@@ -3,7 +3,7 @@
 How Aether fits together. **Keep this current:** update it in the same commit that changes how
 the pieces connect.
 
-Last updated: Synced to code — added the `DELETE /api/sessions/:id/messages` route and the `persisted` / `warning` SSE events to their lists, noted ETag/304 on the conversation-read endpoints and the reused Anthropic client. Added the auto-generated draw.io diagram below.
+Last updated: Synced to code — documented the agent loop's **render-nudge backstop** (planned turns must draw) and the **staging-vs-content** persistence rule (only the answer segment is transcript; legacy rows backfill lazily on read). Earlier: the `DELETE /api/sessions/:id/messages` route, the `persisted` / `warning` SSE events, ETag/304 on conversation-read endpoints, the reused Anthropic client, and the auto-generated draw.io diagram below.
 
 ---
 
@@ -245,10 +245,11 @@ server (and `/api/health`) start fine without a key, and an unset provider only 
 actually uses it.
 
 **One loop, two adapters.** Both clients run the *same* agent loop — `runAgentLoop()` in
-`backend/src/llm.ts`. It owns every wire-format-independent decision (the iteration cap + the
-final "no tools, force a text answer" degrade, token accounting, the inter-iteration text
-separator, the ~120 ms `tool_partial` throttle, the `max_tokens` salvage + degeneracy guard, tool
-execution + self-correction). Each provider supplies a thin **`WireAdapter`** that normalizes its
+`backend/src/llm.ts`. It owns every wire-format-independent decision (the iteration cap —
+`MAX_ITERATIONS`, default 10 — plus the final "no tools, force a text answer" degrade, the
+**render-nudge backstop** below, token accounting, the inter-iteration text separator, the ~120 ms
+`tool_partial` throttle, the `max_tokens` salvage + degeneracy guard, tool execution +
+self-correction). Each provider supplies a thin **`WireAdapter`** that normalizes its
 SDK's stream into a small `LoopEvent` union (`text` · `tool_start`/`tool_delta`/`tool_meta` ·
 `server_tool_start`/`server_tool_result` · `usage` · `stop`) and builds that provider's history
 shape. The loop never names a provider: Anthropic's event taxonomy, the cache_read/creation split,
@@ -297,6 +298,41 @@ the most important rows/entities **first** so a cutoff loses the tail, not the h
 On the frontend, the stream reader lives in `frontend/src/shell/useChat.ts`; message state is
 lifted into `SessionContext` so both `ChatPanel` and `Sidebar` share it. `ChatPanel.tsx` is just
 the view.
+
+### Render-nudge — planned turns must draw
+
+A composition plan describes panels the turn is expected to render. But the model sometimes gathers
+its data, narrates "Now I'll render all the panels," and *stops on text* — drawing nothing. The
+loop guards against that: it tracks `renderCount` (bumped whenever a `STREAMABLE_RENDER_TOOLS` call
+fires) and, on a **plan-active** turn that ends on non-empty text with `renderCount === 0`, appends
+the assistant text plus a `RENDER_NUDGE` user message and loops once more (`MAX_RENDER_NUDGES`,
+default 1) instead of finalizing an empty canvas. The nudge is a no-op when there's no plan, when
+something already rendered, or when the turn produced no text — driven directly by tests in
+`llm.test.ts`. The system prompt carries the same instruction as a first line of defence.
+
+### Staging vs content — only the answer is transcript
+
+The system prompt asks the model to write one short sentence before a data-fetch tool call ("Let me
+pull the population figures, then chart the top ten."). Across an agent loop those pile up — plus a
+"Now I'll render the chart and table…" lead-in on the final message — and, left alone, they'd be
+persisted as the answer and even get the editorial drop cap. So the chat handler
+(`backend/src/index.ts`) **classifies text deterministically by tool type and persists only the
+answer:**
+
+- Streamed text is accumulated into per-iteration **segments**, cut on `onLoopStart`.
+- In `onToolStart`, a segment is flagged answer-bearing if the tool is in `STREAMABLE_RENDER_TOOLS`,
+  else data-fetch. On `onLoopStart`/`onDone` the segment is classified: **render-bearing or terminal
+  (no tools) → answer; data-fetch-only → staging.** Only the answer segments are kept.
+- `stripStagingChain` (`backend/src/staging.ts`) then trims any staging lead-in the model wrote in
+  the *same* message as its render calls, so `messages.content` is stored clean. The existing
+  empty-answer fallback still applies if a turn produced no answer text at all.
+
+All staging streams **live** (thinking out loud) but never reaches the DB. Legacy rows that already
+baked staging into their content are cleaned lazily: `GET /api/sessions/:id/messages` runs
+`stripStagingChain` over each assistant row, returns the cleaned transcript, and fire-and-forget
+rewrites any changed row (idempotent) — so every old conversation cleans itself on next open. The
+frontend renderer's `splitPreamble` is the belt-and-suspenders fallback (see
+[DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md#editorial-prose-the-chat-answer)). `staging.ts` is unit-tested.
 
 ---
 
