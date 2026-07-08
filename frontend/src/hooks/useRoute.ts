@@ -30,6 +30,7 @@ export type AdminPageId =
   | "settings"
   | "health"
   | "styleguide"
+  | "themelab"
   | "screenshots";
 
 const ADMIN_PATHS: Record<AdminPageId, string> = {
@@ -37,6 +38,7 @@ const ADMIN_PATHS: Record<AdminPageId, string> = {
   settings: "/settings",
   health: "/health",
   styleguide: "/style-guide",
+  themelab: "/theme-lab",
   screenshots: "/screenshots",
 };
 const ADMIN_IDS: Record<string, AdminPageId> = Object.fromEntries(

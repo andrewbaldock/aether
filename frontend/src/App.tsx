@@ -11,6 +11,7 @@ import "./capabilities/widgets/Images";
 import "./capabilities/widgets/KnowledgeGraph";
 import "./capabilities/widgets/Settings";
 import "./capabilities/widgets/StyleGuide";
+import "./capabilities/widgets/TokenLab";
 import "./capabilities/widgets/Table";
 import "./capabilities/widgets/Timeline";
 import "./capabilities/widgets/Welcome";
@@ -26,6 +27,7 @@ import { AgentEventProvider } from "./shell/AgentEventContext";
 import { BackendStatusBanner } from "./shell/BackendStatusBanner";
 import { Shell } from "./shell/Shell";
 import { useIsMobile } from "./shell/useIsMobile";
+import { TokenLabProvider } from "./capabilities/widgets/TokenLab/useTokenLab";
 import { AppearanceProvider } from "./theme/useAppearance";
 import { ThemeProvider, useTheme } from "./theme/useTheme";
 
@@ -90,10 +92,15 @@ export default function App() {
     <ThemeProvider>
       <AppToaster />
       <AppearanceProvider>
-        {/* One shared tooltip provider for the whole app, so Radix can coordinate
+        {/* Applies the visitor's live Theme Lab token overrides to <html> and
+          keeps them in sync with the active theme. Inside ThemeProvider (reads
+          useTheme); app-wide so overrides persist while browsing, not just on the
+          Theme Lab page. */}
+        <TokenLabProvider>
+          {/* One shared tooltip provider for the whole app, so Radix can coordinate
           hover timing (skip the open-delay when moving between adjacent
           tooltips). */}
-        <RadixTooltip.Provider delayDuration={300} skipDelayDuration={150}>
+          <RadixTooltip.Provider delayDuration={300} skipDelayDuration={150}>
           <BackendStatusBanner />
           <AgentEventProvider>
             {/* Stores the latest composition plan from the bus so Bigsail (which
@@ -122,7 +129,8 @@ export default function App() {
               </KnowledgeGraphProvider>
             </BigsailPlanProvider>
           </AgentEventProvider>
-        </RadixTooltip.Provider>
+          </RadixTooltip.Provider>
+        </TokenLabProvider>
       </AppearanceProvider>
     </ThemeProvider>
   );

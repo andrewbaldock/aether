@@ -1,6 +1,7 @@
 import { HEALTH_WIDGET } from "../capabilities/widgets/Health";
 import { SETTINGS_WIDGET } from "../capabilities/widgets/Settings";
 import { STYLEGUIDE_WIDGET } from "../capabilities/widgets/StyleGuide";
+import { TOKENLAB_WIDGET } from "../capabilities/widgets/TokenLab";
 import { WELCOME_WIDGET } from "../capabilities/widgets/Welcome";
 import type { AdminPageId } from "../hooks/useRoute";
 import { useAdminNav } from "./useAdminNav";
@@ -27,6 +28,7 @@ export function AdminTabs() {
     { id: SETTINGS_WIDGET.id as AdminPageId, label: "Settings" },
     { id: HEALTH_WIDGET.id as AdminPageId, label: "Health" },
     { id: STYLEGUIDE_WIDGET.id as AdminPageId, label: "Style Guide" },
+    { id: TOKENLAB_WIDGET.id as AdminPageId, label: "Theme Lab" },
     // Dev-only Screenshots tab. The literal "screenshots" (matching
     // SCREENSHOTS_WIDGET.id) rather than an import, so prod never pulls the gallery
     // module into its bundle. In prod the tab simply isn't in the array.
