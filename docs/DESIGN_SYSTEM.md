@@ -1,8 +1,10 @@
 # Design System
 
-The tokens, primitives, and shared shells the frontend is built from. This is the single place
-that story lives; architecture is [ARCHITECTURE.md](./ARCHITECTURE.md), the dependency rationale
-is [STACK.md](./STACK.md), mobile/responsive specifics are [MOBILE.md](./MOBILE.md).
+The tokens, primitives, and shared shells the frontend is built from — the *how*. The design
+*why* (palette philosophy, type voice, motion intent, the guiding principles) is
+[DESIGN_LANGUAGE.md](./DESIGN_LANGUAGE.md). This is the single place the mechanics live;
+architecture is [ARCHITECTURE.md](./ARCHITECTURE.md), the dependency rationale is
+[STACK.md](./STACK.md), mobile/responsive specifics are [MOBILE.md](./MOBILE.md).
 
 **See it live, not just described:** the `/style-guide` admin page (Style Guide tab, next to
 Settings/Health) renders every color token, the type scale, the spacing rhythm, a couple of
