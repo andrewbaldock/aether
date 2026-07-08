@@ -312,6 +312,44 @@ something already rendered, or when the turn produced no text — driven directl
 
 ### Staging vs content — only the answer is transcript
 
+The model *thinks out loud* — process narration ("inner monologue") is interleaved with its tool
+calls and its real answer. Every word streams live so the user watches it work, but only the answer
+is the transcript. Three layers separate the two:
+
+```
+  ONE MODEL TURN (agent loop) ── all of it streams LIVE to the UI ──────────────┐
+                                                                                 │
+    "Let me pull the figures…"        inner monologue  ┐                         │
+        → search_data                 (data-fetch)     │ staging                 │
+    "Now I'll chart the top ten…"     inner monologue  ┘                         │
+        → render_chart                (render tool)     ┐                        │
+    "## Population — the ten largest…" the ANSWER        ┘ content               │
+                                                                                 ▼
+  ── LAYER 1 · backend classifies by TOOL TYPE (index.ts) ────────────────────────
+     segment's tool ∈ render tools ......... ANSWER  ┐
+     segment terminal, no tools ............ ANSWER  ├── kept
+     segment has only data-fetch tools ..... staging ──── dropped (never persisted)
+     stripStagingChain(): also trims a staging lead-in written in the SAME
+     message as a render call, so what lands in the DB is clean.
+                                     │  answer text only
+                                     ▼
+                        messages.content  (clean answer, in the DB)
+                                     │  GET /api/sessions/:id/messages
+  ── LAYER 2 · legacy rows self-clean on load (staging.ts) ───────────────────────
+     stripStagingChain runs again over each old row, returns it cleaned, and
+     fire-and-forget rewrites any row that changed (idempotent).
+                                     │  clean markdown
+                                     ▼
+  ── LAYER 3 · frontend belt-and-suspenders (ProseMarkdown.splitPreamble) ────────
+     anything that still slipped through is peeled at render time:
+        leading staging paragraphs → <p class="prose-preamble">   (quiet, muted)
+        first real content paragraph → .prose-body                (standfirst + drop cap)
+```
+
+Backend is authoritative and deterministic (Layer 1); Layers 2–3 exist because live streaming and
+legacy transcripts can still carry staging the classifier never saw. The rest of this section is the
+detail behind that picture.
+
 The system prompt asks the model to write one short sentence before a data-fetch tool call ("Let me
 pull the population figures, then chart the top ten."). Across an agent loop those pile up — plus a
 "Now I'll render the chart and table…" lead-in on the final message — and, left alone, they'd be
