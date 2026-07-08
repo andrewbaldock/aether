@@ -19,10 +19,10 @@ import { useTheme } from "../../../theme/useTheme";
 // between them — applying one flat set would clobber the other on theme toggle.
 // The apply effect re-runs on theme change and swaps to the active mode's set.
 //
-// SCOPE: localStorage only (like theme/font — see useAppearance). No zero-flash
-// pre-paint script yet, so a hard reload flashes the committed defaults for a
-// frame before overrides apply.
-// ponytail: skip pre-paint; add an index.html seed like useTheme's if the flash bugs.
+// SCOPE: localStorage only (like theme/font — see useAppearance). A pre-paint
+// script in index.html seeds the active mode's overrides before React mounts, so
+// a hard reload doesn't flash the committed defaults; this provider keeps them in
+// sync after mount and on theme toggle.
 
 type Mode = "light" | "dark";
 export type Overrides = Record<Mode, Record<string, string>>;

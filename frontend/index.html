@@ -76,6 +76,20 @@
           };
           const f = localStorage.getItem("aether-font-face");
           if (fonts[f]) el.style.setProperty("--font-body", fonts[f]);
+
+          // Theme Lab overrides — mirrors useTokenLab.tsx. Seeded pre-paint so a
+          // visitor's edited palette doesn't flash the committed defaults on load.
+          // Applies the active theme's set; the intermediate custom props flip
+          // every var(--color-*) that resolves through them.
+          const ov = JSON.parse(
+            localStorage.getItem("aether-token-overrides") || "null"
+          );
+          const active = ov && ov[t];
+          if (active) {
+            for (const name in active) {
+              el.style.setProperty(`--${name}`, active[name]);
+            }
+          }
         } catch {}
       })();
     </script>
