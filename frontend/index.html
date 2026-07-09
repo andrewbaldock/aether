@@ -48,6 +48,25 @@
         try {
           const el = document.documentElement;
           let t = localStorage.getItem("aether-theme");
+
+          // ?theme=l|light|d|dark — one-shot override: persist the choice,
+          // then strip the param (replaceState, so no history entry; the ?
+          // disappears too when theme was the only param).
+          const params = new URLSearchParams(location.search);
+          const q = { l: "light", light: "light", d: "dark", dark: "dark" }[
+            (params.get("theme") || "").toLowerCase()
+          ];
+          if (q) {
+            t = q;
+            localStorage.setItem("aether-theme", t);
+            params.delete("theme");
+            const qs = params.toString();
+            history.replaceState(
+              history.state,
+              "",
+              location.pathname + (qs ? "?" + qs : "") + location.hash
+            );
+          }
           if (t !== "light" && t !== "dark") {
             t = window.matchMedia("(prefers-color-scheme: dark)").matches
               ? "dark"
