@@ -18,6 +18,17 @@ const STAGING_OPENER =
 const LET_ME_ACTION =
   /\blet me (?:pull|grab|get|fetch|build|render|chart|map|assemble|gather|start|dig|look|search|find|check|put together|pull up|run|query|surface|show)\b/i;
 
+// Meta-talk about the answer's own machinery. Naming the data/image plumbing
+// (a reader-facing article never says "Unsplash") only counts when a process word
+// (coverage, search, gallery…) co-occurs, so a lede that's genuinely ABOUT
+// Wikidata isn't swallowed. "The gallery will feature…" (future-tense promise
+// about a widget) is staging; "the chart below shows…" (present-tense tissue) is not.
+const SOURCE_NAME = /\b(?:wikimedia|unsplash|wikidata|openalex|world bank)\b/i;
+const PROCESS_WORD =
+  /\b(?:coverage|search(?:es|ed|ing)?|results?|images?|photos?|galler(?:y|ies)|render(?:s|ed|ing)?|fetch(?:ed|ing)?)\b/i;
+const WIDGET_PROMISE =
+  /\bthe (?:galler(?:y|ies)|charts?|tables?|timelines?|graphs?|panels?) will\b/i;
+
 // Structural markdown that must never be mistaken for a staging line.
 const STRUCTURAL = /^(#{1,6}\s|:::|::[a-z]|>|[-*]\s|\d+[.)]\s|\||---|!\[)/i;
 
@@ -25,7 +36,8 @@ export function isStagingParagraph(paragraph: string): boolean {
   const t = paragraph.trim();
   if (!t || t.length > 240) return false;
   if (STRUCTURAL.test(t)) return false;
-  return STAGING_OPENER.test(t) || LET_ME_ACTION.test(t);
+  if (STAGING_OPENER.test(t) || LET_ME_ACTION.test(t)) return true;
+  return (SOURCE_NAME.test(t) && PROCESS_WORD.test(t)) || WIDGET_PROMISE.test(t);
 }
 
 // Remove the leading run of staging paragraphs — but ONLY when real content

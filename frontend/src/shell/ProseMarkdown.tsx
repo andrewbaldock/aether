@@ -43,12 +43,23 @@ const STAGING_OPENER =
   /^(let['’]s\b|i['’]ll\b|i will\b|i['’]ve\b|i have\b|i['’]m (?:going|about) to\b|now (?:let me|i)\b|okay[,\s]|ok[,\s]|alright[,\s]|first,\s|sure[,\s]|great[,\s])/i;
 const LET_ME_ACTION =
   /\blet me (?:pull|grab|get|fetch|build|render|chart|map|assemble|gather|start|dig|look|search|find|check|put together|pull up|run|query|surface|show)\b/i;
+// Meta-talk about the answer's own machinery ("…too new to have Commons/Unsplash
+// coverage, so the gallery will feature…"). Source names only count alongside a
+// process word, so a lede genuinely ABOUT Wikidata isn't swallowed; widget promises
+// are future-tense only ("will"), so present-tense tissue ("the chart below shows")
+// keeps its editorial treatment.
+const SOURCE_NAME = /\b(?:wikimedia|unsplash|wikidata|openalex|world bank)\b/i;
+const PROCESS_WORD =
+  /\b(?:coverage|search(?:es|ed|ing)?|results?|images?|photos?|galler(?:y|ies)|render(?:s|ed|ing)?|fetch(?:ed|ing)?)\b/i;
+const WIDGET_PROMISE =
+  /\bthe (?:galler(?:y|ies)|charts?|tables?|timelines?|graphs?|panels?) will\b/i;
 const STRUCTURAL = /^(#{1,6}\s|:::|::[a-z]|>|[-*]\s|\d+[.)]\s|\||---|!\[)/i;
 function isStagingParagraph(paragraph: string): boolean {
   const t = paragraph.trim();
   if (!t || t.length > 240) return false;
   if (STRUCTURAL.test(t)) return false;
-  return STAGING_OPENER.test(t) || LET_ME_ACTION.test(t);
+  if (STAGING_OPENER.test(t) || LET_ME_ACTION.test(t)) return true;
+  return (SOURCE_NAME.test(t) && PROCESS_WORD.test(t)) || WIDGET_PROMISE.test(t);
 }
 function splitPreamble(text: string): {
   preamble: string[];
