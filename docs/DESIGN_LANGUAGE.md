@@ -34,15 +34,37 @@ moments land.
 ## The premise
 
 Aether is a conversational explorer: you ask, and it answers in **two registers at
-once** — a written answer set like a page, and a canvas of data panels beside it.
-The interaction design falls out of taking that split seriously.
+once** — a written answer *typeset like an article* on the left, and a *tiled canvas
+of visualizations* on the right, both composed from the same reply.
 
-**Two panes, two jobs.** The chat is for *reading* — prose meant to stand on its
-own, typeset, not a wall of grey bubbles. The canvas is for *seeing* — tables,
-charts, timelines, a knowledge graph, each a self-contained card. Neither is a
-frame around the other; they're peers. Every layout, type, and color decision
-serves one of those two jobs, and the tension between "a good read" and "a live
-dashboard" is the problem the language keeps solving.
+```
+╭─ THE ANSWER · a typeset page ───╮   ╭─ THE CANVAS · a tiled field ────────╮
+│                                 │   │                                     │
+│   ┌─────────────────────────┐   │   │   ◍ knowledge graph    ▁▃▅▇ chart   │
+│   │  standfirst lead-in     │   │   │     ○─◍─○─○            ▁▄▂▇▅▃▆      │
+│   └─────────────────────────┘   │   │      │  ╲                           │
+│    ┌┐                           │   │     ○   ◍         ├─┼─┼─ timeline   │
+│    │A│ drop-capped body that    │   │                                     │
+│    └┘  reads like a page —      │   │   ▤ figure        ▦ table           │
+│        hairline rules, pulled   │   │                     ──────────────  │
+│        quotes, 𑁍 lotus bullets  │   │                     ──────────────  │
+│                                 │   │                     ──────────────  │
+│   ›  ask again…                 │   │                                     │
+╰─────────────────────────────────╯   ╰─────────────────────────────────────╯
+       the reading register         𑁍        the discovery register
+```
+
+Picture a lavish encyclopedia built for *discovery-delight* — or Neal Stephenson's
+[Young Lady's Illustrated Primer](https://en.wikipedia.org/wiki/The_Diamond_Age), the
+book in *The Diamond Age* that answers you, adapts, and shows as much as it tells. The
+**left pane is the reading register** — the answer set as an editorial page, drop cap
+and all (see *Editorial prose*). The **right pane is the discovery register** — a
+tiled canvas where knowledge graphs, timelines, images, charts, and tables render that
+same answer in forms you can *see*, drag, and retune.
+
+Two jobs, two surfaces, one reply. Almost every choice in this document is downstream
+of that split — the shorthand for it, used throughout, is **two panes, two jobs.**
+
 
 ---
 

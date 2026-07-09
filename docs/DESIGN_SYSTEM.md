@@ -8,8 +8,8 @@ architecture is [ARCHITECTURE.md](./ARCHITECTURE.md), the dependency rationale i
 
 **See it live, not just described:** the `/style-guide` admin page (Style Guide tab, next to
 Settings/Health) renders every color token, the type scale, the spacing rhythm, a couple of
-primitives, both icon-button variants, and the five Bigsail widget skeletons — pulled from the
-running app, not a mockup.
+primitives, both icon-button variants, the ARIA conventions, and the five Bigsail widget
+skeletons — pulled from the running app, not a mockup.
 Source: [`frontend/src/capabilities/widgets/StyleGuide/`](../frontend/src/capabilities/widgets/StyleGuide/).
 
 ---
@@ -204,6 +204,33 @@ active/filled/glow state machine and footprint — they stay bespoke rather than
 component to also model chip state.
 
 Live examples of both variants: `/style-guide` → "Icon buttons".
+
+## Accessibility (ARIA)
+
+Radix primitives carry their own semantics (roles, focus trap, Escape, `aria-modal`); the
+conventions below cover everything hand-rolled. Live specimens: `/style-guide` →
+"Accessibility (ARIA)".
+
+- **Icon-only controls are named once** — `IconButton`'s `label` prop feeds both the
+  `aria-label` and the tooltip text, so the accessible name can't drift from what sighted
+  users see. A raw button that can't use `IconButton` still sets `aria-label` by hand.
+- **Decorative icons are `aria-hidden`** — any Lucide icon sitting next to visible text
+  (buttons, title bars, list rows) is hidden so screen readers announce the label once,
+  not the icon too. This is every inline icon in the app.
+- **Toggles expose state** — segmented controls and on/off buttons carry `aria-pressed`
+  (Settings, Token Lab, the sidebar rail, the graph legend); the shared-toggle in
+  `ToolInfoSheet` is a `role="switch"` with `aria-checked`. Tabs that *navigate*
+  (`AdminTabs`) use `aria-current="page"` instead — pressed is for state, current is for
+  location.
+- **Live regions, two politeness levels** — loading states announce politely
+  (`role="status"` on the shared `WidgetLoading` spinner); the backend-down banner
+  interrupts (`role="alert"` in `BackendStatusBanner`).
+- **Meaningful SVGs are `role="img"`** — brand marks and loading illustrations
+  (Wordmark, ThinkingGlyph, BigsailLoading, graph/diagram canvases) get `role="img"`
+  plus a label; purely decorative ones are hidden like any other icon.
+- **Motion and touch floors** — every keyframe has a `prefers-reduced-motion: reduce`
+  fallback (see Motion below), and `IconButton` guarantees the 44px touch target on
+  mobile regardless of icon size.
 
 ## Motion
 

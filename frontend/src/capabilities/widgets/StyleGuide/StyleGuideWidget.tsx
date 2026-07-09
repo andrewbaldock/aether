@@ -19,6 +19,7 @@ import {
   resolveVocabularyIcon,
   VOCABULARY_ICON_NAMES,
 } from "../vocabularyIcon";
+import { WidgetLoading } from "../WidgetLoading";
 import { TOKEN_FAMILIES, type TokenEntry } from "./parseTokens";
 
 // Alphabetized once at module load for the icon-vocabulary grid.
@@ -40,6 +41,8 @@ export function StyleGuideWidget(_props: { widget: Widget }) {
   // Icon-vocabulary panel: collapsed shows the first row with the next fading
   // out under a gradient; open shows the whole set.
   const [iconsOpen, setIconsOpen] = useState(false);
+  // Local state for the aria-pressed demo in the Accessibility section.
+  const [demoSize, setDemoSize] = useState("sm");
   return (
     <AdminPage
       title="Style Guide"
@@ -259,6 +262,67 @@ export function StyleGuideWidget(_props: { widget: Widget }) {
         </div>
       </Section>
 
+      <Section title="Accessibility (ARIA)">
+        <p className="mb-3 text-xs text-content-muted">
+          The ARIA conventions everything hand-rolled follows — Radix primitives
+          (tooltip, dialog, select) already carry their own roles, focus trap,
+          and Escape handling. Motion respects{" "}
+          <code>prefers-reduced-motion</code> globally (
+          <code className="text-content-subtle">index.css</code>), and{" "}
+          <code className="text-content-subtle">IconButton</code> guarantees the
+          44px touch target on mobile.
+        </p>
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface-raised p-4">
+          <AriaRule
+            rule="aria-label"
+            note="Icon-only controls are named by IconButton's label prop — one string feeds both the accessible name and the tooltip, so they can't drift apart."
+          >
+            <IconButton label="Settings">
+              <Settings className="h-4 w-4" aria-hidden />
+            </IconButton>
+          </AriaRule>
+          <AriaRule
+            rule="aria-hidden"
+            note="An icon sitting next to visible text is decorative — hidden so screen readers announce the label once, not the icon too. Every inline Lucide icon in the app carries it."
+          >
+            <span className="flex items-center gap-1.5 text-sm text-content-muted">
+              <Settings className="h-4 w-4" aria-hidden />
+              Settings
+            </span>
+          </AriaRule>
+          <AriaRule
+            rule="aria-pressed"
+            note="Toggles and segmented controls expose their state (Settings, Token Lab, the sidebar rail, the graph legend); tabs that navigate use aria-current=&quot;page&quot; instead."
+          >
+            <div className="inline-flex rounded-lg border border-border bg-surface p-0.5">
+              {["sm", "md", "lg"].map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setDemoSize(key)}
+                  aria-pressed={demoSize === key}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    demoSize === key
+                      ? "bg-accent text-on-accent"
+                      : "text-content-muted hover:text-content"
+                  }`}
+                >
+                  {key}
+                </button>
+              ))}
+            </div>
+          </AriaRule>
+          <AriaRule
+            rule={'role="status" / "alert"'}
+            note='Loading states announce politely (role="status" on the shared WidgetLoading spinner); the backend-down banner interrupts with role="alert". Brand/loading SVGs are role="img" with a label.'
+          >
+            <div className="h-28 w-44 overflow-hidden rounded-md border border-border">
+              <WidgetLoading label="Preparing…" />
+            </div>
+          </AriaRule>
+        </div>
+      </Section>
+
       <Section title="Lucide icon vocabulary">
         <p className="mb-3 text-xs text-content-muted">
           The closed set of Lucide icons the model may pick for topics,
@@ -373,6 +437,26 @@ function TitleDemo({
           />
         </button>
       </div>
+    </div>
+  );
+}
+
+// One accessibility convention: the attribute, a live specimen, and the rule
+// in a sentence. Inspect the specimen to see the attribute actually applied.
+function AriaRule({
+  rule,
+  note,
+  children,
+}: {
+  rule: string;
+  note: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-b border-border pb-3 last:border-b-0 last:pb-0">
+      <code className="w-36 shrink-0 text-xs text-content-subtle">{rule}</code>
+      <div className="flex shrink-0 items-center">{children}</div>
+      <p className="min-w-48 flex-1 text-xs text-content-muted">{note}</p>
     </div>
   );
 }
