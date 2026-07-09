@@ -621,6 +621,19 @@ app.post("/api/chat", async (c) => {
   )
     persistSession = null;
 
+  // Stamp the model this turn actually runs on onto the session, so the sidebar
+  // labels every conversation truthfully — including ones the picker's PATCH
+  // never touched (new/side conversations created mid-ask). Fire-and-forget:
+  // the label must never block or fail a turn. Absent/invalid model = server
+  // default; leave the row null so the label follows the default.
+  if (persistSession && selectedModel) {
+    void updateSessionModel(
+      persistSession,
+      selectedModel,
+      userId as string
+    ).catch(() => {});
+  }
+
   // Build the client per request so the tool surface (and graph-mode prompt)
   // matches this conversation's mode, and so the chosen model applies this turn.
   // sessionId is threaded through for per-conversation tool limits (Unsplash cap);
