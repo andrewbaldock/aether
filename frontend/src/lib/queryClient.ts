@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react";
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 
 // Central data layer + self-diagnostics for every /api call.
@@ -102,6 +103,10 @@ export function logApiError(scope: string, err: unknown): void {
     env: describeEnv(),
     error: err,
   });
+  // Single chokepoint for every query/mutation failure — also the one place to
+  // report them to Sentry (no-op when unconfigured). The scope tag ("query …" /
+  // "mutation …") groups issues by the call that failed.
+  Sentry.captureException(err, { tags: { scope } });
 }
 
 // Don't retry a genuine 4xx (it won't get better); do retry network/5xx up to 3×

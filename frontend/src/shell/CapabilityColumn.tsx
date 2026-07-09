@@ -3,6 +3,7 @@ import { getRenderer, type Widget } from "../capabilities/registry";
 import { useCapabilities } from "../capabilities/useCapabilities";
 import { useCapabilityContent } from "../capabilities/useCapabilityContent";
 import { HEALTH_WIDGET } from "../capabilities/widgets/Health";
+import { METRICS_WIDGET } from "../capabilities/widgets/Metrics";
 import { SETTINGS_WIDGET } from "../capabilities/widgets/Settings";
 import { STYLEGUIDE_WIDGET } from "../capabilities/widgets/StyleGuide";
 import { TOKENLAB_WIDGET } from "../capabilities/widgets/TokenLab";
@@ -20,6 +21,7 @@ const UTILITY_TITLES: Record<string, string> = {
   [WELCOME_WIDGET.id]: WELCOME_WIDGET.title,
   [SETTINGS_WIDGET.id]: SETTINGS_WIDGET.title,
   [HEALTH_WIDGET.id]: HEALTH_WIDGET.title,
+  [METRICS_WIDGET.id]: METRICS_WIDGET.title,
   [STYLEGUIDE_WIDGET.id]: STYLEGUIDE_WIDGET.title,
   [TOKENLAB_WIDGET.id]: TOKENLAB_WIDGET.title,
   // Dev-only Screenshots admin page. Literal id (not an import) so the gallery

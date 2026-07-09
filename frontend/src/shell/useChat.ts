@@ -1,9 +1,21 @@
 import type { SseEvent } from "@contract/sse";
+import * as Sentry from "@sentry/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 import { type Session, sessionsKey } from "../hooks/useSessionList";
+import { track } from "../lib/analytics";
 import { useAgentEvents } from "./AgentEventContext";
 import { parseSseChunk } from "./parseSseChunk";
+
+// Render tools whose completion means a widget was produced this turn — the
+// success signal for the render-tool features. build_knowledge_graph is tracked
+// separately (its own feature), so it's not in this set.
+const RENDER_TOOLS = new Set([
+  "render_table",
+  "render_chart",
+  "render_timeline",
+  "render_images",
+]);
 
 // An ephemeral attachment for a turn — an image or PDF carried inline as base64.
 // Mirrors the backend Attachment wire shape, plus a client-only `name`/`previewUrl`
@@ -155,6 +167,8 @@ export function useChat({
     // displayText only swaps the on-screen bubble.
     const shownText = displayText ?? text;
     const attachments = opts?.attachments;
+    // A turn answering a prior clarifier — the "did the clarify flow convert?" signal.
+    if (opts?.clarified) track("clarify_answered");
     const withUser: Message[] = [
       ...messagesRef.current,
       {
@@ -208,6 +222,19 @@ export function useChat({
     // since a title is only assigned on the first turn. The user bubble is already
     // present, so the first turn has exactly one message.
     const isFirstTurn = next.length === 1;
+
+    // Product-analytics signals for the chat loop. conversation_started fires once
+    // per session (only the first turn); message_sent on every turn, carrying the
+    // dimensions the funnels slice by.
+    if (isFirstTurn)
+      track("conversation_started", { graphMode: graphModeRef.current });
+    track("message_sent", {
+      isFirstTurn,
+      graphMode: graphModeRef.current,
+      model: modelRef.current,
+      hasAttachments: !!(attachments && attachments.length > 0),
+      clarified: !!clarified,
+    });
 
     setIsLoading(true);
     setError(null);
@@ -402,6 +429,11 @@ export function useChat({
               tool: event.tool,
               result: event.result ?? "",
             });
+            // Feature-success signal: a widget was actually produced this turn.
+            if (event.tool === "build_knowledge_graph")
+              track("knowledge_graph_built");
+            else if (RENDER_TOOLS.has(event.tool))
+              track("tool_rendered", { tool: event.tool });
             updateAssistant((m) => ({ ...m, toolActivity: undefined }));
           } else if (event.type === "tool_partial" && event.tool) {
             // Streamed render-tool spec — widgets re-parse it to paint as it
@@ -501,6 +533,10 @@ export function useChat({
       messagesRef.current = withoutPlaceholder;
       onMessagesChange(withoutPlaceholder);
       const message = e instanceof Error ? e.message : "Something went wrong";
+      // The chat stream uses a raw fetch (not the query/mutation cache), so its
+      // failures don't flow through logApiError — report them here. Real errors
+      // only; the AbortError/superseded cases returned above.
+      Sentry.captureException(e);
       setError(message);
       bus.emit({ type: "error", message });
     } finally {

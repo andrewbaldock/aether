@@ -6,6 +6,7 @@ import { ThinkingGlyph } from "../brand/ThinkingGlyph";
 import { Wordmark } from "../brand/Wordmark";
 import { CAPABILITIES, HOME_BASE_ID } from "../capabilities/catalog";
 import { useCapabilities } from "../capabilities/useCapabilities";
+import { track } from "../lib/analytics";
 import { CHART_WIDGET } from "../capabilities/widgets/Chart";
 import { useChartState } from "../capabilities/widgets/Chart/useChartState";
 import { IMAGES_WIDGET } from "../capabilities/widgets/Images";
@@ -722,7 +723,13 @@ export function ChatPanel() {
             {/* Starter pills are the tallest block; drop them on a short
                 (landscape phone) viewport so the composer stays above the fold. */}
             <div className="w-full max-w-xl short:hidden">
-              <StarterPrompts onPick={sendMessage} disabled={isLoading} />
+              <StarterPrompts
+                onPick={(p) => {
+                  track("starter_prompt_clicked");
+                  void sendMessage(p);
+                }}
+                disabled={isLoading}
+              />
             </div>
             <div className="h-12 shrink-0 max-md:h-8 short:hidden" />
           </>
@@ -830,7 +837,10 @@ export function ChatPanel() {
               {/* Model picker — which Claude answers this conversation. */}
               <ModelPicker
                 value={model}
-                onChange={selectModel}
+                onChange={(m) => {
+                  track("model_changed", { model: m });
+                  selectModel(m);
+                }}
                 disabled={isLoading}
               />
               {/* Send / Stop. The button is a STOP control only while a turn is

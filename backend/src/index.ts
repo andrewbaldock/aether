@@ -1,6 +1,8 @@
+import * as Sentry from "@sentry/bun";
 import { Hono } from "hono";
 import { etag } from "hono/etag";
 import { streamSSE } from "hono/streaming";
+import { incrementCounter } from "./appState";
 import {
   createSession,
   deleteMessages,
@@ -29,6 +31,7 @@ import {
 } from "./db";
 import { checkHealth, checkProviders } from "./health";
 import { tryConsumeChat } from "./ipRateLimit";
+import { getMetrics, type MetricsResult, recordVital } from "./metrics";
 import {
   type Attachment,
   type ChatMessage,
@@ -41,7 +44,40 @@ import { createSseEmitter } from "./sse";
 import { stripStagingChain } from "./staging";
 import { STREAMABLE_RENDER_TOOLS, toolStatusLabel } from "./tools";
 
+// Error reporting. Sentry is a no-op when SENTRY_DSN is unset (local dev), so
+// every capture call below is safe to make unconditionally. Low trace sample
+// rate keeps the demo's runtime spend down; errors are always captured.
+const SENTRY_DSN = process.env.SENTRY_DSN;
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    tracesSampleRate: 0.1,
+    environment: process.env.FLY_APP_NAME ? "production" : "development",
+  });
+}
+
 const app = new Hono();
+
+// Error-RATE mirror for the in-app Metrics widget, without a per-request DB
+// write: bump the shared `errors:total` counter only on a 5xx response (rare).
+// Handled 500s (the per-route try/catch that returns c.json(...,500)) and
+// unhandled throws (which onError below turns into a 500) both flow through
+// here, so one place counts them all. Streaming chat errors return a 200 and
+// are counted explicitly in the chat catch instead.
+app.use("*", async (c, next) => {
+  await next();
+  if (c.res.status >= 500) {
+    void incrementCounter("errors:total").catch(() => {});
+  }
+});
+
+// Global safety net for anything a route doesn't catch itself. Captures the real
+// error server-side (Sentry + log) but never leaks it to the client.
+app.onError((err, c) => {
+  console.error("Unhandled route error:", err);
+  Sentry.captureException(err);
+  return c.json({ error: "Internal error" }, 500);
+});
 
 app.get("/api/health", (c) => c.json({ ok: true }));
 
@@ -91,6 +127,46 @@ function callerId(c: {
 app.get("/api/health/full", async (c) => {
   const result = await checkHealth();
   return c.json(result);
+});
+
+// A single web-vitals sample beaconed from the browser (see frontend vitals.ts).
+// Folded into a rolling average in app_state so the Metrics widget can show real
+// device CWV without scraping the Vercel Speed Insights API.
+app.post("/api/vitals", async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Request body must be JSON" }, 400);
+  }
+  const { name, value } = body as { name?: unknown; value?: unknown };
+  if (
+    (name !== "LCP" && name !== "INP" && name !== "CLS") ||
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value < 0
+  ) {
+    return c.json(
+      { error: "Expected { name: 'LCP'|'INP'|'CLS', value: number }" },
+      400
+    );
+  }
+  await recordVital(name, value);
+  return c.json({ ok: true });
+});
+
+// Feature-success metrics for the in-app Metrics widget. Aggregation touches
+// several COUNT queries, so cache the whole result in memory briefly (same TTL
+// pattern as greenProviders below) rather than recomputing per page load.
+const METRICS_TTL_MS = 60_000;
+let metricsCache: { at: number; data: MetricsResult } | null = null;
+app.get("/api/metrics", async (c) => {
+  if (metricsCache && Date.now() - metricsCache.at < METRICS_TTL_MS) {
+    return c.json(metricsCache.data);
+  }
+  const data = await getMetrics();
+  metricsCache = { at: Date.now(), data };
+  return c.json(data);
 });
 
 // The model picker's options — single source of truth so the frontend doesn't
@@ -516,6 +592,11 @@ app.post("/api/chat", async (c) => {
     );
   }
 
+  // Denominator for the in-app error-rate metric: count each accepted chat turn.
+  // Fire-and-forget — a counter hiccup must never block a turn. Chat already does
+  // several DB writes per turn, so one more atomic bump is negligible.
+  void incrementCounter("chat:turns").catch(() => {});
+
   // Validate the requested model against the allowlist; an unknown/absent value
   // resolves to undefined, which lets the client fall back to the env/default.
   const selectedModel = resolveModel(model);
@@ -796,7 +877,11 @@ app.post("/api/chat", async (c) => {
     } catch (err) {
       // Keep the real error in the server log; never stream it to the client —
       // err.message can carry provider/key/internal detail (info disclosure).
+      // This is a 200 stream, so the 5xx middleware can't see it — capture and
+      // count the error here instead.
       console.error("POST /api/chat stream failed:", err);
+      Sentry.captureException(err);
+      void incrementCounter("errors:total").catch(() => {});
       await sse.error(
         "Failed to get a reply from the model. Please try again."
       );

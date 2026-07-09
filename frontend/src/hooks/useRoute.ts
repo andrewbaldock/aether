@@ -29,6 +29,7 @@ export type AdminPageId =
   | "welcome"
   | "settings"
   | "health"
+  | "metrics"
   | "styleguide"
   | "themelab"
   | "screenshots";
@@ -37,6 +38,7 @@ const ADMIN_PATHS: Record<AdminPageId, string> = {
   welcome: "/welcome",
   settings: "/settings",
   health: "/health",
+  metrics: "/metrics",
   styleguide: "/style-guide",
   themelab: "/theme-lab",
   screenshots: "/screenshots",

@@ -1,4 +1,5 @@
 import { HEALTH_WIDGET } from "../capabilities/widgets/Health";
+import { METRICS_WIDGET } from "../capabilities/widgets/Metrics";
 import { SETTINGS_WIDGET } from "../capabilities/widgets/Settings";
 import { STYLEGUIDE_WIDGET } from "../capabilities/widgets/StyleGuide";
 import { TOKENLAB_WIDGET } from "../capabilities/widgets/TokenLab";
@@ -27,6 +28,7 @@ export function AdminTabs() {
     { id: WELCOME_WIDGET.id as AdminPageId, label: "Welcome" },
     { id: SETTINGS_WIDGET.id as AdminPageId, label: "Settings" },
     { id: HEALTH_WIDGET.id as AdminPageId, label: "Health" },
+    { id: METRICS_WIDGET.id as AdminPageId, label: "Metrics" },
     { id: STYLEGUIDE_WIDGET.id as AdminPageId, label: "Style Guide" },
     { id: TOKENLAB_WIDGET.id as AdminPageId, label: "Theme Lab" },
     // Dev-only Screenshots tab. The literal "screenshots" (matching

@@ -9,6 +9,7 @@ import "./capabilities/widgets/Chart";
 import "./capabilities/widgets/Health";
 import "./capabilities/widgets/Images";
 import "./capabilities/widgets/KnowledgeGraph";
+import "./capabilities/widgets/Metrics";
 import "./capabilities/widgets/Settings";
 import "./capabilities/widgets/StyleGuide";
 import "./capabilities/widgets/TokenLab";
