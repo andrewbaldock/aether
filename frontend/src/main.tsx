@@ -1,5 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import * as Sentry from "@sentry/react";
+import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -78,6 +79,7 @@ createRoot(rootElement).render(
       <QueryClientProvider client={queryClient}>
         <App />
         <SpeedInsights />
+        <Analytics />
       </QueryClientProvider>
     </Sentry.ErrorBoundary>
   </StrictMode>
