@@ -45,7 +45,10 @@ export function isStagingParagraph(paragraph: string): boolean {
 // left untouched rather than blanked (which would fail the non-empty persist rule
 // and load as an empty bubble).
 export function stripStagingChain(content: string): string {
-  const paras = content.split(/\n\s*\n/);
+  // Leading whitespace (e.g. the loop's injected "\n\n" separator surviving a
+  // dropped first iteration) would make paras[0] the empty string — never staging —
+  // and bail the whole strip. Trim first; mirrors splitPreamble frontend-side.
+  const paras = content.replace(/^\s+/, "").split(/\n\s*\n/);
   const firstReal = paras.findIndex((p) => !isStagingParagraph(p));
   if (firstReal <= 0) return content; // no leading staging, or nothing but staging
   return paras.slice(firstReal).join("\n\n").trim() || content;

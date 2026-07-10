@@ -21,11 +21,12 @@ export function createSseEmitter(stream: SSEStreamingApi) {
     toolPartial: (tool: string, partialJson: string, isComplete: boolean) =>
       send({ type: "tool_partial", tool, partialJson, isComplete }),
     loopStart: (iteration: number) => send({ type: "loop_start", iteration }),
+    segment: (kind: "staging" | "answer") => send({ type: "segment", kind }),
     plan: (plan: CompositionPlan) => send({ type: "plan", plan }),
     clarify: (question: string, options: string[]) =>
       send({ type: "clarify", question, options }),
-    persisted: (userId: string, assistantId: string) =>
-      send({ type: "persisted", userId, assistantId }),
+    persisted: (userId: string, assistantId: string, content: string) =>
+      send({ type: "persisted", userId, assistantId, content }),
     titled: (sessionId: string, title: string, icon: string | null) =>
       send({ type: "titled", sessionId, title, icon }),
     warning: (message: string) => send({ type: "warning", message }),

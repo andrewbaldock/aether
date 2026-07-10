@@ -770,6 +770,10 @@ export const WEB_SEARCH_TOOL: Anthropic.Messages.WebSearchTool20260209 = {
   type: "web_search_20260209",
   name: "web_search",
   max_uses: 3,
+  // The agent loop always invokes tools directly; without this pin the API's
+  // default allowed_callers implies programmatic tool calling, which Haiku 4.5
+  // doesn't support — every Haiku turn 400'd before a single token streamed.
+  allowed_callers: ["direct"],
 };
 
 // The tool list for a turn. Render tools + base are always present; Knowledge

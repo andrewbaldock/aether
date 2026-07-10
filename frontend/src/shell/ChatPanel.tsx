@@ -584,7 +584,7 @@ export function ChatPanel() {
                         </div>
                       ) : null;
                     })()}
-                    <ProseMarkdown text={m.text} />
+                    <ProseMarkdown text={m.text} preamble={m.preamble} />
                     {/* Clarifier chips: the planner asked ONE expanding question
                         this turn (m.text is the question). Tapping a chip sends the
                         pick as the next turn, flagged clarified so the planner won't

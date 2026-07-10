@@ -384,6 +384,11 @@ function toApiMessage(m: ChatMessage): ApiMessage {
 type LoopEvent =
   // A text token to stream to the user.
   | { kind: "text"; text: string }
+  // A NEW text content block began (Anthropic-only; others never emit it). Text
+  // blocks in one assistant message can be adjacent (e.g. around thinking blocks);
+  // without a marker their deltas would concatenate into one string — "…figures.I
+  // have…" — fusing separate remarks into a single unsplittable paragraph.
+  | { kind: "text_block_start" }
   // A client-side tool_use began (loop will run executeTool when it stops).
   | { kind: "tool_start"; index: number; id: string; name: string }
   // A fragment of a tool's input JSON (accumulated; throttled to the client if streamable).
@@ -502,6 +507,9 @@ async function runAgentLoop<M>(
     // First text token of THIS iteration not yet streamed (used once, to insert the
     // separator before iteration 2+ text that follows earlier iterations' text).
     let iterationTextStarted = false;
+    // A new text block began mid-iteration (Anthropic emits text_block_start); the
+    // next token needs a paragraph break so adjacent blocks don't fuse.
+    let newTextBlock = false;
     let stopReason:
       | "end"
       | "tool_use"
@@ -511,17 +519,25 @@ async function runAgentLoop<M>(
 
     for await (const ev of adapter.stream(history, { withTools: !atCap })) {
       if (ev.kind === "text") {
-        // Separate this iteration's text from a previous iteration's: prefix a
-        // paragraph break on the FIRST text token here if earlier text exists and
-        // this one doesn't already start with whitespace.
-        if (!iterationTextStarted && turnEmittedText && !/^\s/.test(ev.text)) {
+        // Separate this text from earlier text: prefix a paragraph break on the
+        // first token of iteration 2+ (earlier iterations streamed text), and on
+        // the first token of a NEW text block within this message (adjacent blocks
+        // would otherwise fuse — "…figures.I have…"). Skipped when the boundary is
+        // already whitespace on either side.
+        const atBoundary = !iterationTextStarted
+          ? turnEmittedText
+          : newTextBlock && !/\s$/.test(assistantText);
+        if (atBoundary && !/^\s/.test(ev.text)) {
           await onToken("\n\n");
           assistantText += "\n\n";
         }
         iterationTextStarted = true;
+        newTextBlock = false;
         turnEmittedText = true;
         await onToken(ev.text);
         assistantText += ev.text;
+      } else if (ev.kind === "text_block_start") {
+        newTextBlock = true;
       } else if (ev.kind === "tool_start") {
         pendingTools.set(ev.index, {
           id: ev.id,
@@ -840,7 +856,9 @@ function createClaudeClient(
                 };
               } else if (event.type === "content_block_start") {
                 const b = event.content_block;
-                if (b.type === "tool_use") {
+                if (b.type === "text") {
+                  yield { kind: "text_block_start" };
+                } else if (b.type === "tool_use") {
                   yield {
                     kind: "tool_start",
                     index: event.index,

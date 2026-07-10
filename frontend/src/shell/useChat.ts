@@ -46,6 +46,14 @@ export interface Message {
   // stamped client-side at creation (within a second of the DB value, which
   // replaces it on the next reload). Drives the relative "3 hours ago" label.
   createdAt?: string;
+  // Live-turn staging narration ("Let me pull the figures…"), demoted out of
+  // `text` when a `segment` SSE marker classifies it — rendered as muted preamble
+  // notes, never part of the editorial body. Live state only; staging is not
+  // persisted, so reloads never have it.
+  preamble?: string[];
+  // How many chars of `text` are already covered by a `segment` marker. Text
+  // beyond this is the in-flight (unclassified) segment.
+  classifiedLen?: number;
 }
 
 interface UseChatOptions {
@@ -319,6 +327,9 @@ export function useChat({
             : {}),
         };
       });
+      // Captured once so the `persisted` handler below stamps the model this turn
+      // actually RAN on, even if the picker changes while the answer streams.
+      const modelUsed = modelRef.current;
       const requestInit: RequestInit = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -327,7 +338,7 @@ export function useChat({
           sessionId: resolvedSessionId,
           userId,
           graphMode: currentGraphMode,
-          model: modelRef.current,
+          model: modelUsed,
           // Marks a turn that answers a prior clarifier — the backend planner
           // won't clarify again (no interrogation loops).
           ...(clarified ? { clarified: true } : {}),
@@ -447,6 +458,27 @@ export function useChat({
             });
           } else if (event.type === "loop_start") {
             bus.emit({ type: "loop_start", iteration: event.iteration ?? 0 });
+          } else if (event.type === "segment") {
+            // The backend classified everything streamed since the last segment
+            // marker — its tool-type ground truth, not a wording guess. Staging
+            // narration is demoted out of the editorial text into muted preamble
+            // notes; answer text just advances the classified watermark.
+            updateAssistant((m) => {
+              const start = m.classifiedLen ?? 0;
+              const chunk = m.text.slice(start);
+              if (event.kind === "staging" && chunk.trim()) {
+                return {
+                  ...m,
+                  text: m.text.slice(0, start),
+                  preamble: [
+                    ...(m.preamble ?? []),
+                    ...chunk.trim().split(/\n\s*\n/),
+                  ],
+                  classifiedLen: start,
+                };
+              }
+              return { ...m, classifiedLen: m.text.length };
+            });
           } else if (event.type === "plan" && event.plan) {
             // The planner's abstract composition plan. BigsailPlanProvider stores
             // the latest; the canvas consumes it to order cards / draw edges.
@@ -481,10 +513,41 @@ export function useChat({
               remap.set(assistantId, event.assistantId);
               const updated = messagesRef.current.map((m) => {
                 const remapped = remap.get(m.id);
-                return remapped ? { ...m, id: remapped } : m;
+                if (!remapped) return m;
+                // The assistant row also swaps its streamed text for the canonical
+                // persisted content (staging stripped backend-side), so the live
+                // view converges to exactly what a reload would show. `content`
+                // is absent only from an older backend — keep the streamed text.
+                if (m.id === assistantId && event.content) {
+                  return {
+                    ...m,
+                    id: remapped,
+                    text: event.content,
+                    classifiedLen: undefined,
+                  };
+                }
+                return { ...m, id: remapped };
               });
               messagesRef.current = updated;
               onMessagesChange(updated);
+              // Stamp the model this turn ran on into the cached session row —
+              // the backend stamped the DB row at turn start, but the only
+              // sessions refetch fires BEFORE the POST (so it reads null), and
+              // nothing refetches after. Without this the sidebar chip keeps the
+              // stale model until some unrelated refetch. Last turn wins, matching
+              // the DB. Skipped when no model was sent (server default — the row
+              // stays null and the chip shows the default label).
+              if (modelUsed) {
+                queryClient.setQueryData<Session[]>(
+                  sessionsKey(userId),
+                  (rows) =>
+                    rows?.map((r) =>
+                      r.id === resolvedSessionId
+                        ? { ...r, model: modelUsed }
+                        : r
+                    )
+                );
+              }
             }
           } else if (
             event.type === "titled" &&

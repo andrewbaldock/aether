@@ -232,6 +232,35 @@ describe("Claude agent loop", () => {
     expect(toolStarts).toBe(0);
   });
 
+  test("adjacent text blocks in one message get a paragraph break, not fused", async () => {
+    // Two text blocks in the same assistant message (e.g. around a thinking block).
+    // Without the text_block_start separator their deltas concatenate into
+    // "…figures.I have…" — one unsplittable paragraph that defeats the staging strip.
+    setClaudeEvents([
+      aMessageStart(),
+      aTextBlockStart(),
+      aTextDelta("Let me pull the figures."),
+      aTextBlockStop(),
+      aTextBlockStart(),
+      aTextDelta("I have solid material."),
+      aTextBlockStop(),
+      aMessageDelta("end_turn"),
+    ]);
+    const tokens: string[] = [];
+    await runStream(
+      claude(),
+      greeting,
+      callbacks({
+        onToken: async (t: string) => {
+          tokens.push(t);
+        },
+      })
+    );
+    expect(tokens.join("")).toBe(
+      "Let me pull the figures.\n\nI have solid material."
+    );
+  });
+
   test("single tool turn: partials stream, tool executes, loop re-enters, then done", async () => {
     const spec = JSON.stringify({
       columns: [{ key: "a", label: "A" }],

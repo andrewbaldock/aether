@@ -207,14 +207,25 @@ const components: Components = {
   },
 };
 
-export function ProseMarkdown({ text }: { text: string }) {
-  const { preamble, body } = splitPreamble(text);
+export function ProseMarkdown({
+  text,
+  preamble,
+}: {
+  text: string;
+  // Staging narration already classified by the backend's `segment` SSE markers
+  // (useChat demotes it out of `text`). Rendered ahead of any lines splitPreamble
+  // still peels off itself — that regex pass remains as the second line of defense
+  // for lead-ins inside the answer segment and for legacy transcripts.
+  preamble?: string[];
+}) {
+  const { preamble: derived, body } = splitPreamble(text);
+  const notes = [...(preamble ?? []), ...derived];
   return (
     <div
       className="prose-editorial"
       data-variant={isArticle(body) ? "article" : "compact"}
     >
-      {preamble.map((line, idx) => (
+      {notes.map((line, idx) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: staging lines have no id and never reorder
         <p key={idx} className="prose-preamble">
           {line}

@@ -20,6 +20,7 @@ export const SSE_EVENT_TYPES = [
   "tool_result",
   "tool_partial",
   "loop_start",
+  "segment",
   "plan",
   "clarify",
   "persisted",
@@ -52,14 +53,22 @@ export type SseEvent =
     }
   // The agent loop re-entered (iteration 2+) after feeding tool results back.
   | { type: "loop_start"; iteration: number }
+  // Retroactive classification of the `text` streamed since the previous segment
+  // marker (or stream start): the backend's tool-type ground truth — an iteration
+  // whose tools were all data-fetches is staging narration; one that rendered, or
+  // ended with no tools, is answer. Lets the client demote narration to a muted
+  // preamble deterministically instead of guessing at wording.
+  | { type: "segment"; kind: "staging" | "answer" }
   // The planner's abstract composition plan for this turn (complex turns only).
   | { type: "plan"; plan: CompositionPlan }
   // Thin-but-explodable turn: the planner asked ONE clarifying question instead of
   // composing. The question also streamed as `text`; `options` are tappable chips.
   | { type: "clarify"; question: string; options: string[] }
   // The turn was saved; carries the real DB row ids so the client swaps its placeholder
-  // ids (enables a same-session delete to target the right rows without a reload).
-  | { type: "persisted"; userId: string; assistantId: string }
+  // ids (enables a same-session delete to target the right rows without a reload), plus
+  // the canonical cleaned assistant `content` (staging stripped) so the client can
+  // replace its streamed text — the live view converges to what a reload would show.
+  | { type: "persisted"; userId: string; assistantId: string; content: string }
   // First-turn auto-title landed. Carries the session it names so the client can
   // patch that row's title/icon into its cache directly (no refetch). `icon` is the
   // lucide name or null when Haiku returned/validated none.

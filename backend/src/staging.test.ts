@@ -45,6 +45,16 @@ test("strips the whole leading staging chain, keeps the answer", () => {
   expect(out.includes("Let me")).toBe(false);
 });
 
+test("leading whitespace doesn't bail the strip (the 183df4a9 prod row)", () => {
+  // A dropped first iteration leaves the loop's injected "\n\n" separator at the
+  // head of answerText; the empty first split-piece must not read as "no leading
+  // staging". Real prod content, 2026-07-10.
+  const src =
+    "\n\nI have solid material. Let me write the answer and build all the panels.\n\nThe story of how companies decide who gets paid what is really the story of two braided threads.";
+  const out = stripStagingChain(src);
+  expect(out.startsWith("The story of how companies")).toBe(true);
+});
+
 test("never blanks a pure-staging turn (no real content follows)", () => {
   const src = "Let me pull the figures.\n\nNow let me render the panels.";
   expect(stripStagingChain(src)).toBe(src);

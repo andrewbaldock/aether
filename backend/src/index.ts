@@ -669,9 +669,14 @@ app.post("/api/chat", async (c) => {
     let segText = ""; // current iteration's text, not yet classified
     let segRendered = false; // current iteration called a render tool
     let segFetched = false; // current iteration called a data-fetch tool
-    const closeSegment = () => {
+    const closeSegment = async () => {
       // Render-bearing OR terminal (no tools at all) → answer; data-fetch-only → staging.
-      if (segRendered || !segFetched) answerText += segText;
+      const kind = segRendered || !segFetched ? "answer" : "staging";
+      if (kind === "answer") answerText += segText;
+      // Tell the client what the text since the last marker WAS, so it can demote
+      // staging to a muted preamble live — same ground truth as persistence, no
+      // wording heuristics. Skipped for empty segments (nothing to classify).
+      if (segText.trim()) await sse.segment(kind);
       segText = "";
       segRendered = false;
       segFetched = false;
@@ -779,7 +784,7 @@ app.post("/api/chat", async (c) => {
             // data-fetch iterations; stripStagingChain then removes any staging
             // lead-in the model wrote in the SAME message as its render calls
             // ("Now I'll render the chart and table…"), so the stored content is clean.
-            closeSegment();
+            await closeSegment();
             let persistText = stripStagingChain(answerText).trim();
 
             // The conversation pane must never come back empty. The model is told
@@ -816,8 +821,10 @@ app.post("/api/chat", async (c) => {
                 );
                 // Hand the client the real DB ids so its placeholder ids become
                 // the actual row ids — lets a same-session delete hit the right
-                // rows without a reload. Only sent once both saves succeeded.
-                await sse.persisted(userId, assistantId);
+                // rows without a reload — plus the canonical cleaned content so
+                // the live text converges to what a reload would show. Only sent
+                // once both saves succeeded.
+                await sse.persisted(userId, assistantId, persistText);
               } catch (err) {
                 console.error("Failed to persist chat turn:", err);
                 await sse.warning(
@@ -865,7 +872,7 @@ app.post("/api/chat", async (c) => {
           },
           onLoopStart: async (iteration) => {
             // A new iteration began — the previous one's text is now classifiable.
-            closeSegment();
+            await closeSegment();
             await sse.loopStart(iteration);
           },
           onStatus: async (message) => {
