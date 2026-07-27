@@ -59,7 +59,9 @@ function isStagingParagraph(paragraph: string): boolean {
   if (!t || t.length > 240) return false;
   if (STRUCTURAL.test(t)) return false;
   if (STAGING_OPENER.test(t) || LET_ME_ACTION.test(t)) return true;
-  return (SOURCE_NAME.test(t) && PROCESS_WORD.test(t)) || WIDGET_PROMISE.test(t);
+  return (
+    (SOURCE_NAME.test(t) && PROCESS_WORD.test(t)) || WIDGET_PROMISE.test(t)
+  );
 }
 function splitPreamble(text: string): {
   preamble: string[];
@@ -74,6 +76,42 @@ function splitPreamble(text: string): {
     preamble: paras.slice(0, i).map((p) => p.trim()),
     body: paras.slice(i).join("\n\n"),
   };
+}
+
+// Claude sometimes hangs the attributes off the CLOSING fence —
+// `:::{cite="FTC"}` — instead of the opener. remark-directive doesn't read that
+// as a close, so the container swallows the whole rest of the answer and renders
+// it at pull-quote size (huge, centred), with the literal `:::{cite="…"}` left in
+// the text. Hoist those attributes onto their opener and close the fence.
+// It also loses track of where the quote ends, leaving the closing fence dangling
+// at the end of the quoted line instead of on its own.
+export function normalizeDirectiveFences(md: string): string {
+  const lines = md.split("\n");
+  const open: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (/^:{3,}[a-z]/i.test(line)) {
+      open.push(i);
+      continue;
+    }
+    // A close fence, alone on its line or trailing the last line of the quote,
+    // with or without the misplaced attributes.
+    const close = line.match(/(^|\s):{3,}(\{[^}]*\})?\s*$/);
+    if (!close) continue;
+    const opener = open.pop();
+    if (
+      close[2] &&
+      opener !== undefined &&
+      !/\}\s*$/.test(lines[opener] ?? "")
+    ) {
+      lines[opener] = (lines[opener] ?? "").trimEnd() + close[2];
+    }
+    lines[i] = `${line.slice(0, close.index).trimEnd()}\n:::`.replace(
+      /^\n/,
+      ""
+    );
+  }
+  return lines.join("\n");
 }
 
 // remark plugin: convert remark-directive's directive nodes into ordinary
@@ -238,7 +276,7 @@ export function ProseMarkdown({
           remarkPlugins={[remarkGfm, remarkDirective, remarkDirectiveElements]}
           components={components}
         >
-          {body}
+          {normalizeDirectiveFences(body)}
         </ReactMarkdown>
       </div>
     </div>

@@ -52,12 +52,15 @@ renders Markdown editorially: a substantial answer automatically gets a larger
 lead paragraph with a drop cap (so OPEN with a strong, self-contained first
 sentence), \`##\` headings become section titles, and \`---\` becomes an ornamental
 divider. Beyond that you have a small set of directives to art-direct with:
-- \`:::pullquote\`One striking line, pulled large.\`:::\` — spotlight a memorable phrase (optional \`{cite="…"}\`).
+- \`:::pullquote{cite="…"}\` … \`:::\` — spotlight ONE striking line, pulled large (\`cite\` optional).
 - \`:::callout{title="Key idea"}\` … \`:::\` — a boxed takeaway.
 - \`:::aside\` … \`:::\` — a margin note for a tangent; floats beside the text.
 - \`::stat[3¾-inch]{label="figure scale"}\` — a single memorable figure, set big.
 - \`:accent[a few words]\` — inline emphasis in the brand colour, beyond plain bold.
 - \`:::lead\` … \`:::\` — force a lead/standfirst block where you want one.
+Every \`:::\` block opens on its own line and closes with a bare \`:::\` on its own
+line. Attributes (\`{cite="…"}\`, \`{title="…"}\`) belong on the OPENING fence only —
+never on the closing one, and never trailing the end of a sentence.
 Use these like an art director: sparingly and with intent. Most answers want just
 a strong lead and maybe ONE flourish; many want none at all. A few, well placed,
 read as composed; a page full of boxes and pulled quotes reads as noise. Never let
