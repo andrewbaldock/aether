@@ -77,8 +77,14 @@ export default defineConfig({
       },
       workbox: {
         // The SPA falls back to index.html for client-side routes, but never
-        // for /api/* — those must always hit the network.
-        navigateFallbackDenylist: [/^\/api\//],
+        // for /api/* — those must always hit the network — and never for
+        // /storybook, which is a SEPARATE static site built into dist/storybook
+        // (see the build:vercel script). Without this denylist entry, any
+        // visitor who already has the service worker installed would navigate
+        // to /storybook and be served the precached app shell instead: the
+        // Storybook would appear broken for returning users only, which is a
+        // miserable bug to chase.
+        navigateFallbackDenylist: [/^\/api\//, /^\/storybook/],
         // Bump the precache cap so the larger JS chunks (recharts, d3, etc.)
         // are covered; default is 2 MiB.
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,

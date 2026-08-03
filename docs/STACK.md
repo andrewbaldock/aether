@@ -63,7 +63,7 @@ source. See [ARCHITECTURE.md](./ARCHITECTURE.md#two-runtimes).
 | `jsdom` | ^29.x | DOM in Node | The vitest `environment` so React renders without a browser. |
 | `vite-plugin-pwa` | ^1.3.0 | PWA / service worker generator | Makes Aether an installable PWA. Generates the Workbox service worker (`dist/sw.js`) + web manifest from config in `vite.config.ts`, and auto-injects the manifest link + SW registration into `index.html`. `autoUpdate` mode — SW refreshes silently, no update prompt. SW is off in `vite dev`, on in `preview`/prod. See [RUNBOOK.md](./RUNBOOK.md#pwa--service-worker) and [MOBILE.md](./MOBILE.md). |
 | `@playwright/test` | ^1.60 | E2E test runner | Browser-level tests in `frontend/e2e/` (`bun run test:e2e`). Mocks `/api` at the network layer (canned SSE) — no backend, no tokens, deterministic. Drives a 7-project viewport matrix (desktop + iPhone/iPad/Pixel × portrait/landscape; WebKit for Safari, Chromium for Chrome/Android). The same matrix + mock power the dev-only `/screenshots` contact sheet (`bun run screenshots`). Browsers installed via `bunx playwright install chromium webkit`. |
-| `storybook` | 10.5.6 | Component explorer | The browsable design-system docs (`bun run storybook`, port **6006**; `bun run build-storybook` → `storybook-static/`). Stories live beside their components as `*.stories.tsx`; the `Foundations/*` MDX pages are in `.storybook/docs/`. |
+| `storybook` | 10.5.6 | Component explorer | The browsable design-system docs, published at **https://aether.andrewbaldock.com/storybook**. `bun run storybook` (port **6006**) for dev; `bun run build-storybook` → `storybook-static/` for a standalone build. Stories live beside their components as `*.stories.tsx`; the `Foundations/*` MDX pages are in `.storybook/docs/`. |
 | `@storybook/react-vite` | 10.5.6 | Storybook framework | Reuses the app's own `vite.config.ts`, so a story renders through the real React + Tailwind v4 pipeline against the real `@theme` tokens. Nothing is re-declared for Storybook. |
 | `@storybook/addon-docs` | 10.5.6 | Autodocs + MDX | Prop tables generated from the TS types (`reactDocgen: "react-docgen-typescript"`), plus the MDX docs pages. |
 | `@storybook/addon-themes` | 10.5.6 | Theme toolbar | `withThemeByClassName` flips the same `.dark` class on `<html>` that `useTheme` flips in the app — every story previews in both themes. |
@@ -73,6 +73,22 @@ source. See [ARCHITECTURE.md](./ARCHITECTURE.md#two-runtimes).
 `process.env.STORYBOOK` is set — a docs site has no business registering the app's service
 worker. The check is *truthy*, not `=== "1"`: the npm scripts export `STORYBOOK=1`, but
 Storybook's own CLI overwrites the variable with `"true"` before it loads the config.
+
+**Storybook ships inside the app deploy, at `/storybook`.** No second Vercel project and no
+subdomain: `build:vercel` runs the normal build and then `storybook build -o dist/storybook`, so
+the static explorer lands in the same output directory. Storybook's own output uses relative asset
+paths, so it works from any subpath unchanged. Two things make this work, and both are easy to
+break:
+
+- **The SPA catch-all rewrite must exclude it.** `vercel.json` negatively lookaheads `storybook`
+  alongside `assets/`; otherwise every Storybook URL would be rewritten to the app's `index.html`.
+  A second rewrite maps bare `/storybook` → `/storybook/index.html` so the missing trailing slash
+  can't 404.
+- **The service worker must not claim it.** `navigateFallbackDenylist` includes `/^\/storybook/`.
+  Without it, a visitor who already has the SW installed would navigate to `/storybook` and be
+  served the *precached app shell* — meaning Storybook would look broken for returning visitors
+  only, while working perfectly in a fresh browser. Storybook is built after `vite build`, so
+  Workbox never sees those 70 files and the precache manifest stays app-only (11 entries).
 
 ### TypeScript config layout
 

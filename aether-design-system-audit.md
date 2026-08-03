@@ -165,7 +165,7 @@ Same evidence discipline as above: every claim below was verified by running it,
 - Receipt: `frontend/.storybook/{main.ts,preview.tsx}`, `frontend/.storybook/docs/{Introduction.mdx,DesignTokens.mdx}`, `*.stories.tsx` beside each component. Verified: `bun run build-storybook` succeeds; all 18 story renders (9 stories × 2 themes) load with **zero console errors**.
 - Why it's design-system-worthy: This is the artifact that was missing — "can I see your design system" now has an answer that isn't a screenshot.
 - Confidence: solid
-- **Not yet true:** not deployed to a public URL. Say "a browsable Storybook" — **not** "a published design system" — until it's hosted.
+- **Deployed** at https://aether.andrewbaldock.com/storybook — folded into the app's own Vercel build (`build:vercel` → `dist/storybook`) rather than a separate project or subdomain. The honest claim is "a browsable, published Storybook" — still **not** "a published npm package".
 
 ### Data-viz token ramp (partially closes the "stray hex" gap)
 - What: Chart series colours were 12 hardcoded hex values in `ChartWidget.tsx` (two of them copy-pasted duplicates of the `--neon-pink`/`--neon-cyan` token values) plus a runtime HSL generator for pie slices. Replaced with an eight-slot categorical ramp, `--viz-1..8`, defined per theme in `index.css` and consumed as `var(--viz-N)`. Recharts writes those straight into SVG `fill`/`stroke`, so charts re-colour on a theme flip with no JS and no re-render.

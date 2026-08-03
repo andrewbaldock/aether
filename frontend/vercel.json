@@ -1,6 +1,6 @@
 {
   "framework": "vite",
-  "buildCommand": "bun install && bun run build",
+  "buildCommand": "bun install && bun run build:vercel",
   "outputDirectory": "dist",
   "rewrites": [
     {
@@ -8,7 +8,11 @@
       "destination": "https://aether-ab-api.fly.dev/api/:path*"
     },
     {
-      "source": "/((?!assets/|favicon\\.svg).*)",
+      "source": "/storybook",
+      "destination": "/storybook/index.html"
+    },
+    {
+      "source": "/((?!assets/|storybook|favicon\\.svg).*)",
       "destination": "/index.html"
     }
   ]
