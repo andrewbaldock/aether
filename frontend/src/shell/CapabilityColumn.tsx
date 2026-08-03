@@ -226,9 +226,11 @@ function CapabilityChip({
       ? "border-border bg-elevated text-content hover:text-neon-pink"
       : "border-transparent text-content-muted hover:border-border hover:bg-elevated hover:text-neon-pink active:border-border active:bg-elevated active:text-neon-pink focus-visible:border-border focus-visible:bg-elevated focus-visible:text-neon-pink focus-visible:outline-none";
   } else if (filled && active) {
-    // Active content tab: soft grey-green fill (lighter sage in dark) so the
-    // showing view reads as "selected" with the brand's grey-green, not a flat grey.
-    tone = "border-content-subtle bg-[#d5ebd5] dark:bg-[#2a3a2a] text-content";
+    // Active content tab: soft grey-green fill so the showing view reads as
+    // "selected" in the brand's grey-green rather than a flat grey. The sage cast
+    // in dark now lives in the --selected-tint token, not in a `dark:` variant
+    // here — this component doesn't need to know which theme it's in.
+    tone = "border-content-subtle bg-selected-tint text-content";
   } else if (filled) {
     tone =
       "border-border-strong bg-elevated text-content hover:bg-border-strong";
@@ -273,7 +275,7 @@ function CapabilityChip({
         <span
           role="img"
           aria-label="New content"
-          className="aether-unseen-dot absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[#fd40a4]"
+          className="aether-unseen-dot absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-brand-pink"
         />
       )}
     </button>

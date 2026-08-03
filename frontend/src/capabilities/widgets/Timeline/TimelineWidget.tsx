@@ -259,13 +259,13 @@ function SpineMarker({ icon }: { icon?: string }) {
   if (!Icon) {
     // Plain dot, centred on the spine (matches the pre-icon look).
     return (
-      <span className="absolute -left-[1.4rem] top-1 h-2.5 w-2.5 rounded-full border-2 border-[#ff2e9a] bg-surface" />
+      <span className="absolute -left-[1.4rem] top-1 h-2.5 w-2.5 rounded-full border-2 border-neon-pink bg-surface" />
     );
   }
 
   // Pink ring badge with the icon centred inside, sitting on the spine line.
   return (
-    <span className="absolute -left-7.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#ff2e9a] bg-surface text-[#ff2e9a]">
+    <span className="absolute -left-7.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-neon-pink bg-surface text-neon-pink">
       <Icon size={11} strokeWidth={2.25} />
     </span>
   );

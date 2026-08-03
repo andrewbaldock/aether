@@ -95,10 +95,6 @@ to recreate.
 
 Kept explicit so the docs stay trustworthy:
 
-- **Spacing is inherited, not authored.** Components use Tailwind's default 4px
-  rhythm consistently, but there is no named spacing scale of Aether's own.
-- **A few raw hex stops remain** — the brand gradient in `StarterPrompts` and
-  `ChatPanel` (`from-[#fd40a4]`) hasn't been promoted to a token.
 - **`AdminTabs` is not a compound component.** It's a `.map()` over a tab array,
   and it's coupled to the router, which is why it has no story yet.
 - **No visual-regression suite.** The a11y addon runs axe per story; there is no

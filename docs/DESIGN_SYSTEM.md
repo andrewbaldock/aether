@@ -56,8 +56,23 @@ changes; only the value it resolves to flips. That indirection is the entire the
   defines a 4-step text-size scale (`xs:14 / sm:15 / md:16 / lg:18`) applied via the root
   `font-size` — every rem-based Tailwind size scales with it — plus a font-face stack
   (system/Geist/Georgia/Lora).
-- **Spacing:** no separate spacing token file — components use Tailwind's default 4px-based scale
-  (`px-4`, `gap-1`, …) directly. Consistent in practice; not a bespoke token set.
+- **Spacing:** one authored variable, `--spacing: 0.25rem`, declared in the `@theme` block.
+  Tailwind v4 compiles *every* spacing utility against it — `p-4` emits
+  `calc(var(--spacing) * 4)`, `gap-2` emits `calc(var(--spacing) * 2)`, and likewise for margin,
+  width, height, inset, and translate. So the app's entire rhythm is a single number: change it and
+  everything rescales in proportion, with no component edits.
+
+  4px is *chosen*, not merely inherited — it's the smallest step that divides the 44px minimum
+  touch target evenly (11 steps) and keeps the common sizes on whole pixels. It's declared
+  explicitly even though it equals Tailwind's default, because an undeclared default is not a
+  decision: without the line, nothing records that the rhythm was considered and nothing tells the
+  next person where to change it.
+
+  > Named `--space-1..12` tokens were considered and **rejected**. They'd sit *beside* the
+  > utilities rather than behind them, so using them would mean migrating every component to
+  > arbitrary values (`p-[var(--space-4)]`) — more code, worse code — while `p-4` kept routing
+  > through `--spacing` anyway. Authoring the variable the framework already reads is the smaller
+  > and more honest change.
 
 > **Rule of thumb:** a new color needs an entry in both the `@theme` block and both `:root`/`.dark`
 > value blocks. Never reach for a raw hex in a component — if the token you need doesn't exist,
@@ -102,8 +117,32 @@ Two related rules the chart follows:
 > dynamic (`bg-viz-${i}`) which Tailwind can't see statically either. Plain `:root`/`.dark` custom
 > properties give the same indirection with nothing to tree-shake.
 
-Live examples: the **Data-viz ramp** section of `/style-guide`, and **Widgets/Chart palette** in
-Storybook. Both read the ramp through `VIZ_RAMP` in
+### The knowledge-graph entity palette (`--kg-*`)
+
+A *second* categorical set, for the five entity types in the graph. Separate from `--viz-*` because
+it answers a different question ("what kind of thing is this node") and because two slots are
+load-bearing brand: `kg-person` is `--neon-pink`, `kg-concept` is the wordmark's mid gradient stop.
+
+The previous values lived as hex literals in `colors.ts` and were tuned for the dark canvas. Measured
+against white they failed: `place` 2.06:1, `org` 2.03:1, `event` 1.92:1 — visibly washed out. Those
+three were re-stepped; the two brand ties already passed and are untouched.
+
+**One set serves both themes** — declared once under `:root`, inherited by `.dark`. That's a measured
+result, not a shortcut: requiring a colour to clear 3:1 on white *and* on the near-black canvas pins
+it to a narrow mid-lightness band, and searching both surfaces jointly collapsed the feasible region
+to a single palette. (Contrast `--viz-*`, where the two surfaces genuinely want different steps.)
+
+Validated on both surfaces under **all pairs** — the harder test, correct for a force graph where any
+two nodes can drift adjacent: band, chroma and contrast pass; normal-vision floor ΔE 15.4; worst CVD
+pair `concept`↔`place` ΔE 7.0 (deutan).
+
+> ⚠️ That 7.0 is in the **6–8 floor band**, legal *only* alongside secondary encoding. The graph has
+> it — every node renders a lucide icon, a text label, and an `aria-label`. Five hues cannot clear
+> ΔE 8 all-pairs (no ordering of five can), so those labels are not a nicety: they are what makes the
+> palette valid. Removing them would retroactively invalidate it.
+
+Live examples: the **Data-viz ramp** and **Knowledge-graph entities** sections of `/style-guide`, and
+**Widgets/Chart palette** in Storybook. Both read the ramp through `VIZ_RAMP` in
 [`parseTokens.ts`](../frontend/src/capabilities/widgets/StyleGuide/parseTokens.ts), which parses
 `index.css` itself — so neither can drift from the CSS.
 

@@ -749,7 +749,7 @@ export function ChatPanel() {
             onDrop={handleDrop}
             className={`relative rounded-lg border bg-elevated transition-colors ${
               dragDepth > 0
-                ? "border-[#c35ed1] ring-2 ring-[#c35ed1]/40"
+                ? "border-brand-violet ring-2 ring-brand-violet/40"
                 : isLoading
                   ? "aether-loading-border"
                   : "border-border-strong focus-within:border-content-subtle"
@@ -864,7 +864,7 @@ export function ChatPanel() {
                     if (isStop) abortStream();
                   }}
                   aria-label={isStop ? "Stop generating" : "Send message"}
-                  className="relative flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-r from-[#fd40a4] to-[#c35ed1] text-2xl leading-none text-white transition hover:brightness-110 disabled:opacity-40 max-md:h-11 max-md:w-11"
+                  className="relative flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-r from-brand-pink to-brand-violet text-2xl leading-none text-white transition hover:brightness-110 disabled:opacity-40 max-md:h-11 max-md:w-11"
                   // Disabled only when there's nothing to do: not in stop mode and
                   // nothing staged (empty field + no attachments). Stop mode is
                   // always actionable.

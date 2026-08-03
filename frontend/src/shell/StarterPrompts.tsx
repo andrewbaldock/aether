@@ -96,7 +96,7 @@ export function StarterPrompts({ onPick, disabled }: StarterPromptsProps) {
           disabled={disabled}
           onClick={() => onPick(prompt)}
           style={{ "--i": i } as React.CSSProperties}
-          className="starter-pill rounded-full border border-border bg-surface px-4 py-2 text-sm text-content transition-colors hover:border-transparent hover:bg-gradient-to-r hover:from-[#fd40a4] hover:to-[#c35ed1] hover:text-white disabled:pointer-events-none disabled:opacity-50"
+          className="starter-pill rounded-full border border-border bg-surface px-4 py-2 text-sm text-content transition-colors hover:border-transparent hover:bg-gradient-to-r hover:from-brand-pink hover:to-brand-violet hover:text-white disabled:pointer-events-none disabled:opacity-50"
         >
           {prompt}
         </button>

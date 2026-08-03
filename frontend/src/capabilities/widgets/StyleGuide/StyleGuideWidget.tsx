@@ -20,7 +20,12 @@ import {
   VOCABULARY_ICON_NAMES,
 } from "../vocabularyIcon";
 import { WidgetLoading } from "../WidgetLoading";
-import { TOKEN_FAMILIES, type TokenEntry, VIZ_RAMP } from "./parseTokens";
+import {
+  KG_PALETTE,
+  TOKEN_FAMILIES,
+  type TokenEntry,
+  VIZ_RAMP,
+} from "./parseTokens";
 
 // Alphabetized once at module load for the icon-vocabulary grid.
 const ICON_NAMES = [...VOCABULARY_ICON_NAMES].sort();
@@ -126,6 +131,30 @@ export function StyleGuideWidget(_props: { widget: Widget }) {
         </div>
       </Section>
 
+      <Section title="Knowledge-graph entities">
+        <p className="mb-3 max-w-2xl text-xs text-content-muted">
+          Identity colours for the five entity types — a second categorical set,
+          separate from the chart ramp because it answers a different question.
+          Two slots are brand ties: <code className="text-content">person</code>{" "}
+          is the neon pink, <code className="text-content">concept</code> is the
+          wordmark&rsquo;s mid-stop. One set serves both themes here, which is a
+          measured result: pinning each colour to clear 3:1 on white{" "}
+          <em>and</em> on the near-black canvas collapses the feasible region to
+          a single palette.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {KG_PALETTE.map((token, i) => (
+            <Swatch
+              key={token.name}
+              token={token}
+              index={i}
+              theme={theme}
+              cssVar={`--${token.name}`}
+            />
+          ))}
+        </div>
+      </Section>
+
       <Section title="Typography">
         <div className="flex flex-col gap-4 rounded-lg border border-border bg-surface-raised p-4">
           <p className="font-display text-2xl font-semibold text-content">
@@ -198,6 +227,18 @@ export function StyleGuideWidget(_props: { widget: Widget }) {
       </Section>
 
       <Section title="Spacing rhythm">
+        <p className="mb-3 max-w-2xl text-xs text-content-muted">
+          Authored as a single variable —{" "}
+          <code className="text-content">--spacing: 0.25rem</code> in the{" "}
+          <code className="text-content">@theme</code> block. Tailwind v4
+          compiles every spacing utility against it (
+          <code className="text-content">p-4</code> emits{" "}
+          <code className="text-content">calc(var(--spacing) * 4)</code>), so
+          the whole app’s rhythm is one number: change it and everything below —
+          and everything on every other page — rescales in proportion, with no
+          component edits. 4px is the smallest step that divides the 44px
+          minimum touch target evenly.
+        </p>
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-raised p-4">
           {SPACING_STEPS.map((px) => (
             <div key={px} className="flex items-center gap-3">

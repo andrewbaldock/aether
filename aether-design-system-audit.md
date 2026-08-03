@@ -187,8 +187,29 @@ Same evidence discipline as above: every claim below was verified by running it,
 - Confidence: solid
 
 ### Still not true (the gaps above that remain open)
-- **No authored spacing scale.** Unchanged — the `GAPS` entry above still stands verbatim.
+### Spacing is now authored (supersedes the "Spacing scale" and "No authored spacing scale" entries above)
+- What: `--spacing: 0.25rem` is declared in the `@theme` block. Tailwind v4 compiles *every* spacing utility against that one variable — `p-4` emits `calc(var(--spacing) * 4)`, `gap-2` emits `calc(var(--spacing) * 2)`, and the same for margin, width, height, inset, translate. The app's entire rhythm is a single number.
+- Receipt: `frontend/src/index.css` (`--spacing` in `@theme`). Verified by turning the knob: rebuilding with `0.5rem` changed the emitted `--spacing` and every utility rescaled through the existing `calc()`, with zero component edits.
+- Why it's design-system-worthy: "Change one number, the whole interface rescales" is demonstrable in ten seconds, which beats a table of named steps.
+- Confidence: solid
+- **Honest framing:** the *value* still matches Tailwind's default. The claim is "the rhythm is authored and has one knob," **not** "I designed a bespoke spacing scale." Named `--space-1..12` tokens were considered and rejected — they'd sit beside the utilities rather than behind them, so using them would mean migrating every component to `p-[var(--space-4)]`: more code, worse code, and `p-4` would still route through `--spacing`. That reasoning is the interview answer, not the token count.
+
+### Raw hex eliminated from component classNames
+- What: Every arbitrary-value colour class is gone. The brand gradient stops became `--brand-pink`/`--brand-violet` (`from-brand-pink to-brand-violet`), three `#ff2e9a` literals in `TimelineWidget` collapsed onto the existing `--neon-pink`, and `CapabilityColumn`'s `bg-[#d5ebd5] dark:bg-[#2a3a2a]` became a single `bg-selected-tint` token.
+- Receipt: `grep -rnoE '\b(from|to|via|bg|text|border|fill|stroke|shadow|ring)-\[#[0-9a-fA-F]{3,8}\]' frontend/src` returns **nothing**. Token declarations and all eight new utilities confirmed present in the built CSS (`dist/assets/*.css`), not just in source.
+- Why it's design-system-worthy: The `dark:bg-[#2a3a2a]` one is the real find — a hardcoded `dark:` variant meant that component *knew which theme it was in*, which contradicts the whole token claim. Moving it into a token removed the only place that was true.
+- Confidence: solid
+
+### Knowledge-graph entity palette re-stepped
+- What: The five entity-type colours moved out of `colors.ts` hex literals into `--kg-*` tokens, and three of the five were re-stepped. The file previously asserted the values "stay constant across light/dark ... chosen to read on both canvases"; measured against white, `place`/`org`/`event` sat at **2.06:1 / 2.03:1 / 1.92:1** — washed out. `person` (= `--neon-pink`) and `concept` (= the wordmark's mid stop) already passed and are unchanged, so both brand ties survive.
+- Receipt: `frontend/src/index.css` (`--kg-*` block), `frontend/src/capabilities/widgets/KnowledgeGraph/colors.ts`, `parseTokens.ts` (`KG_PALETTE`), two new tests pinning the brand ties and the theme-invariance. Verified in-browser: tokens resolve and an SVG `fill="var(--kg-event)"` paints `rgb(14,141,99)`.
+- Measured, not asserted: now passes band, chroma, contrast ≥ 3:1 and the normal-vision floor (ΔE 15.4) on **both** surfaces under the **all-pairs** test — the harder one, and the right one for a force graph where any two nodes can drift adjacent.
+- Why it's design-system-worthy: the interesting part is the constraint discovery. A joint search over both surfaces showed the feasible region **collapses to a single palette** — pinning a colour to clear 3:1 on white *and* on near-black confines it to a narrow mid-lightness band. So unlike `--viz-*`, a distinct "dark step" genuinely doesn't exist here. That's the opposite conclusion from the chart, reached the same way, which is the point: the method decides, not the habit.
+- Confidence: solid
+- **Honest caveat — do not skip this one in an interview:** worst CVD pair (`concept`↔`place`, deutan) is **ΔE 7.0**, inside the 6–8 floor band, which is legal *only* alongside secondary encoding. The graph has it (icon + text label + `aria-label` per node) and five hues cannot clear ΔE 8 all-pairs — no ordering of five can. Claim "validated, and the labels are load-bearing," **not** "fully colourblind-safe on colour alone."
+
+### Still not true (the gaps that remain open)
 - **No third theme.** Still light/dark only.
 - **No compound-component API.** `AdminTabs` is still a `.map()`, and it's coupled to the router — which is why it has no story yet.
-- **Brand gradient hex remains.** `from-[#fd40a4]` in `StarterPrompts`/`ChatPanel` is still raw; only the *chart* palette was tokenized.
+- **Justified, not tokenized:** `AgentDiagram/nodes.ts` (a deliberate synthwave palette for an illustrative diagram, not UI chrome) and `BigsailLoading.tsx` (already uses `var(--neon-pink, #ff2e9a)` — the correct pattern, hex only as an SVG fallback).
 - **No visual-regression suite.** The a11y addon runs axe per story; there is no snapshot diffing (no Chromatic).

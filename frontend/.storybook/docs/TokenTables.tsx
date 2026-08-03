@@ -1,4 +1,5 @@
 import {
+  KG_PALETTE,
   TOKEN_FAMILIES,
   VIZ_RAMP,
 } from "../../src/capabilities/widgets/StyleGuide/parseTokens";
@@ -67,6 +68,51 @@ export function ColorTokens() {
     </div>
   );
 }
+
+export function KgPalette() {
+  return (
+    <table className="w-full text-left text-sm">
+      <thead>
+        <tr className="text-xs uppercase tracking-wide text-content-subtle">
+          <th className="py-1 pr-4 font-medium">Entity</th>
+          <th className="py-1 pr-4 font-medium">Value (both themes)</th>
+          <th className="py-1 font-medium">Was</th>
+        </tr>
+      </thead>
+      <tbody>
+        {KG_PALETTE.map((slot) => (
+          <tr key={slot.name} className="border-t border-border">
+            <td className="py-2 pr-4 font-mono text-xs text-content">
+              var(--{slot.name})
+            </td>
+            <td className="py-2 pr-4">
+              <span className="flex items-center gap-2">
+                <Swatch value={slot.light} />
+                <code className="text-xs text-content-muted">{slot.light}</code>
+              </span>
+            </td>
+            <td className="py-2">
+              <span className="flex items-center gap-2">
+                <Swatch value={KG_PREVIOUS[slot.name] ?? slot.light} />
+                <code className="text-xs text-content-faint">
+                  {KG_PREVIOUS[slot.name] ?? "unchanged"}
+                </code>
+              </span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// The pre-2026-08 values, kept only so the docs can show the before/after. Not
+// used by anything that renders.
+const KG_PREVIOUS: Record<string, string | undefined> = {
+  "kg-place": "#16c2ff",
+  "kg-org": "#f5a623",
+  "kg-event": "#34d399",
+};
 
 export function VizRamp() {
   return (

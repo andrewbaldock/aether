@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TOKEN_FAMILIES, VIZ_RAMP } from "./parseTokens";
+import { KG_PALETTE, TOKEN_FAMILIES, VIZ_RAMP } from "./parseTokens";
 
 // Runs against the real index.css (?raw import) — if the parser or the CSS
 // structure drifts, this is what catches it.
@@ -7,7 +7,18 @@ describe("parseTokens", () => {
   const all = TOKEN_FAMILIES.flatMap((f) => f.tokens);
 
   it("finds every color token registered in @theme", () => {
-    expect(all).toHaveLength(18);
+    expect(all).toHaveLength(21);
+  });
+
+  // The gradient stops are the one family whose light and dark values match on
+  // purpose — a brand ramp is the same ramp on either surface. Asserted so a
+  // future "these are identical, collapse them" tidy-up has to be deliberate.
+  it("keeps the brand gradient stops identical across themes", () => {
+    const brand = all.filter((t) => t.name.startsWith("brand"));
+    expect(brand.map((t) => t.name)).toEqual(["brand-pink", "brand-violet"]);
+    for (const token of brand) {
+      expect(token.dark, `${token.name}`).toBe(token.light);
+    }
   });
 
   it("resolves a light and dark value for every token", () => {
@@ -45,6 +56,29 @@ describe("parseTokens", () => {
   it("keeps the viz ramp out of @theme (Tailwind v4 tree-shakes unused entries)", () => {
     const names = TOKEN_FAMILIES.flatMap((f) => f.tokens).map((t) => t.name);
     expect(names.filter((n) => n.startsWith("viz"))).toEqual([]);
+  });
+
+  // Pins the two brand ties. person/concept were left untouched while the other
+  // three slots were re-stepped for light-surface contrast; if a future palette
+  // change drifts them off the brand colours, that should be a decision, not a
+  // side effect of re-running a colour search.
+  it("keeps the knowledge-graph brand ties on their brand colours", () => {
+    const byName = new Map(KG_PALETTE.map((t) => [t.name, t]));
+    const neonPink = TOKEN_FAMILIES.flatMap((f) => f.tokens).find(
+      (t) => t.name === "neon-pink"
+    );
+    expect(KG_PALETTE).toHaveLength(5);
+    expect(byName.get("kg-person")?.light).toBe(neonPink?.light);
+    // The wordmark's mid gradient stop (see brand/Wordmark.tsx).
+    expect(byName.get("kg-concept")?.light).toBe("#b54bd0");
+  });
+
+  // Declared once under :root; .dark inherits through the cascade. The parser
+  // must report that as "same value", not as a missing dark step.
+  it("treats the graph palette as theme-invariant by inheritance", () => {
+    for (const slot of KG_PALETTE) {
+      expect(slot.dark, `${slot.name}`).toBe(slot.light);
+    }
   });
 
   it("documents that accent is an alias of neon-pink", () => {

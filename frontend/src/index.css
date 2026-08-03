@@ -21,6 +21,7 @@
   --color-surface-raised: var(--surface-raised);
   --color-elevated: var(--elevated);
   --color-selected: var(--selected);
+  --color-selected-tint: var(--selected-tint);
   --color-surface-overlay: var(--surface-overlay);
   --color-content: var(--content);
   --color-content-muted: var(--content-muted);
@@ -33,6 +34,19 @@
   --color-on-accent: var(--on-accent);
   --color-neon-pink: var(--neon-pink);
   --color-neon-cyan: var(--neon-cyan);
+  /* The two stops of the brand action gradient — Send button, starter-pill
+     hover, drop-target ring, unseen-content dot.
+     These carry the SAME value in both themes today (a brand ramp is the same
+     ramp on either surface), but they still route through the :root/.dark
+     indirection like every other colour token. That uniformity is the point:
+     the style guide, the Theme Lab, and any future theme can treat every token
+     identically instead of special-casing two of them — and if the gradient ever
+     does want a dark-mode step, the slot already exists.
+     Distinct from --neon-pink (#ff2e9a): that's the semantic ACCENT, the
+     "you can click this" colour. These are the gradient's own hues. Two similar
+     pinks, two different jobs — don't collapse them. */
+  --color-brand-pink: var(--brand-pink);
+  --color-brand-violet: var(--brand-violet);
   --color-danger-surface: var(--danger-surface);
   --color-danger-content: var(--danger-content);
   /* NOTE: the data-viz ramp (--viz-1..8, see :root below) is deliberately NOT
@@ -44,6 +58,24 @@
      Tailwind can't see statically anyway. So it lives in :root/.dark as a plain
      themed custom property: same indirection, same theme flip, nothing to
      tree-shake. */
+  /* Spacing rhythm. Tailwind v4 compiles EVERY spacing utility against this one
+     variable — `p-4` emits `calc(var(--spacing) * 4)`, `gap-2` emits
+     `calc(var(--spacing) * 2)`, and so on for padding, margin, gap, width,
+     height, inset, translate. So the app's whole rhythm is a single number, and
+     this is the knob: change it and every spacing utility rescales together, in
+     proportion, with no component edits.
+     4px is chosen, not merely inherited — it's the smallest step that still
+     divides the 44px minimum touch target evenly (11 steps) and lands the common
+     sizes on whole pixels. Declared explicitly even though it matches Tailwind's
+     default, because an undeclared default is not a decision: without this line
+     nothing in the repo records that the rhythm was ever considered, and nothing
+     tells the next person where to change it.
+     Named --space-* tokens were considered and rejected: they'd sit BESIDE the
+     utilities rather than behind them, so every component would need migrating
+     to arbitrary values (`p-[var(--space-4)]`) to use them — more code, worse
+     code, and the `p-4` utilities would still quietly route through --spacing. */
+  --spacing: 0.25rem;
+
   /* Space Grotesk — Aether's "voice" font for branded UI copy (font-display
      utility). Loaded in index.html. Falls back to the system stack. */
   --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
@@ -56,6 +88,7 @@
   --surface-raised: #ebf2eb; /* soft grey-green sidebar */
   --elevated: #eef3ee; /* hover fills / assistant bubble */
   --selected: #d6e3d6; /* active sidebar row — stronger than elevated */
+  --selected-tint: #d5ebd5; /* active capability chip — greener than --selected */
   --surface-overlay: #1a1020; /* dark tooltip even in light, for neon contrast */
   --content: #171717;
   --content-muted: #4a4458;
@@ -68,6 +101,8 @@
   --on-accent: #ffffff;
   --neon-pink: #ff2e9a;
   --neon-cyan: #16c2ff;
+  --brand-pink: #fd40a4; /* action-gradient start — NOT --accent */
+  --brand-violet: #c35ed1; /* action-gradient end */
   --danger-surface: #fee2e2;
   --danger-content: #b91c1c;
 
@@ -94,6 +129,32 @@
   --viz-6: #008300; /* green */
   --viz-7: #4a3aa7; /* violet */
   --viz-8: #e34948; /* red */
+
+  /* ── Knowledge-graph entity palette ─────────────────────────────────────────
+     Identity colours for the five entity types. A SECOND categorical palette,
+     separate from --viz-* because it answers a different question ("what kind of
+     thing is this node") and because two of its slots are load-bearing brand:
+     person is --neon-pink and concept is the wordmark's mid-stop.
+
+     Declared once here and NOT repeated under .dark — the cascade means the dark
+     theme inherits these. That is a measured result, not laziness: the set was
+     searched against BOTH surfaces at once, and the feasible region collapsed to
+     a single palette. Constraining a colour to clear 3:1 on white AND on the
+     near-black surface pins it to a narrow mid-lightness band, so a genuinely
+     distinct "dark step" doesn't exist here the way it does for --viz-*.
+     Validated on both surfaces (OKLab ΔE ×100, ALL pairs — the harder test, and
+     the right one for a force graph where any two nodes can drift adjacent):
+       lightness band · chroma · contrast ≥ 3:1 · normal-vision ΔE 15.4 — all pass
+       worst CVD pair concept↔place ΔE 7.0 (deutan)
+     That 7.0 sits in the 6–8 FLOOR band, which is legal only alongside secondary
+     encoding. The graph has it: every node renders a lucide icon, a text label,
+     and an aria-label, so colour is never the sole channel. Keep all three if you
+     touch this — dropping the labels would retroactively invalidate the palette. */
+  --kg-person: #ff2e9a; /* = --neon-pink (brand tie, deliberately unchanged) */
+  --kg-place: #429ec6; /* was #16c2ff — 2.06:1 on white, washed out */
+  --kg-concept: #b54bd0; /* = wordmark mid-stop (brand tie, unchanged) */
+  --kg-org: #c0852c; /* was #f5a623 — 2.03:1 on white */
+  --kg-event: #0e8d63; /* was #34d399 — 1.92:1 on white */
 }
 
 /* DARK — matches today's look, with the neon-pink accent swapped in for the old
@@ -104,6 +165,7 @@
   --surface-raised: #0a0a0a; /* neutral-950 */
   --elevated: #262626; /* neutral-800 */
   --selected: #383838; /* active sidebar row — stronger than elevated */
+  --selected-tint: #2a3a2a; /* active capability chip — sage, not neutral grey */
   --surface-overlay: #0a0a0a; /* neutral-950 */
   --content: #f5f5f5; /* neutral-100 */
   --content-muted: #a3a3a3; /* neutral-400 */
@@ -116,6 +178,8 @@
   --on-accent: #1a0a14; /* near-black, pink-tinted, for text on accent */
   --neon-pink: #ff2e9a;
   --neon-cyan: #16c2ff;
+  --brand-pink: #fd40a4; /* same in both themes — see the @theme note */
+  --brand-violet: #c35ed1;
   --danger-surface: rgb(127 29 29 / 0.4); /* red-900/40 */
   --danger-content: #fca5a5; /* red-300 */
 

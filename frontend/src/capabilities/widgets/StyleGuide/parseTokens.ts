@@ -40,6 +40,7 @@ const FAMILY_ORDER = [
   "Borders",
   "Accent",
   "Neon",
+  "Brand",
   "Danger",
   "Other",
 ];
@@ -48,7 +49,11 @@ function familyOf(name: string): string {
   // elevated/selected are surface fills; on-accent rides with accent.
   if (name === "elevated" || name === "selected") return "Surfaces";
   if (name === "on-accent") return "Accent";
-  if (name.startsWith("surface")) return "Surfaces";
+  // The gradient stops are their own family: they're brand hues, not semantic
+  // roles, and they don't flip between themes the way everything else does.
+  if (name.startsWith("brand")) return "Brand";
+  if (name.startsWith("surface") || name.startsWith("selected"))
+    return "Surfaces";
   if (name.startsWith("content")) return "Content";
   if (name.startsWith("border")) return "Borders";
   if (name.startsWith("accent")) return "Accent";
@@ -90,17 +95,28 @@ export const TOKEN_FAMILIES: TokenFamily[] = parse();
 // theme entries no utility references, and these are consumed as raw values by
 // recharts, never as classes (see the note in index.css). Same :root/.dark
 // indirection, so the same light/dark pair applies.
-function parseViz(): TokenEntry[] {
+function parseRamp(names: string[]): TokenEntry[] {
   const light = readValues(blockBody(/^:root \{/m));
   const dark = readValues(blockBody(/^\.dark \{/m));
-  const out: TokenEntry[] = [];
-  for (let n = 1; ; n++) {
-    const name = `viz-${n}`;
+  return names.flatMap((name) => {
     const lightValue = light.get(name);
-    if (!lightValue) break;
-    out.push({ name, light: lightValue, dark: dark.get(name) ?? "" });
-  }
-  return out;
+    if (!lightValue) return [];
+    // A slot absent from .dark isn't missing — it inherits :root through the
+    // cascade. The knowledge-graph palette is declared once on purpose.
+    return [{ name, light: lightValue, dark: dark.get(name) ?? lightValue }];
+  });
 }
 
-export const VIZ_RAMP: TokenEntry[] = parseViz();
+export const VIZ_RAMP: TokenEntry[] = parseRamp(
+  Array.from({ length: 8 }, (_, i) => `viz-${i + 1}`)
+);
+
+// The knowledge graph's entity-identity palette — a second categorical set,
+// separate from the chart ramp. Order matches the EntityType union.
+export const KG_PALETTE: TokenEntry[] = parseRamp([
+  "kg-person",
+  "kg-place",
+  "kg-concept",
+  "kg-org",
+  "kg-event",
+]);

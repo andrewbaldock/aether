@@ -16,7 +16,7 @@ const meta = {
           "",
           "**Motion** — each pill carries a `--i` index custom property; the `.starter-pill` keyframes read it to stagger the entrance. Same `--i` mechanism as the skeleton cascade in `CardShell`, which is what makes the two read as one motion language rather than two animations that happen to coexist.",
           "",
-          "**Note** — the hover gradient still uses raw hex stops (`from-[#fd40a4]`). That's the one place in the app that hasn't been promoted to a token; it's tracked, not defended.",
+          "**Note** — the hover gradient still uses raw hex stops (`from-brand-pink`). That's the one place in the app that hasn't been promoted to a token; it's tracked, not defended.",
         ].join("\n"),
       },
     },

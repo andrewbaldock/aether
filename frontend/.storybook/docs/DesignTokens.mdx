@@ -1,5 +1,11 @@
 import { Meta } from "@storybook/addon-docs/blocks";
-import { ColorTokens, FontFaces, TypeScale, VizRamp } from "./TokenTables";
+import {
+  ColorTokens,
+  FontFaces,
+  KgPalette,
+  TypeScale,
+  VizRamp,
+} from "./TokenTables";
 
 <Meta title="Foundations/Design Tokens" />
 
@@ -79,6 +85,44 @@ dynamic (`bg-viz-${i}`), which Tailwind can't see statically either. So they liv
 in `:root` / `.dark` as plain themed custom properties: same indirection, same
 theme flip, nothing to tree-shake. See **Widgets/Chart palette**.
 
+## Knowledge-graph entity palette
+
+A *second* categorical set, for the five entity types in the knowledge graph.
+Separate from the chart ramp because it answers a different question — "what kind
+of thing is this node" rather than "which series is this" — and because two of
+its slots are load-bearing brand: `person` is the neon pink, `concept` is the
+wordmark's mid gradient stop.
+
+The previous values were tuned for the dark canvas and measured badly on the
+light one: `place`, `org` and `event` sat at **2.06:1, 2.03:1 and 1.92:1** against
+white — visibly washed out. Those three were re-stepped; the two brand ties were
+already passing and are untouched.
+
+<div className="my-6">
+  <KgPalette />
+</div>
+
+**One set serves both themes, and that's a measured result rather than a
+shortcut.** Unlike `--viz-*`, requiring each colour to clear 3:1 on white *and*
+on the near-black canvas pins it to a narrow mid-lightness band — searching both
+surfaces jointly collapsed the feasible region to a single palette. So these are
+declared once under `:root` and the dark theme inherits them.
+
+Validated on both surfaces under **all pairs** — the harder test, and the right
+one for a force graph where any two nodes can drift adjacent:
+
+| Check | Result |
+|---|---|
+| Lightness band, chroma, contrast ≥ 3:1 | pass, both surfaces |
+| Normal-vision floor (≥ 15) | ΔE 15.4 |
+| CVD separation (target ≥ 8) | ΔE 7.0 — `concept`↔`place`, deutan |
+
+That 7.0 is in the **6–8 floor band**, which is legal *only* alongside secondary
+encoding. The graph has it: every node renders a lucide icon, a text label, and
+an `aria-label`, so colour is never the sole channel. Five hues cannot clear ΔE 8
+all-pairs — no ordering of five can — so the labels aren't a nicety here, they're
+what makes the palette valid. Keep them.
+
 ## Typography
 
 A four-step scale, exposed to the user as a setting rather than hidden as a
@@ -98,9 +142,30 @@ Grotesk) is deliberately *not* — it's the app's voice, not a preference.
   <FontFaces />
 </div>
 
-## Spacing — the honest gap
+## Spacing
 
-There is no authored spacing scale. Components use Tailwind's default 4px rhythm
-(`px-4`, `gap-2`, `p-5`) consistently, and the result is visually coherent, but
-that coherence is inherited from the framework default rather than a decision
-Aether made and named. Listed here rather than papered over.
+One variable, `--spacing: 0.25rem`, declared in the `@theme` block. Tailwind v4
+compiles *every* spacing utility against it:
+
+```css
+.p-4   { padding: calc(var(--spacing) * 4) }
+.gap-2 { gap:     calc(var(--spacing) * 2) }
+```
+
+…and the same for margin, width, height, inset, and translate. **The app's whole
+rhythm is a single number.** Change it and everything rescales in proportion,
+with no component edits — which is the demo: turn one knob, watch the entire
+interface breathe in or out.
+
+4px is chosen, not merely inherited — it's the smallest step that divides the
+44px minimum touch target evenly (11 steps) and keeps common sizes on whole
+pixels. It's declared explicitly even though it matches Tailwind's default,
+because an undeclared default is not a decision: without that line nothing
+records that the rhythm was ever considered, and nothing tells the next person
+where to change it.
+
+Named `--space-1..12` tokens were considered and rejected. They'd sit *beside*
+the utilities rather than behind them, so using them would mean migrating every
+component to arbitrary values (`p-[var(--space-4)]`) — more code, worse code —
+while `p-4` kept routing through `--spacing` regardless. Authoring the variable
+the framework already reads is the smaller and more honest change.
