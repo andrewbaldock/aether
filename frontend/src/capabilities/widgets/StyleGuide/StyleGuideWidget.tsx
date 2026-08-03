@@ -6,6 +6,7 @@ import { AdminPage } from "../../../shell/AdminPage";
 import { Button } from "../../../shell/Button";
 import { ConfirmDialog } from "../../../shell/ConfirmDialog";
 import { IconButton } from "../../../shell/IconButton";
+import { Input, Textarea } from "../../../shell/Input";
 import { ModelPicker } from "../../../shell/ModelPicker";
 import { ProseMarkdown } from "../../../shell/ProseMarkdown";
 import { Tooltip } from "../../../shell/Tooltip";
@@ -281,6 +282,55 @@ export function StyleGuideWidget(_props: { widget: Widget }) {
           <Button variant="primary" disabled>
             Disabled
           </Button>
+        </div>
+      </Section>
+
+      <Section title="Text fields">
+        <p className="mb-3 max-w-2xl text-xs text-content-muted">
+          Two variants, and the distinction is deliberate:{" "}
+          <code className="text-content">field</code> is a form control in a
+          dialog or panel; <code className="text-content">inline</code> is for
+          renaming a value in place, where the fill has to say &ldquo;the text
+          you were just reading is now editable&rdquo;. Flattening them into one
+          look would make an inline rename read as a form appearing out of
+          nowhere.
+        </p>
+        <div className="flex flex-col gap-4 rounded-lg border border-border bg-surface-raised p-4">
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="sg-field"
+              className="text-xs font-medium text-content-muted"
+            >
+              field
+            </label>
+            <Input id="sg-field" placeholder="Describe the chart…" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="sg-inline"
+              className="text-xs font-medium text-content-muted"
+            >
+              inline
+            </label>
+            <Input
+              id="sg-inline"
+              variant="inline"
+              defaultValue="The Apollo program"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="sg-textarea"
+              className="text-xs font-medium text-content-muted"
+            >
+              Textarea — resize-none by default
+            </label>
+            <Textarea
+              id="sg-textarea"
+              rows={3}
+              placeholder="Describe the chart you want…"
+            />
+          </div>
         </div>
       </Section>
 

@@ -14,8 +14,35 @@ const preview: Preview = {
     // backgrounds addon would fight it with a hardcoded white/black.
     backgrounds: { disable: true },
     options: {
+      // Explicit, because the default is file-discovery order — which put
+      // ExploreMenu above Button and buried AdminPage at the bottom. A design
+      // system's sidebar IS its table of contents: read top to bottom it should
+      // go principles → tokens → primitives → composed shells.
       storySort: {
-        order: ["Foundations", ["Introduction", "Design Tokens"], "Shell"],
+        order: [
+          "Foundations",
+          [
+            "Introduction",
+            "Design Tokens",
+            "Typeset engine",
+            "Loading states",
+            "Empty states",
+          ],
+          "Shell",
+          [
+            "Button",
+            "Input",
+            "IconButton",
+            "Tooltip",
+            "ConfirmDialog",
+            "ExploreMenu",
+            "ModelPicker",
+            "StarterPrompts",
+            "AdminPage",
+          ],
+          "Widgets",
+          ["CardShell", "SkeletonCard", "Chart palette"],
+        ],
       },
     },
   },

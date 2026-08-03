@@ -1,5 +1,6 @@
 import { RotateCcw } from "lucide-react";
 import { useEffect, useId, useState } from "react";
+import { Textarea } from "../../../shell/Input";
 import type { Card } from "./cards";
 import { cardSummarySeed, useCardRegenerate } from "./useCardRegenerate";
 
@@ -52,7 +53,7 @@ export function CardBack({
           >
             What this {nounFor(card)} shows — edit to regenerate
           </label>
-          <textarea
+          <Textarea
             id={promptFieldId}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -61,7 +62,6 @@ export function CardBack({
             onPointerDown={(e) => e.stopPropagation()}
             rows={3}
             placeholder={`Describe the ${nounFor(card)} you want…`}
-            className="w-full resize-none rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-content placeholder:text-content-faint focus:border-border-strong focus:outline-none"
           />
           <div className="mt-2 flex justify-end">
             <button

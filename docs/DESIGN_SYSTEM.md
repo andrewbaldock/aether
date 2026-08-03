@@ -297,6 +297,30 @@ Two things worth knowing:
 
 `buttonClass(variant, extra)` is exported for the rare button that genuinely can't be this component.
 
+### Text fields
+
+`shell/Input.tsx` exports `Input` and `Textarea`. Found by the same audit as `Button`: **six text
+fields across four files, no two styled alike**.
+
+Unlike the buttons, the fix was *not* to force one look. Two of those fields were doing a different
+job, so both treatments survive as named variants:
+
+| Variant | Where | What the styling says |
+|---|---|---|
+| `field` (default) | dialogs, panels (`EditWidgetDialog`, `CardBack`) | "this is a form control" — bordered on the page surface |
+| `inline` | sidebar rename, chat title | "the text you were reading is now editable" — filled + ring |
+
+An inline rename with a form border reads as a form that appeared from nowhere; a dialog field with
+a filled background reads as disabled.
+
+**Two things deliberately stay raw**, both noted in source so the next person doesn't "fix" them:
+the chat composer `<textarea>` (transparent and borderless — the box around it owns the border,
+loading animation, and drop ring) and the hidden `<input type="file">` (no field styling at all,
+clicked programmatically).
+
+`Textarea` defaults to `resize-none`: every one lives in a sized container where a drag handle
+breaks the layout. `inputClass(variant, extra)` is exported for the rare field that can't be these.
+
 ### Icon buttons
 
 Every icon-only button is the shared `IconButton`

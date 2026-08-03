@@ -25,6 +25,7 @@ import { track } from "../lib/analytics";
 import { useAgentEvents } from "./AgentEventContext";
 import { ACCEPTED_TYPES, filesToAttachments } from "./attachments";
 import { ICON_BUTTON_CLASS, IconButton } from "./IconButton";
+import { Input } from "./Input";
 import { ModelPicker } from "./ModelPicker";
 import { ProseMarkdown } from "./ProseMarkdown";
 import { useSessionContext } from "./SessionContext";
@@ -813,6 +814,9 @@ export function ChatPanel() {
             />
             {/* Attach (+) button — bottom-left. Opens the hidden file picker;
                 images can also be pasted or dropped anywhere in the box. */}
+            {/* Deliberately a raw <input>, not the shared <Input>: this is a
+                hidden file picker, not a text field — it carries none of the
+                field styling and exists only to be clicked programmatically. */}
             <input
               ref={fileInputRef}
               type="file"
@@ -958,13 +962,14 @@ function ConversationTitle({
   if (editing) {
     return (
       <div className="aether-titlebar-texture relative flex h-11.25 items-center justify-center border-b border-border px-4">
-        <input
+        <Input
           ref={inputRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
           onKeyDown={handleKey}
-          className="w-full max-w-sm rounded-md bg-elevated px-3 py-1 text-[0.9375rem] text-content outline-none ring-1 ring-border-strong text-center"
+          variant="inline"
+          className="max-w-sm py-1 text-center text-[0.9375rem]"
         />
       </div>
     );

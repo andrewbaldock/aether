@@ -6,7 +6,7 @@ import { Meta } from "@storybook/addon-docs/blocks";
 
 Aether is a conversational explorer: you ask a question, and the answer arrives
 as a canvas of widgets — charts, tables, timelines, image grids, a force-directed
-knowledge graph — beside the prose. Five widget types, two themes, one shell.
+knowledge graph — beside the prose. Five widget types, two themes, two shells.
 
 This Storybook documents the parts that are genuinely *shared*. It is built from
 the app's own `vite.config.ts` and imports the app's own `src/index.css`, so
@@ -59,16 +59,24 @@ Because the delay lives in CSS and the index is just a number the component
 hands over, the two read as one system rather than two animations that happen to
 coexist. See **Widgets/SkeletonCard** and **Shell/StarterPrompts**.
 
-## One shell, five widgets
+## Two shells
 
-`CardShell` is the single wrapper every card on the canvas renders through. It
-owns the drag strip, title, action cluster, skeleton entrance, and the 3D flip
-that reveals a widget's JSON spec. The component inside it is a dispatcher that
-renders only type-specific *content*.
+The system has exactly two composed shells, and between them they own all the
+chrome in the app.
 
-So a new widget type implements its content and inherits its entire chrome — and
-the flip, notoriously fiddly to get right in a `preserve-3d` scene, is
-implemented exactly once. See **Widgets/CardShell**.
+**`CardShell`** is the single wrapper every card on the Bigsail canvas renders
+through. It owns the drag strip, title, action cluster, skeleton entrance, and
+the 3D flip that reveals a widget's JSON spec. The component inside it is a
+dispatcher that renders only type-specific *content* — so a new widget type
+implements its content and inherits its entire chrome, and the flip (notoriously
+fiddly in a `preserve-3d` scene) is implemented exactly once. See
+**Widgets/CardShell**, which shows all five capabilities in the same shell.
+
+**`AdminPage`** does the same job for the utility pages — Welcome, Settings,
+Health, Metrics, Style Guide, Theme Lab. Before it existed, each page rolled its
+own scroll container, width, padding, tab slot, and heading size, so *navigating
+between them made the column jump*. Each page looked fine alone; the system only
+failed in the transition. See **Shell/AdminPage**.
 
 ## Composition over configuration
 

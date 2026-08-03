@@ -41,7 +41,7 @@ function AdminChrome({ children }: { children: ReactNode }) {
 }
 
 const meta = {
-  title: "Widgets/AdminPage",
+  title: "Shell/AdminPage",
   component: AdminPage,
   parameters: {
     docs: {

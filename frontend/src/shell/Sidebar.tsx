@@ -6,6 +6,7 @@ import { resolveVocabularyIcon } from "../capabilities/widgets/vocabularyIcon";
 import { SITE_URL } from "../lib/links";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { IconButton } from "./IconButton";
+import { Input } from "./Input";
 import { useModelLabel } from "./ModelPicker";
 import { useSessionContext } from "./SessionContext";
 
@@ -243,14 +244,14 @@ function SessionItem({
   return (
     <li className="group relative">
       {renaming ? (
-        <input
+        <Input
           ref={inputRef}
           aria-label="Rename conversation"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commitRename}
           onKeyDown={handleRenameKey}
-          className="w-full rounded-md bg-elevated px-3 py-2 text-sm text-content outline-none ring-1 ring-border-strong"
+          variant="inline"
         />
       ) : (
         <button

@@ -10,6 +10,7 @@ import { parseImagesSpec } from "../capabilities/widgets/Images/useImagesState";
 import { parseTableSpec } from "../capabilities/widgets/Table/useTableState";
 import { parseTimelineSpec } from "../capabilities/widgets/Timeline/useTimelineState";
 import { Button } from "./Button";
+import { Textarea } from "./Input";
 
 // Edit a widget's recreation prompt AND its raw params in a modal — the tool-tab
 // counterpart to the Bigsail card's flip (the gear opens THIS instead of flipping).
@@ -117,14 +118,13 @@ export function EditWidgetDialog({
               >
                 Recreation prompt — what this {noun} shows
               </label>
-              <textarea
+              <Textarea
                 id={promptFieldId}
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 readOnly={readOnly}
                 rows={3}
                 placeholder={`Describe the ${noun}…`}
-                className="w-full resize-none rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-content placeholder:text-content-faint focus:border-border-strong focus:outline-none read-only:opacity-70"
               />
             </div>
             <div className="flex min-h-0 flex-1 flex-col">
@@ -134,13 +134,13 @@ export function EditWidgetDialog({
               >
                 Parameters (JSON)
               </label>
-              <textarea
+              <Textarea
                 id={paramsFieldId}
                 value={paramsText}
                 onChange={(e) => setParamsText(e.target.value)}
                 readOnly={readOnly}
                 spellCheck={false}
-                className="min-h-40 w-full flex-1 resize-none rounded-md border border-border bg-surface px-2 py-1.5 font-mono text-xs leading-relaxed text-content focus:border-border-strong focus:outline-none read-only:opacity-70"
+                className="min-h-40 flex-1 font-mono text-xs leading-relaxed"
               />
             </div>
             {error ? (
