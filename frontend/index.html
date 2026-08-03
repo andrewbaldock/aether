@@ -64,7 +64,7 @@
             history.replaceState(
               history.state,
               "",
-              location.pathname + (qs ? "?" + qs : "") + location.hash
+              `${location.pathname}${qs ? `?${qs}` : ""}${location.hash}`
             );
           }
           if (t !== "light" && t !== "dark") {
@@ -103,7 +103,7 @@
           const ov = JSON.parse(
             localStorage.getItem("aether-token-overrides") || "null"
           );
-          const active = ov && ov[t];
+          const active = ov?.[t];
           if (active) {
             for (const name in active) {
               el.style.setProperty(`--${name}`, active[name]);

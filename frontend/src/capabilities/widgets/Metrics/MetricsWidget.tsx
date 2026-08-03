@@ -48,9 +48,9 @@ export function MetricsWidget(_props: { widget: Widget }) {
       }
     >
       <p className="mt-2 text-sm text-content-muted">
-        How each feature is doing, measured from real usage. Deep product funnels
-        live in PostHog; full error traces in Sentry; device web-vitals in Vercel
-        Speed Insights.
+        How each feature is doing, measured from real usage. Deep product
+        funnels live in PostHog; full error traces in Sentry; device web-vitals
+        in Vercel Speed Insights.
       </p>
 
       {!data ? (
@@ -195,7 +195,9 @@ function Stat({
 }) {
   return (
     <div>
-      <div className={`text-2xl font-semibold tabular-nums ${TONE_CLASS[tone]}`}>
+      <div
+        className={`text-2xl font-semibold tabular-nums ${TONE_CLASS[tone]}`}
+      >
         {value}
       </div>
       <div className="mt-0.5 text-xs text-content-muted">{label}</div>

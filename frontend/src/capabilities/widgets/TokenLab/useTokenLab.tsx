@@ -99,7 +99,14 @@ export function TokenLabProvider({ children }: { children: ReactNode }) {
   const resetAll = useCallback(() => setAll({ light: {}, dark: {} }), []);
 
   const value = useMemo<TokenLabContextValue>(
-    () => ({ theme, overrides: all[theme], setToken, clearToken, resetAll, all }),
+    () => ({
+      theme,
+      overrides: all[theme],
+      setToken,
+      clearToken,
+      resetAll,
+      all,
+    }),
     [theme, all, setToken, clearToken, resetAll]
   );
 

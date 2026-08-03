@@ -1,5 +1,5 @@
-import { QueryClientProvider } from "@tanstack/react-query";
 import * as Sentry from "@sentry/react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { StrictMode } from "react";
