@@ -1,4 +1,5 @@
 import { RefreshCw } from "lucide-react";
+import { Button } from "../../shell/Button";
 
 // The idle empty state for a data capability. Before any conversation exists it's
 // just the invitation. Once a conversation has happened, it offers an Update button
@@ -44,15 +45,15 @@ export function WidgetEmptyState({
 
       {hasConversation &&
         (canUpdate ? (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
             onClick={onUpdate}
-            className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-content-muted transition-colors hover:border-content-muted hover:text-content"
+            icon={<RefreshCw className="h-3.5 w-3.5" aria-hidden />}
+            // "Update" alone doesn't say update WHAT — the label names the target.
             aria-label="Fill this panel from the conversation"
           >
-            <RefreshCw className="h-3.5 w-3.5" aria-hidden />
             Update
-          </button>
+          </Button>
         ) : (
           <div className="flex flex-col items-center gap-1.5">
             <p className="text-sm text-content-muted">

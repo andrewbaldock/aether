@@ -1,6 +1,7 @@
 import { RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { AdminPage } from "../../../shell/AdminPage";
+import { Button } from "../../../shell/Button";
 import { ProseMarkdown } from "../../../shell/ProseMarkdown";
 import { ThemeToggle } from "../../../theme/ThemeToggle";
 import {
@@ -61,21 +62,16 @@ export function TokenLabWidget(_props: { widget: Widget }) {
 
       {/* Action bar: copy the current overrides as CSS, or wipe them. */}
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={copyCss}
-          className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover"
-        >
+        <Button variant="primary" onClick={copyCss}>
           Copy CSS
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="secondary"
           onClick={resetAll}
           disabled={dirtyCount === 0}
-          className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-content-muted transition-colors hover:bg-elevated hover:text-content disabled:pointer-events-none disabled:opacity-40"
         >
           Reset all
-        </button>
+        </Button>
         <span className="text-xs text-content-subtle">
           {dirtyCount === 0
             ? "No changes"
@@ -165,12 +161,7 @@ export function TokenLabWidget(_props: { widget: Widget }) {
         <div className="rounded-lg border border-border bg-surface p-4 text-content">
           <ProseMarkdown text={PREVIEW_PROSE} />
           <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              type="button"
-              className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover"
-            >
-              Primary action
-            </button>
+            <Button variant="primary">Primary action</Button>
             <button
               type="button"
               className="rounded-lg border border-border-strong px-3 py-1.5 text-sm font-medium text-content-muted transition-colors hover:bg-elevated hover:text-content"

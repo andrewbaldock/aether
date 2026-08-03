@@ -264,6 +264,39 @@ working on the trigger element. There's no packaged component library (shadcn/Ch
 custom compound-component API beyond what Radix provides — composition here means "wrap a Radix
 primitive," not "build a `<Tabs.List>`-style system."
 
+### Buttons
+
+`shell/Button.tsx` is the shared **text** button; `IconButton` remains the icon-only one.
+
+It was added late, after an audit found **21 files hand-rolling their own** `rounded-lg … px-3 py-1.5 …`
+string. The drift was already measurable: the neutral treatment existed with four different hover
+rules, and two files disagreed about whether `disabled` meant 40% or 50% opacity.
+
+Three variants, **derived from what the app already used** rather than invented:
+
+| Variant | Use | Hand-rolled copies it replaced |
+|---|---|---|
+| `primary` | the affirmative action | 3 |
+| `secondary` | the neutral default | 7 (with the drift) |
+| `danger` | destructive confirmation | 1 |
+
+There is deliberately no `tertiary`, no `size`, and no `loading` — none had a real call site, and an
+unused variant is just a decision imposed on the next person.
+
+Two things worth knowing:
+
+- **It forwards a ref**, so it works as a Radix `asChild` trigger. `IconButton` can't (it returns a
+  `<Tooltip>` wrapper), which is why `ExploreMenu` still hand-rolls a raw `<button>` off
+  `ICON_BUTTON_CLASS`. `ConfirmDialog`'s Cancel/Confirm are now `<Button>` inside
+  `AlertDialog.Cancel asChild` directly. **Exception:** passing `tooltip` wraps it in a Tooltip tree,
+  so a tooltipped Button cannot also be an `asChild` trigger.
+- **Tooltips are opt-in.** A text button already has an accessible name, so a tooltip repeating the
+  label is noise for pointer users and a duplicate announcement for screen readers. Use it for what
+  the label can't say — a shortcut, or a consequence. (`IconButton` is the opposite: there the
+  tooltip *is* the name.)
+
+`buttonClass(variant, extra)` is exported for the rare button that genuinely can't be this component.
+
 ### Icon buttons
 
 Every icon-only button is the shared `IconButton`

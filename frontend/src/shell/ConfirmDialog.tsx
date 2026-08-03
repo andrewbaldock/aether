@@ -1,5 +1,6 @@
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { ReactNode } from "react";
+import { Button } from "./Button";
 
 // A small, app-styled confirm dialog built on Radix AlertDialog — a centered modal
 // with a focus trap, Escape-to-cancel, and role=alertdialog a11y, for confirming an
@@ -42,26 +43,19 @@ export function ConfirmDialog({
             </AlertDialog.Description>
           ) : null}
           <div className="mt-5 flex justify-end gap-2">
+            {/* Both are Radix `asChild` triggers, which clone their child and
+                need a real ref — Button forwards one, so it can be used directly
+                here instead of the hand-rolled buttons this used to carry. */}
             <AlertDialog.Cancel asChild>
-              <button
-                type="button"
-                className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-content-muted transition-colors hover:bg-elevated hover:text-content focus-visible:bg-elevated focus-visible:outline-none"
-              >
-                {cancelLabel}
-              </button>
+              <Button variant="secondary">{cancelLabel}</Button>
             </AlertDialog.Cancel>
             <AlertDialog.Action asChild>
-              <button
-                type="button"
+              <Button
+                variant={affirmative === "danger" ? "danger" : "primary"}
                 onClick={onConfirm}
-                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none ${
-                  affirmative === "danger"
-                    ? "bg-danger-surface text-danger-content hover:brightness-95"
-                    : "bg-accent text-on-accent hover:bg-accent-hover"
-                }`}
               >
                 {confirmLabel}
-              </button>
+              </Button>
             </AlertDialog.Action>
           </div>
         </AlertDialog.Content>

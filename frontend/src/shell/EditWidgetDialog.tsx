@@ -9,6 +9,7 @@ import { parseChartSpec } from "../capabilities/widgets/Chart/useChartState";
 import { parseImagesSpec } from "../capabilities/widgets/Images/useImagesState";
 import { parseTableSpec } from "../capabilities/widgets/Table/useTableState";
 import { parseTimelineSpec } from "../capabilities/widgets/Timeline/useTimelineState";
+import { Button } from "./Button";
 
 // Edit a widget's recreation prompt AND its raw params in a modal — the tool-tab
 // counterpart to the Bigsail card's flip (the gear opens THIS instead of flipping).
@@ -149,21 +150,14 @@ export function EditWidgetDialog({
 
           <div className="mt-5 flex shrink-0 justify-end gap-2">
             <Dialog.Close asChild>
-              <button
-                type="button"
-                className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-content-muted transition-colors hover:bg-elevated hover:text-content focus-visible:bg-elevated focus-visible:outline-none"
-              >
+              <Button variant="secondary">
                 {readOnly ? "Close" : "Cancel"}
-              </button>
+              </Button>
             </Dialog.Close>
             {!readOnly ? (
-              <button
-                type="button"
-                onClick={onSaveClick}
-                className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover focus-visible:outline-none"
-              >
+              <Button variant="primary" onClick={onSaveClick}>
                 Save
-              </button>
+              </Button>
             ) : null}
           </div>
         </Dialog.Content>

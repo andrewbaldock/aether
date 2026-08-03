@@ -1,8 +1,9 @@
-import { ChevronDown, Settings } from "lucide-react";
+import { ChevronDown, Copy, Settings } from "lucide-react";
 import { useState } from "react";
 import { ThinkingGlyph } from "../../../brand/ThinkingGlyph";
 import { Wordmark } from "../../../brand/Wordmark";
 import { AdminPage } from "../../../shell/AdminPage";
+import { Button } from "../../../shell/Button";
 import { ConfirmDialog } from "../../../shell/ConfirmDialog";
 import { IconButton } from "../../../shell/IconButton";
 import { ModelPicker } from "../../../shell/ModelPicker";
@@ -251,26 +252,46 @@ export function StyleGuideWidget(_props: { widget: Widget }) {
         </div>
       </Section>
 
+      <Section title="Buttons">
+        <p className="mb-3 max-w-2xl text-xs text-content-muted">
+          Three variants, taken from what the app already used rather than
+          invented. Before <code className="text-content">Button</code> existed,
+          21 files hand-rolled their own class string and the drift was visible
+          — the neutral treatment had four different hover rules. Icon-only
+          buttons stay with <code className="text-content">IconButton</code>.
+          This one is for buttons that carry a label, optionally with a leading
+          icon.
+        </p>
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-raised p-4">
+          <Button variant="primary">Primary</Button>
+          <Button variant="secondary">Secondary</Button>
+          <Button variant="danger">Danger</Button>
+          <Button
+            variant="secondary"
+            icon={<Copy className="h-4 w-4" aria-hidden />}
+          >
+            With icon
+          </Button>
+          <Button
+            variant="secondary"
+            tooltip="Tooltips are for what the label can't say — a shortcut or a consequence"
+          >
+            With tooltip
+          </Button>
+          <Button variant="primary" disabled>
+            Disabled
+          </Button>
+        </div>
+      </Section>
+
       <Section title="Primitives">
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-raised p-4">
           <Tooltip label="Built on Radix — focus, Escape, and portal handled for free">
-            <button
-              type="button"
-              className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-content-muted transition-colors hover:bg-elevated hover:text-content"
-            >
-              Hover for tooltip
-            </button>
+            <Button variant="secondary">Hover for tooltip</Button>
           </Tooltip>
 
           <ConfirmDialog
-            trigger={
-              <button
-                type="button"
-                className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover"
-              >
-                Open confirm dialog
-              </button>
-            }
+            trigger={<Button variant="primary">Open confirm dialog</Button>}
             title="Just a demo"
             description="The same ConfirmDialog every destructive action in the app reuses."
             confirmLabel="Got it"
