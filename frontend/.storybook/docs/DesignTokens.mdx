@@ -1,0 +1,106 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+import { ColorTokens, FontFaces, TypeScale, VizRamp } from "./TokenTables";
+
+<Meta title="Foundations/Design Tokens" />
+
+# Design tokens
+
+Every table on this page is **derived, not written**. The colour list is parsed
+out of `src/index.css` at build time (a Vite `?raw` import — the same
+`parseTokens.ts` the in-app `/style-guide` page uses), and the type and font
+tables come from the exported records in `useAppearance.tsx`. If a token changes
+in the CSS, this page changes with it. There is no copy to keep in sync.
+
+Use the **theme toolbar toggle** above to see any story render against the other
+side of these values.
+
+## Colour
+
+Each token resolves through one indirection: `@theme` registers the Tailwind
+utility, `:root` and `.dark` hold the values.
+
+```css
+@theme { --color-surface: var(--surface); }
+:root  { --surface: #ffffff; }
+.dark  { --surface: #171717; }
+```
+
+Which means `bg-surface` is written once and is correct in both themes forever.
+
+<div className="my-6">
+  <ColorTokens />
+</div>
+
+### Reading the families
+
+- **Surfaces** — a four-step elevation ramp: `surface` (the page) → `surface-raised`
+  (sidebar, panels) → `elevated` (hover fills, assistant bubbles) → `selected`
+  (the active row, deliberately stronger than a hover). `surface-overlay` is the
+  odd one out: it stays dark *even in light mode*, because the tooltip bubble
+  needs contrast against neon.
+- **Content** — four steps of de-emphasis: `content` → `content-muted` →
+  `content-subtle` → `content-faint`. Named by role, not by grey value, so the
+  dark ramp can invert without a single rename.
+- **Accent** — neon pink, the brand. `on-accent` is its paired foreground, which
+  is *not* simply white in dark mode: it's a near-black with a pink cast, because
+  white on `#ff2e9a` is the kind of contrast failure that only shows up on a real
+  screen.
+- **Neon / Danger** — the fixed brand pair, and the destructive-action pair used
+  by `ConfirmDialog`'s `danger` variant.
+
+## Data-viz ramp
+
+Eight categorical slots for chart series, assigned in sequence. This ramp is the
+one place a *number* of colours matters, so it gets its own rules:
+
+- **The order is load-bearing.** It is the colour-blind-safety mechanism, not a
+  preference — adjacent pairs are validated for separation under protanopia and
+  deuteranopia (OKLab ΔE ≥ 8; worst adjacent pair 9.1 light / 8.4 dark), plus a
+  normal-vision floor of ΔE ≥ 15 (19.6 / 19.3). Re-ordering silently voids that.
+- **Both modes are selected.** The dark column is the same eight hues re-stepped
+  for the near-black surface, not an automatic lightening.
+- **The brand pink is deliberately absent.** `--accent` means *you can click
+  this*; a pink series would read as an affordance. Identity and action stay on
+  separate channels.
+- Three light slots (aqua, yellow, magenta) sit under 3:1 on white. That's
+  allowed only because the values are legible another way — axis ticks, the hover
+  tooltip, and the legend's text labels. Keep that relief if you touch them.
+
+<div className="my-6">
+  <VizRamp />
+</div>
+
+Unlike every other token here, this ramp is **not** registered in `@theme`.
+Tailwind v4 tree-shakes theme entries that no utility class references, so a
+`--color-viz-*` declared there resolves to the *empty string* at runtime — charts
+render with no stroke and no error. These are consumed as raw values by Recharts
+(straight into an SVG `fill`/`stroke`), and a per-series class name would be
+dynamic (`bg-viz-${i}`), which Tailwind can't see statically either. So they live
+in `:root` / `.dark` as plain themed custom properties: same indirection, same
+theme flip, nothing to tree-shake. See **Widgets/Chart palette**.
+
+## Typography
+
+A four-step scale, exposed to the user as a setting rather than hidden as a
+constant. Tailwind's `text-*` utilities are rem-based, so changing the root
+`font-size` scales the entire app proportionally — one value, no per-component
+overrides. `md` is the browser default, so the untouched experience is the
+standard one.
+
+<div className="my-6">
+  <TypeScale />
+</div>
+
+The body face is user-selectable too. The brand face (`font-display`, Space
+Grotesk) is deliberately *not* — it's the app's voice, not a preference.
+
+<div className="my-6">
+  <FontFaces />
+</div>
+
+## Spacing — the honest gap
+
+There is no authored spacing scale. Components use Tailwind's default 4px rhythm
+(`px-4`, `gap-2`, `p-5`) consistently, and the result is visually coherent, but
+that coherence is inherited from the framework default rather than a decision
+Aether made and named. Listed here rather than papered over.

@@ -20,7 +20,7 @@ import {
   VOCABULARY_ICON_NAMES,
 } from "../vocabularyIcon";
 import { WidgetLoading } from "../WidgetLoading";
-import { TOKEN_FAMILIES, type TokenEntry } from "./parseTokens";
+import { TOKEN_FAMILIES, type TokenEntry, VIZ_RAMP } from "./parseTokens";
 
 // Alphabetized once at module load for the icon-vocabulary grid.
 const ICON_NAMES = [...VOCABULARY_ICON_NAMES].sort();
@@ -100,6 +100,28 @@ export function StyleGuideWidget(_props: { widget: Widget }) {
                 ))}
               </div>
             </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Data-viz ramp">
+        <p className="mb-3 max-w-2xl text-xs text-content-muted">
+          Eight categorical slots for chart series, assigned in sequence and
+          never re-ordered — the order is what guarantees adjacent series stay
+          distinguishable under protanopia and deuteranopia. Both themes are
+          selected, not flipped. Excludes the brand pink on purpose:{" "}
+          <code className="text-content">--accent</code> means “you can click
+          this”, so a pink series would read as an affordance.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {VIZ_RAMP.map((token, i) => (
+            <Swatch
+              key={token.name}
+              token={token}
+              index={i}
+              theme={theme}
+              cssVar={`--${token.name}`}
+            />
           ))}
         </div>
       </Section>
@@ -492,10 +514,15 @@ function Swatch({
   token,
   index,
   theme,
+  // Which custom property backs this swatch. Semantic tokens are registered in
+  // @theme so they read through --color-*; the viz ramp isn't (see index.css)
+  // and reads its raw --viz-* property directly.
+  cssVar = `--color-${token.name}`,
 }: {
   token: TokenEntry;
   index: number;
   theme: "light" | "dark";
+  cssVar?: string;
 }) {
   return (
     <div
@@ -504,7 +531,7 @@ function Swatch({
     >
       <div
         className="h-12 rounded-lg border border-border-strong"
-        style={{ background: `var(--color-${token.name})` }}
+        style={{ background: `var(${cssVar})` }}
       />
       <span className="text-xs text-content-muted">{token.name}</span>
       <span className="font-mono text-[10px] text-content-faint">

@@ -12,6 +12,13 @@ import { VitePWA } from "vite-plugin-pwa";
 // error instead of a real 502.
 const isE2E = process.env.VITE_E2E === "1";
 
+// Storybook reuses this same config (see .storybook/main.ts) so stories render
+// through the real React + Tailwind v4 pipeline. A component docs site has no
+// business registering the app's service worker, so the PWA plugin sits out.
+// Truthy, not === "1": the scripts export STORYBOOK=1, but Storybook's own CLI
+// overwrites the variable with "true" before it loads this file.
+const isStorybook = !!process.env.STORYBOOK;
+
 export default defineConfig({
   plugins: [
     react(),
@@ -21,7 +28,7 @@ export default defineConfig({
       // /api outside Playwright's page.route mock, racing the mock on first load and
       // leaking a request to the (proxy-less) network. Disabling it makes the mock
       // the sole answerer of /api, which is the whole point of the deterministic suite.
-      disable: isE2E,
+      disable: isE2E || isStorybook,
       // Service worker auto-updates in the background and takes over on the
       // next load — no "new version available" prompt to maintain. Fits a
       // low-churn demo: visitors always end up on the latest deploy.

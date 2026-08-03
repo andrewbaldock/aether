@@ -45,45 +45,34 @@ import { useChartState } from "./useChartState";
 const CHART_BUILD_PROMPT =
   "Build the best chart you can about what we've been discussing. Visualize the quantitative shape of the subject — trends, distributions, or comparisons — and broaden from what was literally said: chart the real numbers the topic involves, fetching figures from your data sources if needed rather than only plotting numbers someone typed. Choose the form and comparison that fit — line for trends, a multi-series or stacked bar for real comparisons, horizontal bars for rankings, a rate or share on the value axis when that's the truer story — not always a vertical bar of raw counts. This is about the conversation so far, not future messages. Don't ask whether to do it or offer to do it later — call render_chart now. Only skip if the subject genuinely has no quantitative dimension at all.";
 
-// Named palette for line/bar/area series (up to ~12 before cycling). Anchored to
-// the brand neons then spreads across the spectrum so adjacent series are distinct.
-const PALETTE = [
-  "#ff2e9a", // neon pink (brand)
-  "#16c2ff", // neon cyan (brand)
-  "#c35ed1", // violet
-  "#f5a623", // amber
-  "#3ecf8e", // green
-  "#ff6b6b", // coral
-  "#4ecdc4", // teal
-  "#ffe66d", // yellow
-  "#a29bfe", // lavender
-  "#fd79a8", // rose
-  "#55efc4", // mint
-  "#fdcb6e", // peach
-] as const;
+// The categorical palette is a TOKEN RAMP (--viz-1..8 in index.css), not a list
+// of hex values living here. Recharts writes these straight into SVG fill/stroke
+// attributes, and the browser resolves the custom property like any other CSS
+// value — so a chart re-colours itself on a theme flip with no JS, no re-render,
+// and no theme-awareness anywhere in this file. Same deal as `bg-surface`.
+//
+// Eight slots in a fixed order. The order is the colour-blind-safety mechanism
+// (adjacent pairs are validated for separation under protanopia/deuteranopia),
+// so slots are assigned in sequence and the ramp is never re-ordered per chart.
+const VIZ_SLOTS = 8;
 
-// For pie charts the slice count is data-driven and can exceed any fixed palette.
-// Generate a color by spreading slices evenly around the HSL wheel, keeping
-// saturation and lightness tuned for the dark theme. Always returns a string.
-function pieColor(index: number, total: number): string {
-  const hue = Math.round((index / Math.max(total, 1)) * 360);
-  return `hsl(${hue}, 80%, 62%)`;
-}
-
-// For series (line/bar/area): cycle the named palette, fall back to hsl spread.
+// ponytail: past 8 series the ramp cycles, so slot 9 repeats slot 1. The correct
+// fix is to fold the tail into an "Other" series, but the series count is decided
+// by the model in the render_chart spec, so that belongs in the backend's tool
+// prompt rather than here. Charts that wide are rare and read badly anyway.
 function paletteColor(index: number): string {
-  return (
-    PALETTE[index % PALETTE.length] ?? `hsl(${(index * 47) % 360}, 75%, 60%)`
-  );
+  return `var(--viz-${(index % VIZ_SLOTS) + 1})`;
 }
 
+// A model-supplied colour on the spec still wins — it crosses the wire as part of
+// ChartSeries and predates the ramp. Unset (the normal case) takes the token.
 function seriesColor(color: string | undefined, index: number): string {
   return color ?? paletteColor(index);
 }
 
 // "Chart" — renders every render_chart spec from the conversation, stacked in one
-// scrollable tab. Recharts for the rendering; brand colors as defaults. The
-// `widget` prop is unused; state is live.
+// scrollable tab. Recharts for the rendering; the --viz-* token ramp for colour.
+// The `widget` prop is unused; state is live.
 export function ChartWidget(_props: { widget: Widget }) {
   const {
     entries,
@@ -279,10 +268,20 @@ export function ChartWidget(_props: { widget: Widget }) {
   );
 }
 
-// Axis/grid colors read from the theme so the chart matches light/dark. Plain
-// hex via CSS vars isn't available to Recharts SVG props directly, so use the
-// muted content tone.
+// Axis/grid colors inherit the card's text colour, which is already a theme
+// token — so the chrome flips with the theme for free.
 const AXIS_COLOR = "currentColor";
+
+// Recharts paints legend LABELS in their series colour by default. Two problems:
+// the label then carries identity twice (the swatch beside it already does), and
+// a mid-lightness series colour makes poor body text — slot 4 (yellow) on the
+// light surface is the worst case. Text wears text tokens; the swatch carries the
+// colour. Spread into every <Legend> so the four chart types can't drift.
+const LEGEND_PROPS = {
+  formatter: (value: string) => (
+    <span className="text-content-muted">{value}</span>
+  ),
+} as const;
 
 // The bare recharts node for one chart spec. Caller supplies the sizing wrapper
 // (ResponsiveContainer) and optional title — the ChartWidget tab does, and so does
@@ -313,7 +312,7 @@ export function SpecChart({
     return (
       <PieChart>
         <RechartsTooltip />
-        <Legend />
+        <Legend {...LEGEND_PROPS} />
         <Pie
           data={spec.data}
           dataKey={valueKey}
@@ -326,7 +325,7 @@ export function SpecChart({
           {spec.data.map((_, i) => (
             // Slice order is stable for a given spec; index key is fine here.
             // biome-ignore lint/suspicious/noArrayIndexKey: stable slice order
-            <Cell key={i} fill={pieColor(i, spec.data.length)} />
+            <Cell key={i} fill={paletteColor(i)} />
           ))}
         </Pie>
       </PieChart>
@@ -351,7 +350,7 @@ export function SpecChart({
         />
         <ValueAxis axis={horizontal ? "x" : "y"} label={yLabel} />
         <RechartsTooltip />
-        <Legend />
+        <Legend {...LEGEND_PROPS} />
         {spec.series.map((s, i) => (
           <Bar
             key={s.key}
@@ -359,17 +358,7 @@ export function SpecChart({
             name={s.label ?? s.key}
             fill={seriesColor(s.color, i)}
             stackId={stackId}
-          >
-            {/* Single-series bar charts: color each bar by category (like a pie).
-                Multi-series: use the series color uniformly (Cells would override
-                the per-series distinction). */}
-            {spec.series.length === 1
-              ? spec.data.map((_, di) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: stable bar order
-                  <Cell key={di} fill={pieColor(di, spec.data.length)} />
-                ))
-              : null}
-          </Bar>
+          />
         ))}
       </BarChart>
     );
@@ -388,7 +377,7 @@ export function SpecChart({
         />
         <ValueAxis axis="y" label={yLabel} />
         <RechartsTooltip />
-        <Legend />
+        <Legend {...LEGEND_PROPS} />
         {spec.series.map((s, i) => {
           const color = seriesColor(s.color, i);
           return (
@@ -419,7 +408,7 @@ export function SpecChart({
       />
       <ValueAxis axis="y" label={yLabel} />
       <RechartsTooltip />
-      <Legend />
+      <Legend {...LEGEND_PROPS} />
       {spec.series.map((s, i) => (
         <Line
           key={s.key}

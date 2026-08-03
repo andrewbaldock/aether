@@ -35,6 +35,15 @@
   --color-neon-cyan: var(--neon-cyan);
   --color-danger-surface: var(--danger-surface);
   --color-danger-content: var(--danger-content);
+  /* NOTE: the data-viz ramp (--viz-1..8, see :root below) is deliberately NOT
+     registered here. Tailwind v4 tree-shakes @theme entries no utility class
+     references, so a --color-viz-* registered here resolves to the EMPTY STRING
+     at runtime — charts render with no stroke and no error. The ramp is consumed
+     as a value by recharts (an SVG fill/stroke attribute), never as a utility
+     class, and a per-series class name would be dynamic (`bg-viz-${i}`) — which
+     Tailwind can't see statically anyway. So it lives in :root/.dark as a plain
+     themed custom property: same indirection, same theme flip, nothing to
+     tree-shake. */
   /* Space Grotesk — Aether's "voice" font for branded UI copy (font-display
      utility). Loaded in index.html. Falls back to the system stack. */
   --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
@@ -61,6 +70,30 @@
   --neon-cyan: #16c2ff;
   --danger-surface: #fee2e2;
   --danger-content: #b91c1c;
+
+  /* ── Data-viz categorical ramp (light) ──────────────────────────────────────
+     Eight hues in a FIXED order, assigned to chart series in sequence. The order
+     is the colour-blind-safety mechanism, not a preference: it's validated for
+     adjacent-pair separation under protanopia and deuteranopia, so re-ordering
+     these silently breaks the guarantee. Both modes are *selected* — the .dark
+     column below is these same eight hues re-stepped for the near-black surface,
+     never an automatic flip.
+     Validated (OKLab ΔE ×100, adjacent pairs, on this theme's real surface):
+       light  worst CVD 9.1 · worst normal-vision 19.6 · lightness + chroma pass
+       dark   worst CVD 8.4 · worst normal-vision 19.3 · all ≥ 3:1 on surface
+     Deliberately NOT the brand pink: --accent means "you can click this", and a
+     pink series would read as an affordance. Identity and action stay separate.
+     Three light slots (aqua/yellow/magenta) sit under 3:1 on white, which is
+     allowed only because values are legible another way — axis ticks, the hover
+     tooltip, and the legend's text labels. Keep that relief if you touch these. */
+  --viz-1: #2a78d6; /* blue */
+  --viz-2: #eb6834; /* orange */
+  --viz-3: #1baf7a; /* aqua */
+  --viz-4: #eda100; /* yellow */
+  --viz-5: #e87ba4; /* magenta */
+  --viz-6: #008300; /* green */
+  --viz-7: #4a3aa7; /* violet */
+  --viz-8: #e34948; /* red */
 }
 
 /* DARK — matches today's look, with the neon-pink accent swapped in for the old
@@ -85,6 +118,17 @@
   --neon-cyan: #16c2ff;
   --danger-surface: rgb(127 29 29 / 0.4); /* red-900/40 */
   --danger-content: #fca5a5; /* red-300 */
+
+  /* Data-viz ramp (dark) — same eight hues as :root, re-stepped for the dark
+     surface so every slot clears the dark lightness band and 3:1 contrast. */
+  --viz-1: #3987e5; /* blue */
+  --viz-2: #d95926; /* orange */
+  --viz-3: #199e70; /* aqua */
+  --viz-4: #c98500; /* yellow */
+  --viz-5: #d55181; /* magenta */
+  --viz-6: #008300; /* green */
+  --viz-7: #9085e9; /* violet */
+  --viz-8: #e66767; /* red */
 }
 
 html,
@@ -581,8 +625,7 @@ body {
 }
 /* Drop cap on that lead paragraph's first letter. Kept modest (~3 lines tall,
    not the classic 4–5) so it accents the standfirst without dominating it. */
-.prose-editorial[data-variant="article"]
-  .prose-body
+.prose-editorial[data-variant="article"] .prose-body
   > p:first-of-type::first-letter {
   float: left;
   font-family: var(--font-display);
@@ -631,7 +674,15 @@ body {
   margin-top: 0;
 }
 
-/* Lists — lotus bullets for ul, tinted markers for ol */
+/* Lists — lotus bullets for ul, tinted markers for ol.
+   The shared li rule comes FIRST so specificity ascends down the block: the more
+   specific `ul > li` rules below must not be followed by a looser selector, or
+   a reader (and noDescendingSpecificity) can't tell which one wins at a glance.
+   Nothing here conflicts — this rule sets margin, the ones below set position —
+   so the order is purely for legibility. */
+.prose-editorial li {
+  margin: 0.15em 0;
+}
 .prose-editorial ul {
   list-style: none;
   margin: 0 0 0.75em;
@@ -652,9 +703,6 @@ body {
   margin: 0 0 0.75em;
   padding-left: 1.3em;
   list-style: decimal;
-}
-.prose-editorial li {
-  margin: 0.15em 0;
 }
 .prose-editorial ol li::marker {
   color: var(--content-subtle);

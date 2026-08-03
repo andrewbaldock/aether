@@ -1,0 +1,105 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+
+<Meta title="Foundations/Introduction" />
+
+# Aether's design system
+
+Aether is a conversational explorer: you ask a question, and the answer arrives
+as a canvas of widgets — charts, tables, timelines, image grids, a force-directed
+knowledge graph — beside the prose. Five widget types, two themes, one shell.
+
+This Storybook documents the parts that are genuinely *shared*. It is built from
+the app's own `vite.config.ts` and imports the app's own `src/index.css`, so
+every story renders through the real pipeline against the real tokens. Nothing
+here is a re-declaration of the app.
+
+---
+
+## Token architecture
+
+One indirection layer, and only one:
+
+```
+@theme            --color-surface: var(--surface)      ← registers the Tailwind utility
+:root             --surface: #ffffff                    ← light value
+.dark             --surface: #171717                    ← dark value
+```
+
+A component writes `bg-surface` and never learns what theme it is in. The utility
+class is stable; only the value underneath it flips. That is the whole mechanism —
+there is no `isDark` prop, no theme-aware component, and no conditional class
+anywhere in the tree.
+
+The practical test: adding a theme means adding a block of values. It should
+require zero component changes. See **Foundations/Design Tokens** for the live
+token list, parsed out of `index.css` itself.
+
+## Zero-flash boot
+
+Theme, text size, body font, and any Theme-Lab palette overrides are all applied
+by an inline script in `index.html` **before first paint**, then kept in sync
+after mount by `useTheme` / `useAppearance`. The React state is seeded by the same
+resolution logic the pre-paint script uses, so the app never re-flips on mount.
+
+The full loop is: OS preference → explicit user override → `localStorage`
+persistence → pre-paint application. Not a toggle bolted onto a stylesheet.
+
+## One motion language
+
+Two animations carry most of the app's character, and they share a mechanism:
+
+- **The skeleton cascade.** Each placeholder card gets a `--i` index custom
+  property; the CSS reads it as an animation delay, so planned cards ripple into
+  the canvas in order rather than appearing at once.
+- **The starter pills.** Same `--i`, same staggered entrance.
+- **Table rows.** Same again — clamped in JS to the first ~24 rows so a large
+  table doesn't ripple for a second and a half.
+
+Because the delay lives in CSS and the index is just a number the component
+hands over, the two read as one system rather than two animations that happen to
+coexist. See **Widgets/SkeletonCard** and **Shell/StarterPrompts**.
+
+## One shell, five widgets
+
+`CardShell` is the single wrapper every card on the canvas renders through. It
+owns the drag strip, title, action cluster, skeleton entrance, and the 3D flip
+that reveals a widget's JSON spec. The component inside it is a dispatcher that
+renders only type-specific *content*.
+
+So a new widget type implements its content and inherits its entire chrome — and
+the flip, notoriously fiddly to get right in a `preserve-3d` scene, is
+implemented exactly once. See **Widgets/CardShell**.
+
+## Composition over configuration
+
+The shell primitives take *elements*, not config. `ConfirmDialog` takes a
+`trigger` and wraps whatever button it guards. `Tooltip` and Radix's `asChild`
+merge behaviour onto the caller's own element, so layout classes passed from a
+call site keep working untouched.
+
+Consequently the variant APIs stay small on purpose: `ConfirmDialog` has exactly
+two (`primary` for reversible, `danger` for destructive). A third would only
+invite guessing.
+
+## Schema heal-on-load
+
+Widget specs are versioned. On load, a spec whose `schemaVersion` doesn't match
+is cleared rather than migrated — the answer is regenerable, so healing beats
+maintaining a migration ladder for a demo's worth of persisted state. Honest
+about its own trade-off: this is a policy that works *because* the data is cheap
+to recreate.
+
+---
+
+## What isn't here yet
+
+Kept explicit so the docs stay trustworthy:
+
+- **Spacing is inherited, not authored.** Components use Tailwind's default 4px
+  rhythm consistently, but there is no named spacing scale of Aether's own.
+- **A few raw hex stops remain** — the brand gradient in `StarterPrompts` and
+  `ChatPanel` (`from-[#fd40a4]`) hasn't been promoted to a token.
+- **`AdminTabs` is not a compound component.** It's a `.map()` over a tab array,
+  and it's coupled to the router, which is why it has no story yet.
+- **No visual-regression suite.** The a11y addon runs axe per story; there is no
+  snapshot diffing.

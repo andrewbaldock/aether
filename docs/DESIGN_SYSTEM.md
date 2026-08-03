@@ -63,6 +63,50 @@ changes; only the value it resolves to flips. That indirection is the entire the
 > value blocks. Never reach for a raw hex in a component — if the token you need doesn't exist,
 > add it here first.
 
+### The data-viz ramp (`--viz-1` … `--viz-8`)
+
+Chart series colours are a **categorical ramp**: eight slots, defined per theme in `:root`/`.dark`
+and handed to Recharts as `var(--viz-N)` strings. Recharts writes them straight into SVG
+`fill`/`stroke`, and the browser resolves the custom property like any other CSS value — so a chart
+re-colours itself on a theme flip with **no JS and no re-render**. `ChartWidget.tsx` contains no
+colour values and no theme awareness.
+
+Three properties are load-bearing, and all three are easy to break by accident:
+
+1. **The order is the colourblind-safety mechanism, not a preference.** Adjacent slots are
+   validated for separation under protanopia/deuteranopia (OKLab ΔE ≥ 8 target; worst adjacent pair
+   is 9.1 light / 8.4 dark) plus a normal-vision floor of ΔE ≥ 15 (19.6 / 19.3). Slots are assigned
+   in sequence, never shuffled per chart. Re-ordering the ramp silently voids the guarantee — so
+   re-validate if you touch it.
+2. **Both modes are selected, not flipped.** The `.dark` column is the same eight hues re-stepped
+   for the near-black surface.
+3. **The brand pink is deliberately absent.** `--accent` means "you can click this"; a pink series
+   would read as an affordance. Identity and action stay on separate channels.
+
+Three light-mode slots (aqua, yellow, magenta) sit below 3:1 contrast on white. That's permitted
+only because the values are readable another way — axis ticks, the hover tooltip, and the legend's
+text labels. Keep that relief if you change them.
+
+Two related rules the chart follows:
+
+- **Legend text wears text tokens, never the series colour** (`LEGEND_PROPS` in `ChartWidget.tsx`).
+  The swatch beside the label already carries identity; painting the label too spends the channel
+  twice and makes poor body text.
+- **A single-series bar chart uses slot 1 for every bar.** Bar *length* already encodes the value,
+  so colouring each bar differently re-encodes what the reader can already see.
+
+> ⚠️ **The ramp is NOT registered in `@theme`** — the one deliberate exception to the rule above.
+> Tailwind v4 tree-shakes `@theme` entries that no utility class references, so a `--color-viz-*`
+> declared there resolves to the **empty string** at runtime: charts render with no stroke and no
+> error. These are consumed as raw values, never as classes, and a per-series class name would be
+> dynamic (`bg-viz-${i}`) which Tailwind can't see statically either. Plain `:root`/`.dark` custom
+> properties give the same indirection with nothing to tree-shake.
+
+Live examples: the **Data-viz ramp** section of `/style-guide`, and **Widgets/Chart palette** in
+Storybook. Both read the ramp through `VIZ_RAMP` in
+[`parseTokens.ts`](../frontend/src/capabilities/widgets/StyleGuide/parseTokens.ts), which parses
+`index.css` itself — so neither can drift from the CSS.
+
 ## Editorial prose (the chat answer)
 
 An assistant answer is not a chat bubble of flat text — it's **set like a designed page**. The

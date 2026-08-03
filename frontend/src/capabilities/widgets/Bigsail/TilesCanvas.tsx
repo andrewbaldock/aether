@@ -274,7 +274,11 @@ export function TilesCanvas({
 // on its Y axis to reveal the read-only JSON spec that rules the widget, plus an
 // EyeOff "hide from canvas" action. Flip state is intentionally EPHEMERAL — local
 // state only, never persisted — so a reload/URL-change always returns to the front.
-function CardShell({
+//
+// Exported for its Storybook story (CardShell.stories.tsx) — it's the centre of
+// the widget system (one chrome, five widget types), so it needs to be showable
+// on its own. TilesCanvas above is still its only runtime caller.
+export function CardShell({
   card,
   staggerIndex,
   onHide,

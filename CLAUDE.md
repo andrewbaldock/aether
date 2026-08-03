@@ -20,8 +20,14 @@ commit; see [docs/ROADMAP.md](docs/ROADMAP.md).
   button/icon-button variant, a color/spacing/typography token) **MUST update
   `docs/DESIGN_SYSTEM.md` AND add/update the matching live example on the `/style-guide` page**
   ([`frontend/src/capabilities/widgets/StyleGuide/StyleGuideWidget.tsx`](frontend/src/capabilities/widgets/StyleGuide/StyleGuideWidget.tsx))
-  in the same commit — there's no Storybook here, `/style-guide` is that role, and it's meant to
-  read as ground truth, not lag the code.
+  in the same commit — `/style-guide` is the in-app ground truth and is meant to read as such, not
+  lag the code.
+- **There is also a Storybook** (`frontend/.storybook/`, `bun run storybook`). A new or changed
+  shared primitive should get or update its `*.stories.tsx` **beside the component**, with a prop
+  table (autodocs reads the TS types) and an accessibility note. `/style-guide` and Storybook are
+  complementary, not duplicates: `/style-guide` shows tokens and primitives *in the running app*;
+  Storybook isolates each component, documents its props and do/don'ts, and previews it in both
+  themes. Both read tokens through `parseTokens.ts`, so neither hand-copies a value.
 - The README's "tech stack at a glance" and run instructions must match reality too.
 
 When you finish a change, ask: did the stack, the architecture, or a shared UI primitive change?

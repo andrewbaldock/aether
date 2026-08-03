@@ -5,6 +5,7 @@ node_modules/
 dist/
 .vite/
 *.tsbuildinfo
+frontend/storybook-static/
 .understand-anything
 .graphify
 

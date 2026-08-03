@@ -75,10 +75,32 @@ function parse(): TokenFamily[] {
     byFamily.set(family, [...(byFamily.get(family) ?? []), entry]);
   }
 
-  return FAMILY_ORDER.filter((label) => byFamily.has(label)).map((label) => ({
-    label,
-    tokens: byFamily.get(label)!,
-  }));
+  // flatMap over a single lookup rather than filter-then-get: the two-step version
+  // needed a non-null assertion to convince tsc the second lookup still had a hit.
+  return FAMILY_ORDER.flatMap((label) => {
+    const tokens = byFamily.get(label);
+    return tokens ? [{ label, tokens }] : [];
+  });
 }
 
 export const TOKEN_FAMILIES: TokenFamily[] = parse();
+
+// The categorical data-viz ramp (--viz-1..8). Parsed separately from the families
+// above because it is deliberately NOT registered in @theme — Tailwind v4 drops
+// theme entries no utility references, and these are consumed as raw values by
+// recharts, never as classes (see the note in index.css). Same :root/.dark
+// indirection, so the same light/dark pair applies.
+function parseViz(): TokenEntry[] {
+  const light = readValues(blockBody(/^:root \{/m));
+  const dark = readValues(blockBody(/^\.dark \{/m));
+  const out: TokenEntry[] = [];
+  for (let n = 1; ; n++) {
+    const name = `viz-${n}`;
+    const lightValue = light.get(name);
+    if (!lightValue) break;
+    out.push({ name, light: lightValue, dark: dark.get(name) ?? "" });
+  }
+  return out;
+}
+
+export const VIZ_RAMP: TokenEntry[] = parseViz();

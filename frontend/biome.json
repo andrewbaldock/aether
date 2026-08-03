@@ -4,6 +4,7 @@
     "includes": [
       "**",
       "!dist",
+      "!storybook-static",
       "!**/*.tsbuildinfo",
       "!playwright-report",
       "!test-results",

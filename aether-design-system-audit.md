@@ -153,3 +153,42 @@ Read-only evidence audit of `~/Code/aether` for the Ashby Design Engineer applic
 - **URL state is page/view-level, not full app state.** Search params are not used — widget configuration lives in a persisted `ui_state` blob, not the URL. Don't say "the entire app state is in the URL" — say "every conversation and tool view is deep-linkable."
 - **"Multi-theme" is really just light/dark.** There's no third theme or brand-switchable theming beyond the two-mode toggle. Don't say "multi-theme system" — say "light/dark theming with OS-preference fallback and zero-flash boot."
 - **No component library / Storybook / published primitives.** The ~12 shell primitives are consistently applied in-app but aren't packaged, documented, or browsable as a standalone design-system artifact. If asked "can I see your design system," there's currently no single page that shows it off — see the recommendations below.
+
+---
+
+## 2026-08 ADDITIONS
+
+Same evidence discipline as above: every claim below was verified by running it, not by writing it.
+
+### Browsable Storybook (P1 — done)
+- What: Storybook 10 (`@storybook/react-vite`) in `frontend/`, sharing the app's real `vite.config.ts` and importing `src/index.css` — so a story renders through the same React + Tailwind v4 pipeline as the app, against the live `@theme` tokens. A theme toolbar (`withThemeByClassName`) flips the same `.dark` class `useTheme` flips, so every story previews in both themes. 16 entries: 2 MDX docs pages + 14 stories across Tooltip, IconButton, ConfirmDialog, StarterPrompts, CardShell, SkeletonCard, and the chart palette. Prop tables are generated from the TS types; `@storybook/addon-a11y` runs axe per story.
+- Receipt: `frontend/.storybook/{main.ts,preview.tsx}`, `frontend/.storybook/docs/{Introduction.mdx,DesignTokens.mdx}`, `*.stories.tsx` beside each component. Verified: `bun run build-storybook` succeeds; all 18 story renders (9 stories × 2 themes) load with **zero console errors**.
+- Why it's design-system-worthy: This is the artifact that was missing — "can I see your design system" now has an answer that isn't a screenshot.
+- Confidence: solid
+- **Not yet true:** not deployed to a public URL. Say "a browsable Storybook" — **not** "a published design system" — until it's hosted.
+
+### Data-viz token ramp (partially closes the "stray hex" gap)
+- What: Chart series colours were 12 hardcoded hex values in `ChartWidget.tsx` (two of them copy-pasted duplicates of the `--neon-pink`/`--neon-cyan` token values) plus a runtime HSL generator for pie slices. Replaced with an eight-slot categorical ramp, `--viz-1..8`, defined per theme in `index.css` and consumed as `var(--viz-N)`. Recharts writes those straight into SVG `fill`/`stroke`, so charts re-colour on a theme flip with no JS and no re-render.
+- Receipt: `frontend/src/index.css` (`--viz-1..8` under `:root` and `.dark`), `frontend/src/capabilities/widgets/Chart/ChartWidget.tsx:48-71` (`paletteColor`/`seriesColor`), `frontend/src/capabilities/widgets/StyleGuide/parseTokens.ts` (`VIZ_RAMP`).
+- Measured, not asserted: the **old** palette FAILED validation in both modes (worst adjacent CVD ΔE 5.5 under deuteranopia, against a ≥ 8 target; 10 of 12 colours below 3:1 contrast on the light surface; 5 outside the lightness band). The **new** ramp passes every hard gate in both modes on Aether's real surfaces — worst adjacent CVD ΔE 9.1 light / 8.4 dark, worst normal-vision ΔE 19.6 / 19.3.
+- Why it's design-system-worthy: This is the strongest single story in the set, because it's *measured*. It also demonstrates the token architecture flexing into a domain (SVG attributes in a third-party charting library) that utility classes can't reach.
+- Confidence: solid
+- **Honest caveat:** the ramp's hues and steps are adopted from a validated reference palette, not hand-derived. The design work was diagnosing the failure, choosing a token architecture that survives a theme flip, deciding the ramp must exclude the brand accent (`--accent` means "clickable"), and wiring the validation into the docs. Don't claim to have derived the colour science.
+
+### Tailwind v4 tree-shaking trap (worth knowing, worth telling)
+- What: The ramp is deliberately **not** registered in the `@theme` block. Tailwind v4 drops `@theme` entries that no utility class references, so `--color-viz-1` resolved to the *empty string* at runtime — charts rendered with no stroke and **no error**. Caught by screenshotting the story, not by the type checker or the linter.
+- Receipt: `frontend/src/index.css` (the note where the `@theme` registration would go), regression test in `parseTokens.test.ts` ("keeps the viz ramp out of @theme").
+- Why it's design-system-worthy: A concrete, non-obvious framework failure mode, found by looking at the rendered output — and then fenced with a test so it can't come back. Good interview answer to "tell me about a bug that didn't throw."
+- Confidence: solid
+
+### Chart marks now follow the identity/action split
+- What: Two anti-patterns removed. (1) Recharts painted legend *labels* in their series colour — identity encoded twice, and unreadable body text at slot 4 on white; labels now wear `text-content-muted` and the swatch carries the colour. (2) Single-series bar charts coloured every bar differently, re-encoding a value that bar length already shows; they now use slot 1 uniformly.
+- Receipt: `frontend/src/capabilities/widgets/Chart/ChartWidget.tsx` (`LEGEND_PROPS`, and the removed per-`Cell` fill in the bar branch).
+- Confidence: solid
+
+### Still not true (the gaps above that remain open)
+- **No authored spacing scale.** Unchanged — the `GAPS` entry above still stands verbatim.
+- **No third theme.** Still light/dark only.
+- **No compound-component API.** `AdminTabs` is still a `.map()`, and it's coupled to the router — which is why it has no story yet.
+- **Brand gradient hex remains.** `from-[#fd40a4]` in `StarterPrompts`/`ChatPanel` is still raw; only the *chart* palette was tokenized.
+- **No visual-regression suite.** The a11y addon runs axe per story; there is no snapshot diffing (no Chromatic).
