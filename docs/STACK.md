@@ -82,13 +82,23 @@ break:
 
 - **The SPA catch-all rewrite must exclude it.** `vercel.json` negatively lookaheads `storybook`
   alongside `assets/`; otherwise every Storybook URL would be rewritten to the app's `index.html`.
-  A second rewrite maps bare `/storybook` → `/storybook/index.html` so the missing trailing slash
-  can't 404.
+- **Bare `/storybook` needs a REDIRECT, not a rewrite.** A rewrite serves the right file but leaves
+  the URL without its trailing slash, so Storybook's relative asset refs (`./sb-manager/runtime.js`)
+  resolve against `/` instead of `/storybook/` — and the catch-all then answers each one with the
+  app's HTML at status 200. Storybook renders blank while every URL "works". `redirects` sends the
+  browser to `/storybook/` so relative resolution is correct.
 - **The service worker must not claim it.** `navigateFallbackDenylist` includes `/^\/storybook/`.
   Without it, a visitor who already has the SW installed would navigate to `/storybook` and be
   served the *precached app shell* — meaning Storybook would look broken for returning visitors
   only, while working perfectly in a fresh browser. Storybook is built after `vite build`, so
   Workbox never sees those 70 files and the precache manifest stays app-only (11 entries).
+
+**Verifying a deploy: check content-type, not status.** Because the catch-all answers every
+unmatched path with `index.html` at **200**, status codes are meaningless for this site — a broken
+URL and a working one look identical to `curl -o /dev/null -w '%{http_code}'`. `bun run smoke`
+(`frontend/scripts/smoke-deploy.ts`) asserts content-types instead, with a JS asset under
+`/storybook/` as the canary: if it comes back as `text/html`, the catch-all swallowed it. Pass a URL
+argument to point it at a preview deploy.
 
 ### TypeScript config layout
 
