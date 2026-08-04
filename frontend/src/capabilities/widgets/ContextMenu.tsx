@@ -2,6 +2,7 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { MoreVertical } from "lucide-react";
 import type { ReactNode } from "react";
 import { ICON_BUTTON_CLASS } from "../../shell/IconButton";
+import { OVERLAY_SURFACE } from "../../shell/overlay";
 
 // A small kebab-triggered action menu shared by the Table / Chart / Images /
 // Timeline widgets — the "Explore further" affordance on a row, series, tile, or
@@ -39,7 +40,7 @@ export function MenuItems({
         align={align}
         side={side}
         sideOffset={4}
-        className="z-9999 min-w-44 rounded-lg border border-border-strong bg-surface-raised py-1 shadow-lg"
+        className={`z-9999 min-w-44 py-1 ${OVERLAY_SURFACE.popover}`}
       >
         {items.map((item) => (
           <DropdownMenu.Item

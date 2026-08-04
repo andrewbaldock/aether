@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { OVERLAY_SURFACE } from "./overlay";
 
 // A mobile bottom sheet that explains a tool and lets the user flip it on/off.
 // Desktop uses the chip's hover tooltip + instant toggle; touch has no hover, so
@@ -39,7 +40,7 @@ export function ToolInfoSheet({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative z-10 rounded-t-2xl border-t border-border bg-surface-raised px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl"
+        className={`relative z-10 px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] ${OVERLAY_SURFACE.sheet}`}
       >
         {/* Grab handle */}
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-border-strong" />

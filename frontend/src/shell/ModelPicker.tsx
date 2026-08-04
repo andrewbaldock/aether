@@ -2,6 +2,7 @@ import * as Select from "@radix-ui/react-select";
 import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronDown } from "lucide-react";
 import { apiFetch } from "../lib/queryClient";
+import { OVERLAY_SURFACE } from "./overlay";
 import { Tooltip } from "./Tooltip";
 
 // Mirrors the backend ModelOption (src/models.ts). `provider` tags which service
@@ -133,7 +134,7 @@ export function ModelPicker({ value, onChange, disabled }: ModelPickerProps) {
           side="top"
           sideOffset={6}
           align="end"
-          className="z-9999 max-h-[min(24rem,var(--radix-select-content-available-height))] overflow-hidden rounded-lg border border-border-strong bg-surface-raised shadow-lg"
+          className={`z-9999 max-h-[min(24rem,var(--radix-select-content-available-height))] overflow-hidden ${OVERLAY_SURFACE.popover}`}
         >
           <Select.Viewport className="p-1">
             {groups.map((g, gi) => (

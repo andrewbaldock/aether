@@ -297,6 +297,39 @@ Two things worth knowing:
 
 `buttonClass(variant, extra)` is exported for the rare button that genuinely can't be this component.
 
+### Floating surfaces (`OVERLAY_SURFACE`)
+
+`shell/overlay.ts` names the elevation treatment for anything that floats above the page — dialogs,
+menus, dropdowns, the mobile sheet.
+
+This one is worth reading for how it turned out, not just what it is. It was opened as a suspected
+drift (five copy-pasted class strings across five files) and turned out to be the opposite: the
+surfaces were already following a consistent **two-tier** rule. It just had no name and no single
+place to change it.
+
+| Tier | Used by | Treatment | Why |
+|---|---|---|---|
+| `modal` | `ConfirmDialog`, `EditWidgetDialog` | `rounded-xl` + `shadow-2xl` | takes the whole screen's attention behind a scrim; the user must deal with it |
+| `popover` | `ModelPicker`, `ExploreMenu` | `rounded-lg` + `shadow-lg` | anchored to its trigger, dismissed by looking away — should read as attached to the page |
+| `sheet` | `ToolInfoSheet` | `rounded-t-2xl` + `border-t` + `shadow-2xl` | mobile bottom sheet; only its top edge is ever on screen |
+
+All three keep `border-border-strong`: on the raised surface a floating panel needs a harder edge
+than inline content, or it dissolves into the page beneath it in dark mode.
+
+**The one genuine inconsistency it fixed:** the bottom sheet carried `border-border` rather than
+`border-border-strong` — and that top edge is the only part of the sheet's frame a user ever sees.
+
+**Positioning is deliberately not in the constant.** Each call site keeps its own fixed/absolute
+placement, z-index, width clamps, and padding — those are per-overlay and Radix often drives them.
+A wrapper component would have to fight Radix for control of exactly those properties, which is why
+this is a class constant (like `ICON_BUTTON_CLASS` and `buttonClass`) rather than a `<Panel>`.
+
+> Related, and deliberately **not** done: a general `<Panel>` component. An audit of 41
+> `rounded + border + bg` usages found they are at least five different things (content panels,
+> pills, floating surfaces, segmented-control tracks, icon-button drift), and 16 of the 21
+> "content panel" uses are inside the Style Guide and Theme Lab — demo pages whose job is drawing
+> boxes. Real product usage is about five, which is a Tailwind class working correctly, not a gap.
+
 ### Text fields
 
 `shell/Input.tsx` exports `Input` and `Textarea`. Found by the same audit as `Button`: **six text

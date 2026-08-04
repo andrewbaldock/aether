@@ -11,6 +11,7 @@ import { parseTableSpec } from "../capabilities/widgets/Table/useTableState";
 import { parseTimelineSpec } from "../capabilities/widgets/Timeline/useTimelineState";
 import { Button } from "./Button";
 import { Textarea } from "./Input";
+import { OVERLAY_SURFACE } from "./overlay";
 
 // Edit a widget's recreation prompt AND its raw params in a modal — the tool-tab
 // counterpart to the Bigsail card's flip (the gear opens THIS instead of flipping).
@@ -100,7 +101,9 @@ export function EditWidgetDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-9998 bg-black/40 backdrop-blur-[1px]" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-9999 flex max-h-[min(40rem,calc(100vh-2rem))] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-border-strong bg-surface-raised p-5 shadow-2xl focus:outline-none">
+        <Dialog.Content
+          className={`fixed left-1/2 top-1/2 z-9999 flex max-h-[min(40rem,calc(100vh-2rem))] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col p-5 focus:outline-none ${OVERLAY_SURFACE.modal}`}
+        >
           <Dialog.Title className="font-display text-base font-semibold text-content">
             {readOnly ? `${noun} details` : `Edit ${noun}`}
           </Dialog.Title>

@@ -1,6 +1,7 @@
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import type { ReactNode } from "react";
 import { Button } from "./Button";
+import { OVERLAY_SURFACE } from "./overlay";
 
 // A small, app-styled confirm dialog built on Radix AlertDialog — a centered modal
 // with a focus trap, Escape-to-cancel, and role=alertdialog a11y, for confirming an
@@ -33,7 +34,9 @@ export function ConfirmDialog({
       <AlertDialog.Trigger asChild>{trigger}</AlertDialog.Trigger>
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="fixed inset-0 z-9998 bg-black/40 backdrop-blur-[1px]" />
-        <AlertDialog.Content className="fixed left-1/2 top-1/2 z-9999 w-[min(24rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border-strong bg-surface-raised p-5 shadow-2xl focus:outline-none">
+        <AlertDialog.Content
+          className={`fixed left-1/2 top-1/2 z-9999 w-[min(24rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 p-5 focus:outline-none ${OVERLAY_SURFACE.modal}`}
+        >
           <AlertDialog.Title className="font-display text-base font-semibold text-content">
             {title}
           </AlertDialog.Title>
