@@ -1,4 +1,4 @@
-import { ChevronDown, Copy, Settings } from "lucide-react";
+import { BookOpen, ChevronDown, Copy, Settings } from "lucide-react";
 import { useState } from "react";
 import { ThinkingGlyph } from "../../../brand/ThinkingGlyph";
 import { Wordmark } from "../../../brand/Wordmark";
@@ -58,6 +58,35 @@ export function StyleGuideWidget(_props: { widget: Widget }) {
       // to flip themes back and forth — so it gets its own switcher.
       actions={<ThemeToggle className="" />}
     >
+      {/* The two halves of the design system point at each other. This page is
+          the system RUNNING — real components, in the real app, with the live
+          theme toggle. Storybook is the same system ISOLATED: one component at a
+          time, with prop tables, every state, and accessibility notes. Someone
+          who finds one should never have to guess the other exists.
+          Same origin (/storybook is built into this deploy), but target=_blank
+          so opening the docs doesn't throw away the conversation you're in. */}
+      <a
+        href="/storybook"
+        target="_blank"
+        rel="noreferrer"
+        className="mt-4 flex items-start gap-3 rounded-lg border border-border-strong bg-surface-raised p-4 transition-colors hover:border-content-subtle"
+      >
+        <BookOpen
+          className="mt-0.5 h-5 w-5 shrink-0 text-neon-pink"
+          aria-hidden
+        />
+        <span className="flex flex-col gap-0.5">
+          <span className="font-display text-sm font-semibold text-content">
+            Browse the component explorer &rarr;
+          </span>
+          <span className="text-xs text-content-muted">
+            This page shows the system running inside the app. The Storybook at{" "}
+            <code className="text-content">/storybook</code> shows each
+            component on its own — every state, prop tables generated from the
+            TypeScript types, and accessibility notes.
+          </span>
+        </span>
+      </a>
       <Section title="Branding">
         <div className="flex flex-col gap-4 rounded-lg border border-border bg-surface-raised p-4">
           {/* Each cell centers glyph over caption: the Wordmark SVG's viewBox

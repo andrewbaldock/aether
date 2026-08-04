@@ -12,6 +12,13 @@ knowledge graph — beside the prose. Five widget types, two themes, two shells.
 &nbsp;·&nbsp; the live app these components are taken from. (The wordmark at the
 top-left of this sidebar links there too.)
 
+**→ […and the in-app Style Guide](https://aether.andrewbaldock.com/style-guide)**
+&nbsp;·&nbsp; the same system, but *running*: real components on the real page,
+with the live theme toggle. This Storybook is the isolated view — one component
+at a time, every state, prop tables, accessibility notes. The two are
+deliberately separate views of one system, and both read their tokens from the
+same parsed `index.css`, so neither can drift from the other.
+
 This Storybook documents the parts that are genuinely *shared*. It is built from
 the app's own `vite.config.ts` and imports the app's own `src/index.css`, so
 every story renders through the real pipeline against the real tokens. Nothing
