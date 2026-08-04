@@ -8,10 +8,15 @@ Aether is a conversational explorer: you ask a question, and the answer arrives
 as a canvas of widgets — charts, tables, timelines, image grids, a force-directed
 knowledge graph — beside the prose. Five widget types, two themes, two shells.
 
+**→ [See it running at aether.andrewbaldock.com](https://aether.andrewbaldock.com)**
+&nbsp;·&nbsp; the live app these components are taken from. (The wordmark at the
+top-left of this sidebar links there too.)
+
 This Storybook documents the parts that are genuinely *shared*. It is built from
 the app's own `vite.config.ts` and imports the app's own `src/index.css`, so
 every story renders through the real pipeline against the real tokens. Nothing
-here is a re-declaration of the app.
+here is a re-declaration of the app — it ships **inside the app's own deploy**,
+at `/storybook`, from the same build.
 
 ---
 

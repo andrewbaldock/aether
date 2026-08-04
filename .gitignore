@@ -23,3 +23,9 @@ frontend/public/screenshots-out/
 # macOS
 .DS_Store
 .vercel
+
+# Personal working notes — kept locally, deliberately not published in this
+# public repo. The design-system findings that matter live in
+# docs/DESIGN_SYSTEM.md and the Storybook at /storybook.
+aether-design-system-audit.md
+HANDOFF-*.md
